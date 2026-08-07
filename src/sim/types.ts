@@ -70,6 +70,28 @@ export interface MatchConfig {
   b: Fighter;
 }
 
+/**
+ * Optional rule changes, all off by default so the shipped behaviour and every
+ * recorded seed stay exactly as they were.
+ *
+ * These exist to test whether a *mechanical* comeback reads better than the
+ * lucky-crit comeback the base game produces. See `pnpm diagnose --comeback`.
+ */
+export interface MatchRules {
+  /**
+   * Damage bonus that grows as a fighter loses HP: a fighter at zero HP would
+   * hit for `1 + rubberBand` times normal. 0 disables it.
+   */
+  rubberBand?: number;
+  /**
+   * HP shares (e.g. [0.5, 0.25]) at which a fighter summons a defensive wave
+   * of minions, once each per match.
+   */
+  comebackWaves?: number[];
+  /** Minions per wave. */
+  comebackWaveSize?: number;
+}
+
 export type Side = "a" | "b";
 
 export interface FighterSnapshot {

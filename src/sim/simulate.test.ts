@@ -3,6 +3,57 @@ import { simulate } from "./simulate.js";
 import { abilityMatch, lopsidedMatch, makeFighter, mirrorMatch } from "./testFixtures.js";
 import { FPS, MAX_FRAMES } from "./types.js";
 
+describe("optional comeback rules", () => {
+  it("hits harder the more HP a fighter has lost", () => {
+    const config = mirrorMatch();
+    const plain = simulate(config, 3);
+    const banded = simulate(config, 3, { rubberBand: 1 });
+
+    const damageOf = (result: ReturnType<typeof simulate>): number =>
+      result.events
+        .filter((e) => e.type === "hit" || e.type === "crit")
+        .reduce((sum, e) => sum + e.value, 0);
+
+    // Same seed, same swings — but each one lands for more once HP is down.
+    expect(damageOf(banded) / banded.durationFrames).toBeGreaterThan(
+      damageOf(plain) / plain.durationFrames,
+    );
+    // And the fight ends sooner because both sides are hitting harder.
+    expect(banded.durationFrames).toBeLessThan(plain.durationFrames);
+  });
+
+  it("does not change damage while both fighters are at full HP", () => {
+    const config = mirrorMatch();
+    const plain = simulate(config, 3);
+    const banded = simulate(config, 3, { rubberBand: 1 });
+    const firstHit = (result: ReturnType<typeof simulate>) =>
+      result.events.find((e) => e.type === "hit" || e.type === "crit")!;
+    expect(banded.snapshots[0]).toEqual(plain.snapshots[0]);
+    expect(firstHit(banded).value).toBe(firstHit(plain).value);
+  });
+
+  it("spawns a wave at each threshold, once each", () => {
+    const config = mirrorMatch();
+    const waves = simulate(config, 3, { comebackWaves: [0.5, 0.25], comebackWaveSize: 2 });
+    const spawnsBy = (id: string): number =>
+      waves.events.filter((e) => e.type === "spawn" && e.actorId === id).length;
+
+    // Neither mirror fighter has a summon ability, so every spawn is a wave.
+    expect(mirrorMatch().a.abilities).toEqual([]);
+    const loser = waves.winner === "a" ? config.b.id : config.a.id;
+    // The loser crosses both thresholds; two minions each time.
+    expect(spawnsBy(loser)).toBe(4);
+  });
+
+  it("is still deterministic with rules on", () => {
+    const config = abilityMatch();
+    const rules = { rubberBand: 0.5, comebackWaves: [0.5, 0.25] };
+    expect(JSON.stringify(simulate(config, 11, rules))).toBe(
+      JSON.stringify(simulate(config, 11, rules)),
+    );
+  });
+});
+
 describe("simulate", () => {
   it("is deterministic: the same seed twice gives identical JSON", () => {
     const config = abilityMatch();
@@ -151,6 +202,14 @@ describe("simulate", () => {
     const crits = swings.filter((e) => e.type === "crit").length;
     expect(crits / swings.length).toBeGreaterThan(0.15);
     expect(crits / swings.length).toBeLessThan(0.5);
+  });
+
+  it("leaves the default path byte-identical when rules are passed empty", () => {
+    const config = abilityMatch();
+    const bare = JSON.stringify(simulate(config, 77));
+    expect(JSON.stringify(simulate(config, 77, {}))).toBe(bare);
+    expect(JSON.stringify(simulate(config, 77, { rubberBand: 0 }))).toBe(bare);
+    expect(JSON.stringify(simulate(config, 77, { comebackWaves: [] }))).toBe(bare);
   });
 
   it("runs 500 matches in well under a second", () => {

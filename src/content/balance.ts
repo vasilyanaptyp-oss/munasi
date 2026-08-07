@@ -1,5 +1,5 @@
 import { simulate } from "../sim/simulate.js";
-import type { Fighter } from "../sim/types.js";
+import type { Fighter, MatchRules } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 
 /** A matchup is considered balanced inside this winrate band. */
@@ -33,6 +33,8 @@ export interface BalanceOptions {
   sample?: number;
   /** First seed. Every pair uses the same seed block, so runs are comparable. */
   startSeed?: number;
+  /** Optional rule changes, for evaluating a prototype against the baseline. */
+  rules?: MatchRules;
 }
 
 /** Runs one pair head to head. Pure: same inputs, same numbers, every time. */
@@ -42,7 +44,7 @@ export function evaluatePair(a: Fighter, b: Fighter, options: BalanceOptions = {
   let winsA = 0;
   let frames = 0;
   for (let i = 0; i < sample; i += 1) {
-    const result = simulate({ a, b }, startSeed + i);
+    const result = simulate({ a, b }, startSeed + i, options.rules ?? {});
     if (result.winner === "a") winsA += 1;
     else if (result.winner === "draw") winsA += 0.5;
     frames += result.durationFrames;

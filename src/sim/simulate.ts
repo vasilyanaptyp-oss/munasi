@@ -3,6 +3,7 @@ import type {
   Ability,
   Fighter,
   MatchConfig,
+  MatchRules,
   MatchEvent,
   MatchResult,
   Minion,
@@ -28,6 +29,13 @@ const DERIVED_MINION_LIFETIME = 8;
 /** Default `buff_attack` duration in seconds. */
 const DEFAULT_BUFF_DURATION = 5;
 
+/** Stats of a comeback-wave minion, as fractions of its owner's numbers. */
+const WAVE_MINION_HP_SHARE = 0.12;
+const WAVE_MINION_ATTACK_SHARE = 0.45;
+const WAVE_MINION_SPEED = 0.9;
+const WAVE_MINION_LIFETIME = 6;
+const DEFAULT_WAVE_SIZE = 2;
+
 interface ActiveBuff {
   power: number;
   /** Tick at which the buff stops applying. */
@@ -51,6 +59,8 @@ interface FighterState {
   buffs: ActiveBuff[];
   minions: MinionState[];
   minionsSpawned: number;
+  /** Comeback-wave thresholds already triggered. */
+  wavesTriggered: number[];
 }
 
 interface MinionState extends Minion {
@@ -83,6 +93,17 @@ function effectiveAttack(state: FighterState): number {
   return state.base.attack * attackMultiplier(state);
 }
 
+/**
+ * Rubber-band bonus: the further a fighter is from full HP, the harder it
+ * hits. Returns exactly 1 when the rule is off, so the default path is
+ * arithmetically untouched.
+ */
+function comebackMultiplier(state: FighterState, rubberBand: number): number {
+  if (rubberBand <= 0) return 1;
+  const share = Math.max(0, Math.min(1, state.hp / state.base.maxHp));
+  return 1 + rubberBand * (1 - share);
+}
+
 function minionSpec(ability: Ability): MinionSpec {
   if (ability.minion) return { ...ability.minion };
   return {
@@ -97,7 +118,11 @@ function minionSpec(ability: Ability): MinionSpec {
  * Runs a full match. Pure: the only entropy is `seed`, and neither argument is
  * mutated. Identical `(config, seed)` always yields a byte-identical result.
  */
-export function simulate(config: MatchConfig, seed: number): MatchResult {
+export function simulate(
+  config: MatchConfig,
+  seed: number,
+  rules: MatchRules = {},
+): MatchResult {
   const fighters = { a: cloneFighter(config.a), b: cloneFighter(config.b) };
 
   // Two independent streams derived from the one seed, so the match stays
@@ -119,6 +144,7 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
     buffs: [],
     minions: [],
     minionsSpawned: 0,
+    wavesTriggered: [],
   });
 
   const sides: Record<Side, FighterState> = {
@@ -159,30 +185,65 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
     pendingMinionDamage.length = 0;
   };
 
-  const castAbility = (state: FighterState, ability: Ability): void => {
-    const enemy = opponentOf(state);
-    switch (ability.type) {
-      case "spawn_minion": {
-        const spec = minionSpec(ability);
-        const hp = Math.max(1, Math.round(spec.hp));
-        state.minionsSpawned += 1;
-        state.minions.push({
-          id: `${state.base.id}#m${state.minionsSpawned}`,
-          ownerId: state.base.id,
-          hp,
-          maxHp: hp,
-          attack: spec.attack,
-          attackSpeed: spec.attackSpeed,
-          lifetime: spec.lifetime,
-          attackCooldown: ticksPerAttack(spec.attackSpeed),
-          ticksLeft: Math.round(spec.lifetime * TICKS_PER_SECOND),
+  const rubberBand = rules.rubberBand ?? 0;
+  const waveThresholds = rules.comebackWaves ?? [];
+  const waveSize = rules.comebackWaveSize ?? DEFAULT_WAVE_SIZE;
+
+  const spawnMinion = (state: FighterState, spec: MinionSpec): MinionState => {
+    const hp = Math.max(1, Math.round(spec.hp));
+    state.minionsSpawned += 1;
+    const minion: MinionState = {
+      id: `${state.base.id}#m${state.minionsSpawned}`,
+      ownerId: state.base.id,
+      hp,
+      maxHp: hp,
+      attack: spec.attack,
+      attackSpeed: spec.attackSpeed,
+      lifetime: spec.lifetime,
+      attackCooldown: ticksPerAttack(spec.attackSpeed),
+      ticksLeft: Math.round(spec.lifetime * TICKS_PER_SECOND),
+    };
+    state.minions.push(minion);
+    return minion;
+  };
+
+  /** Defensive wave when a fighter drops through a threshold, once each. */
+  const checkComebackWaves = (state: FighterState): void => {
+    if (waveThresholds.length === 0) return;
+    const share = state.hp / state.base.maxHp;
+    for (const threshold of waveThresholds) {
+      if (share > threshold || state.wavesTriggered.includes(threshold)) continue;
+      state.wavesTriggered.push(threshold);
+      if (state.hp <= 0) continue;
+      for (let i = 0; i < waveSize; i += 1) {
+        const minion = spawnMinion(state, {
+          hp: state.base.maxHp * WAVE_MINION_HP_SHARE,
+          attack: state.base.attack * WAVE_MINION_ATTACK_SHARE,
+          attackSpeed: WAVE_MINION_SPEED,
+          lifetime: WAVE_MINION_LIFETIME,
         });
         events.push({
           frame,
           type: "spawn",
           actorId: state.base.id,
-          targetId: state.minions[state.minions.length - 1]!.id,
-          value: hp,
+          targetId: minion.id,
+          value: minion.hp,
+        });
+      }
+    }
+  };
+
+  const castAbility = (state: FighterState, ability: Ability): void => {
+    const enemy = opponentOf(state);
+    switch (ability.type) {
+      case "spawn_minion": {
+        const minion = spawnMinion(state, minionSpec(ability));
+        events.push({
+          frame,
+          type: "spawn",
+          actorId: state.base.id,
+          targetId: minion.id,
+          value: minion.hp,
         });
         break;
       }
@@ -263,7 +324,10 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
       side.attackCooldown -= 1;
       if (side.attackCooldown > 0) continue;
       const isCrit = side.rng.chance(side.base.critChance);
-      const raw = effectiveAttack(side) * (isCrit ? side.base.critMult : 1);
+      const raw =
+        effectiveAttack(side) *
+        (isCrit ? side.base.critMult : 1) *
+        comebackMultiplier(side, rubberBand);
       const dealt = damageFighter(enemy, rollDamage(side.rng, raw));
       events.push({
         frame,
@@ -297,6 +361,11 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
     }
 
     applyPendingDamage();
+
+    if (waveThresholds.length > 0) {
+      checkComebackWaves(sides.a);
+      checkComebackWaves(sides.b);
+    }
 
     // Minions that ran out of HP or lifetime leave the field.
     for (const side of [sides.a, sides.b]) {

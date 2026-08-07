@@ -16,7 +16,8 @@
     "balance": "tsx src/content/validateBalance.ts",
     "frame": "tsx src/cli/frame.ts",
     "calibrate": "tsx src/content/calibrate.ts",
-    "matchups": "tsx src/content/generateMatchups.ts"
+    "matchups": "tsx src/content/generateMatchups.ts",
+    "diagnose": "tsx src/cli/diagnose.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"
