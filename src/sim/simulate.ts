@@ -9,6 +9,8 @@ import type {
   Minion,
   MinionSnapshot,
   MinionSpec,
+  PickupSnapshot,
+  PickupType,
   Side,
   Snapshot,
   Winner,
@@ -36,6 +38,18 @@ const WAVE_MINION_SPEED = 0.9;
 const WAVE_MINION_LIFETIME = 6;
 const DEFAULT_WAVE_SIZE = 2;
 
+/** Arena pickup defaults. */
+const PICKUP_DEFAULTS = {
+  firstFrame: 90,
+  intervalFrames: 150,
+  reachFrames: 45,
+  healPower: 120,
+  damageBuff: 0.35,
+  speedBuff: 0.35,
+  buffDuration: 6,
+} as const;
+const PICKUP_TYPES: PickupType[] = ["heal", "damage_buff", "attack_speed"];
+
 interface ActiveBuff {
   power: number;
   /** Tick at which the buff stops applying. */
@@ -57,6 +71,8 @@ interface FighterState {
   /** Ticks until each ability (by index) is castable again. */
   abilityCooldowns: number[];
   buffs: ActiveBuff[];
+  /** Attack-speed multipliers from pickups. */
+  speedBuffs: ActiveBuff[];
   minions: MinionState[];
   minionsSpawned: number;
   /** Comeback-wave thresholds already triggered. */
@@ -91,6 +107,12 @@ function attackMultiplier(state: FighterState): number {
 
 function effectiveAttack(state: FighterState): number {
   return state.base.attack * attackMultiplier(state);
+}
+
+function effectiveAttackSpeed(state: FighterState): number {
+  let mult = 1;
+  for (const buff of state.speedBuffs) mult += buff.power;
+  return state.base.attackSpeed * mult;
 }
 
 /**
@@ -138,10 +160,12 @@ export function simulate(
     side,
     base,
     rng,
-    hp: base.maxHp,
+    // The gauntlet carries the challenger's HP in from the previous round.
+    hp: side === "a" ? (rules.startHpA ?? base.maxHp) : base.maxHp,
     attackCooldown: ticksPerAttack(base.attackSpeed),
     abilityCooldowns: base.abilities.map((ab) => ab.cooldown * TICKS_PER_SECOND),
     buffs: [],
+    speedBuffs: [],
     minions: [],
     minionsSpawned: 0,
     wavesTriggered: [],
@@ -161,8 +185,9 @@ export function simulate(
   let frame = 0;
   let winner: Winner | null = null;
 
+  const variance = rules.damageVariance ?? DAMAGE_VARIANCE;
   const rollDamage = (rng: Rng, attack: number): number =>
-    Math.max(1, Math.round(attack * rng.range(1 - DAMAGE_VARIANCE, 1 + DAMAGE_VARIANCE)));
+    Math.max(1, Math.round(attack * rng.range(1 - variance, 1 + variance)));
 
   /**
    * Damage is queued during a tick and applied once every actor has swung.
@@ -183,6 +208,82 @@ export function simulate(
     for (const { target, amount } of pendingMinionDamage) target.hp -= amount;
     pendingFighterDamage.length = 0;
     pendingMinionDamage.length = 0;
+  };
+
+  /**
+   * Pickups. No positions are simulated: the item appears, sits for
+   * `reachFrames`, and is then claimed by whoever wins a roll weighted by
+   * attack speed. Speed is the stat a viewer can already see in the stat line,
+   * so the outcome reads as earned rather than arbitrary.
+   */
+  const pickupRules = rules.pickups;
+  const pickupCfg = { ...PICKUP_DEFAULTS, ...(pickupRules ?? {}) };
+  const pickupRng = mulberry32(deriveSeed(3));
+  let pickup: PickupSnapshot | null = null;
+  let pickupsSpawned = 0;
+  let nextPickupFrame = pickupCfg.firstFrame;
+
+  const claimPickup = (item: PickupSnapshot): void => {
+    const speedA = effectiveAttackSpeed(sides.a);
+    const speedB = effectiveAttackSpeed(sides.b);
+    const chanceA = speedA / (speedA + speedB);
+    const winner = pickupRng.next() < chanceA ? sides.a : sides.b;
+    const duration = pickupCfg.buffDuration;
+
+    switch (item.type) {
+      case "heal": {
+        const healed = Math.min(
+          Math.round(pickupCfg.healPower),
+          winner.base.maxHp - winner.hp,
+        );
+        if (healed > 0) winner.hp += healed;
+        break;
+      }
+      case "damage_buff":
+        winner.buffs.push({
+          power: pickupCfg.damageBuff,
+          expiresAtTick: tick + Math.round(duration * TICKS_PER_SECOND),
+        });
+        break;
+      case "attack_speed":
+        winner.speedBuffs.push({
+          power: pickupCfg.speedBuff,
+          expiresAtTick: tick + Math.round(duration * TICKS_PER_SECOND),
+        });
+        break;
+    }
+    events.push({
+      frame,
+      type: "pickup_claim",
+      actorId: winner.base.id,
+      targetId: item.id,
+      value: item.type === "heal" ? pickupCfg.healPower : Math.round(pickupCfg.damageBuff * 100),
+    });
+  };
+
+  const stepPickups = (): void => {
+    if (!pickupRules) return;
+    if (pickup === null && frame >= nextPickupFrame) {
+      pickupsSpawned += 1;
+      const type = PICKUP_TYPES[pickupRng.int(PICKUP_TYPES.length)]!;
+      pickup = {
+        id: `pickup${pickupsSpawned}`,
+        type,
+        spawnFrame: frame,
+        resolveFrame: frame + pickupCfg.reachFrames,
+      };
+      events.push({
+        frame,
+        type: "pickup_spawn",
+        actorId: pickup.id,
+        targetId: pickup.id,
+        value: 0,
+      });
+    } else if (pickup !== null && frame >= pickup.resolveFrame) {
+      claimPickup(pickup);
+      pickup = null;
+      nextPickupFrame = frame + pickupCfg.intervalFrames;
+    }
   };
 
   const rubberBand = rules.rubberBand ?? 0;
@@ -304,6 +405,9 @@ export function simulate(
       if (side.buffs.length > 0) {
         side.buffs = side.buffs.filter((b) => b.expiresAtTick > tick);
       }
+      if (side.speedBuffs.length > 0) {
+        side.speedBuffs = side.speedBuffs.filter((b) => b.expiresAtTick > tick);
+      }
     }
 
     // Abilities, in fighter order then ability order — fixed, so the RNG stream
@@ -336,7 +440,7 @@ export function simulate(
         targetId: enemy.base.id,
         value: dealt,
       });
-      side.attackCooldown += ticksPerAttack(side.base.attackSpeed);
+      side.attackCooldown += ticksPerAttack(effectiveAttackSpeed(side));
     }
 
     // Minions attack the enemy fighter and age.
@@ -442,12 +546,15 @@ export function simulate(
         buffed: sides.b.buffs.length > 0,
       },
       minions: snapshotMinions(),
+      ...(pickup === null ? {} : { pickup: { ...pickup } }),
     });
   };
 
   takeSnapshot();
 
-  for (frame = 1; frame < MAX_FRAMES; frame += 1) {
+  const frameCap = Math.min(MAX_FRAMES, rules.maxFrames ?? MAX_FRAMES);
+  for (frame = 1; frame < frameCap; frame += 1) {
+    stepPickups();
     for (let i = 0; i < TICKS_PER_FRAME && winner === null; i += 1) step();
     takeSnapshot();
     if (winner !== null) break;

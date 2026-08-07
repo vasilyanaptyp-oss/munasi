@@ -16,8 +16,17 @@ import type { Ability } from "../sim/types.js";
  * - Give at most two abilities, and remember an `aoe` opponent is the natural
  *   counter to `spawn_minion`.
  */
+/**
+ * Which half of the roster a fighter belongs to. The gauntlet's whole joke is
+ * one worker against three bosses, so teams are built from this rather than
+ * listed by hand — six workers against every combination of three bosses is
+ * 120 matchups without drawing anyone new.
+ */
+export type Faction = "workers" | "bosses";
+
 export interface FighterSpec {
   id: string;
+  faction: Faction;
   name: string;
   spriteId: string;
   maxHp: number;
@@ -36,6 +45,7 @@ export interface FighterSpec {
 export const ROSTER: FighterSpec[] = [
   {
     id: "plumber",
+    faction: "workers",
     name: "САНТЕХНИК ЖЭКА",
     spriteId: "plumber",
     maxHp: 1400,
@@ -47,6 +57,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "baker",
+    faction: "workers",
     name: "НОЧНОЙ ПЕКАРЬ",
     spriteId: "baker",
     maxHp: 1050,
@@ -57,6 +68,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "courier",
+    faction: "workers",
     name: "КУРЬЕР НА СМЕНЕ",
     spriteId: "courier",
     maxHp: 1000,
@@ -67,6 +79,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "loader",
+    faction: "workers",
     name: "ГРУЗЧИК С РЫНКА",
     spriteId: "loader",
     maxHp: 1400,
@@ -77,6 +90,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "nailmaster",
+    faction: "workers",
     name: "МАСТЕР МАНИКЮРА",
     spriteId: "nailmaster",
     maxHp: 1000,
@@ -87,6 +101,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "chairman",
+    faction: "bosses",
     name: "ПРЕДСЕДАТЕЛЬ КОМИССИИ",
     spriteId: "chairman",
     maxHp: 1150,
@@ -104,6 +119,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "silencer",
+    faction: "bosses",
     name: "ГЛАВНЫЙ ПО ТИШИНЕ",
     spriteId: "silencer",
     maxHp: 1200,
@@ -114,6 +130,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "arbiter",
+    faction: "bosses",
     name: "ВЕРХОВНЫЙ АРБИТР",
     spriteId: "arbiter",
     maxHp: 1300,
@@ -124,6 +141,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "councillor",
+    faction: "bosses",
     name: "ТАЙНЫЙ СОВЕТНИК",
     spriteId: "councillor",
     maxHp: 1100,
@@ -141,6 +159,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "viceroy",
+    faction: "bosses",
     name: "НАМЕСТНИК ОКРУГА",
     spriteId: "viceroy",
     maxHp: 1100,
@@ -151,6 +170,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "gatekeeper",
+    faction: "workers",
     name: "СТАРШИЙ ПО ШЛАГБАУМУ",
     spriteId: "gatekeeper",
     maxHp: 1250,
@@ -161,6 +181,7 @@ export const ROSTER: FighterSpec[] = [
   },
   {
     id: "inspector",
+    faction: "bosses",
     name: "ВЕЧНЫЙ ИНСПЕКТОР",
     spriteId: "inspector",
     maxHp: 1250,

@@ -1,15 +1,45 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { GauntletResult } from "../sim/gauntlet.js";
 import type { MatchResult } from "../sim/types.js";
 import { buildRenderIndex, renderSingleFrame } from "./frame.js";
 import { defaultPlan, type FramePlan } from "./framePlan.js";
+import { renderGauntletFrame } from "./gauntletFrame.js";
 
 export * from "./frame.js";
+export * from "./gauntletFrame.js";
+export * from "./gauntletTheme.js";
 export * from "./framePlan.js";
 export * from "./sprites.js";
 export * from "./drawFighter.js";
 export * from "./silhouette.js";
 export { HEIGHT, LAYOUT, WIDTH } from "./theme.js";
+
+/**
+ * Either mode. The pipeline below is written against this rather than against
+ * `MatchResult`, so the gauntlet and the original 1v1 share the frame plan,
+ * the worker split and the encoder.
+ */
+export type Renderable = MatchResult | GauntletResult;
+
+export function isGauntlet(result: Renderable): result is GauntletResult {
+  return "rounds" in result;
+}
+
+/** Renders one frame of whichever mode this is. */
+export function renderAnyFrame(
+  result: Renderable,
+  frame: number,
+  options: { index?: ReturnType<typeof buildRenderIndex>; planned?: FramePlan[number] } = {},
+): Buffer {
+  const shared = {
+    ...(options.index === undefined ? {} : { index: options.index }),
+    ...(options.planned === undefined ? {} : { planned: options.planned }),
+  };
+  return isGauntlet(result)
+    ? renderGauntletFrame(result, frame, shared)
+    : renderSingleFrame(result, frame, shared);
+}
 
 /** Zero-padded so ffmpeg's image2 demuxer reads them in order. */
 export function frameFileName(frame: number): string {
@@ -25,7 +55,7 @@ export interface RenderFramesOptions {
   plan?: FramePlan;
 }
 
-export function planFor(result: MatchResult, options: RenderFramesOptions): FramePlan {
+export function planFor(result: Renderable, options: RenderFramesOptions): FramePlan {
   return options.plan ?? defaultPlan(result, options.victoryFrames ?? 0);
 }
 
@@ -34,7 +64,7 @@ export function planFor(result: MatchResult, options: RenderFramesOptions): Fram
  * The directory is created if missing.
  */
 export async function renderFrames(
-  result: MatchResult,
+  result: Renderable,
   outDir: string,
   options: RenderFramesOptions = {},
 ): Promise<void> {
@@ -43,7 +73,7 @@ export async function renderFrames(
   const plan = planFor(result, options);
 
   for (const [output, planned] of plan.entries()) {
-    const png = renderSingleFrame(result, planned.source, { index, planned });
+    const png = renderAnyFrame(result, planned.source, { index, planned });
     await writeFile(join(outDir, frameFileName(output)), png);
     options.onProgress?.(output + 1, plan.length);
   }

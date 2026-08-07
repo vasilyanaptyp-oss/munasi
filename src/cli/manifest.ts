@@ -27,6 +27,17 @@ export interface ManifestEntry {
   generatedAt: string;
   /** Present when the video opens on an earlier moment of the fight. */
   coldOpen?: ManifestColdOpen;
+  /** Present for gauntlet runs. */
+  gauntlet?: {
+    challengerId: string;
+    teamIds: string[];
+    /** True when the challenger cleared the whole team. */
+    cleared: boolean;
+    /** 1-based round the run was decided in. */
+    decidedInRound: number;
+    /** Challenger HP at the end of each round. */
+    hpByRound: number[];
+  };
 }
 
 export interface Manifest {
@@ -61,4 +72,17 @@ export function pairKey(a: string, b: string): string {
 
 export function renderedPairs(manifest: Manifest): Set<string> {
   return new Set(manifest.entries.map((e) => pairKey(e.fighters[0], e.fighters[1])));
+}
+
+/** Key for a gauntlet matchup: challenger plus the team, order-independent. */
+export function gauntletKey(challengerId: string, teamIds: string[]): string {
+  return `${challengerId}|${[...teamIds].sort().join("+")}`;
+}
+
+export function renderedGauntlets(manifest: Manifest): Set<string> {
+  const out = new Set<string>();
+  for (const entry of manifest.entries) {
+    if (entry.gauntlet) out.add(gauntletKey(entry.gauntlet.challengerId, entry.gauntlet.teamIds));
+  }
+  return out;
 }

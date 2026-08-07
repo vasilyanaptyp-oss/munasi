@@ -4,6 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import type { GauntletResult } from "../sim/gauntlet.js";
 import type { MatchResult } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { buildSfxTrack, MUSIC_FILE, writeSfxTrack } from "./audio.js";
@@ -54,12 +55,23 @@ export function slug(name: string): string {
   );
 }
 
+/** Either mode, for the encoder's purposes. */
+export type Exportable = MatchResult | GauntletResult;
+
+function isGauntletResult(result: Exportable): result is GauntletResult {
+  return "rounds" in result;
+}
+
 /**
  * Named from fighter ids rather than display names: names are free to be
  * non-ASCII (the roster is in Russian), and transliterating them into a
  * filename would be lossy and locale-dependent. Ids stay ASCII by convention.
  */
-export function videoFileName(result: MatchResult): string {
+export function videoFileName(result: Exportable): string {
+  if (isGauntletResult(result)) {
+    const team = result.team.members.map((m) => slug(m.id)).join("-");
+    return `${slug(result.challenger.id)}-vs-${team}-${result.seed}.mp4`;
+  }
   return `${slug(result.fighters.a.id)}-vs-${slug(result.fighters.b.id)}-${result.seed}.mp4`;
 }
 
@@ -109,7 +121,7 @@ async function probeDuration(path: string): Promise<number> {
  * Returns the path and the duration ffprobe reads back from the file.
  */
 export async function exportVideo(
-  result: MatchResult,
+  result: Exportable,
   options: ExportOptions,
 ): Promise<ExportResult> {
   checkFfmpeg();

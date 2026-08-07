@@ -154,6 +154,61 @@ describe("renderFramesParallel", () => {
   }, 120_000);
 });
 
+describe("gauntlet rendering", () => {
+  it("renders identically in parallel and in one process", async () => {
+    const { loadFighters, getFighter } = await import("../content/index.js");
+    const { buildGauntlet, GAUNTLET_RULES } = await import("../content/teams.js");
+    const { simulateGauntlet } = await import("../sim/gauntlet.js");
+    const { defaultPlan } = await import("../render/framePlan.js");
+
+    const roster = loadFighters();
+    const full = simulateGauntlet(
+      buildGauntlet(
+        getFighter("plumber", roster),
+        ["arbiter", "councillor", "inspector"].map((id) => getFighter(id, roster)),
+      ),
+      7,
+      GAUNTLET_RULES,
+    );
+    // A slice from the middle of round one keeps the test quick.
+    const plan = defaultPlan(full, 0).slice(40, 48);
+
+    const serial = tempDir("munasi-g-serial-");
+    const parallel = tempDir("munasi-g-parallel-");
+    await renderFrames(full, serial, { plan });
+    await renderFramesParallel(full, parallel, { plan, workers: 2 });
+
+    const files = readdirSync(serial).sort();
+    expect(files).toHaveLength(plan.length);
+    expect(readdirSync(parallel).sort()).toEqual(files);
+    const { readFileSync } = await import("node:fs");
+    for (const file of files) {
+      expect(readFileSync(join(parallel, file)).equals(readFileSync(join(serial, file)))).toBe(true);
+    }
+  }, 180_000);
+
+  it("renders the same frame the same way twice", async () => {
+    const { loadFighters, getFighter } = await import("../content/index.js");
+    const { buildGauntlet, GAUNTLET_RULES } = await import("../content/teams.js");
+    const { simulateGauntlet } = await import("../sim/gauntlet.js");
+    const { renderGauntletFrame } = await import("../render/gauntletFrame.js");
+
+    const roster = loadFighters();
+    const result = simulateGauntlet(
+      buildGauntlet(
+        getFighter("courier", roster),
+        ["viceroy", "silencer", "chairman"].map((id) => getFighter(id, roster)),
+      ),
+      3,
+      GAUNTLET_RULES,
+    );
+    const a = renderGauntletFrame(result, 120);
+    renderGauntletFrame(result, 5);
+    expect(renderGauntletFrame(result, 120).equals(a)).toBe(true);
+    expect(() => renderGauntletFrame(result, result.durationFrames)).toThrow(/out of range/);
+  }, 120_000);
+});
+
 describe("generate", () => {
   // Two throwaway fighters that kill each other in a couple of seconds, so the
   // pipeline runs end to end without rendering a full 30-second match.
@@ -189,6 +244,7 @@ describe("generate", () => {
       keepFrames: false,
       redo: false,
       coldOpen: false,
+      duel: true,
       roster: quickRoster,
     });
 
@@ -235,6 +291,7 @@ describe("generate", () => {
       keepFrames: false,
       redo: false,
       coldOpen: false,
+      duel: true,
       roster: quickRoster,
     });
     expect(summary.produced).toEqual([]);

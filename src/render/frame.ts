@@ -29,7 +29,7 @@ export interface RenderIndex {
   deathFrame: Map<string, number>;
 }
 
-export function buildRenderIndex(result: MatchResult): RenderIndex {
+export function buildRenderIndex(result: { events: MatchEvent[] }): RenderIndex {
   const byFrame = new Map<number, MatchEvent[]>();
   const deathFrame = new Map<string, number>();
   for (const event of result.events) {
@@ -43,12 +43,12 @@ export function buildRenderIndex(result: MatchResult): RenderIndex {
   return { byFrame, deathFrame };
 }
 
-function eventsAt(index: RenderIndex, frame: number): MatchEvent[] {
+export function eventsAt(index: RenderIndex, frame: number): MatchEvent[] {
   return index.byFrame.get(frame) ?? [];
 }
 
 /** Deterministic jitter so stacked damage numbers do not overlap. */
-function jitter(seed: string, spread: number): number {
+export function jitter(seed: string, spread: number): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i += 1) {
     h ^= seed.charCodeAt(i);
@@ -61,7 +61,7 @@ function isAttack(event: MatchEvent): boolean {
   return event.type === "hit" || event.type === "crit" || event.type === "minion_hit";
 }
 
-function strokedText(
+export function strokedText(
   ctx: Ctx,
   text: string,
   x: number,
@@ -293,7 +293,7 @@ function drawProgress(ctx: Ctx, frame: number, total: number): void {
   ctx.fillRect(x, y, (w * (frame + 1)) / Math.max(1, total), 8);
 }
 
-interface FighterVisualState {
+export interface FighterVisualState {
   /** 0..1 white damage flash. */
   flash: number;
   /** -1..1 attack phase, or null when not swinging. */
@@ -329,7 +329,7 @@ function deathProgress(index: RenderIndex, frame: number, fighterId: string): nu
   return Math.min(1, (frame - died) / DEATH_FRAMES);
 }
 
-function fighterVisualState(
+export function fighterVisualState(
   index: RenderIndex,
   frame: number,
   fighterId: string,
@@ -351,7 +351,7 @@ function fighterVisualState(
   };
 }
 
-function shakeOffset(index: RenderIndex, frame: number): { x: number; y: number } {
+export function shakeOffset(index: RenderIndex, frame: number): { x: number; y: number } {
   let amp = 0;
   for (let back = 0; back <= SHAKE_FRAMES; back += 1) {
     const f = frame - back;

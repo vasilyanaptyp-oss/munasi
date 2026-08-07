@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { mulberry32 } from "../sim/rng.js";
-import type { MatchResult } from "../sim/types.js";
+import type { MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { readWav, SAMPLE_RATE, writeWav } from "./wav.js";
 
@@ -236,7 +236,10 @@ export interface SfxTrackOptions {
  * `adelay` inputs, and it stays deterministic because it is driven purely by
  * the event list.
  */
-export function buildSfxTrack(result: MatchResult, options: SfxTrackOptions): Float32Array {
+export function buildSfxTrack(
+  result: { events: MatchEvent[] },
+  options: SfxTrackOptions,
+): Float32Array {
   const dir = ensureAudioAssets(options.audioDir);
   const cache = new Map<SfxName, Float32Array>();
   const load = (name: SfxName): Float32Array => {

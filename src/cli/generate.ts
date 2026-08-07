@@ -3,6 +3,8 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { generateMatchups, type Matchup } from "../content/generateMatchups.js";
 import { loadFighters } from "../content/index.js";
+import { buildGauntlet, gauntletMatchups, GAUNTLET_RULES } from "../content/teams.js";
+import { findBestGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import type { Fighter } from "../sim/types.js";
 import { exportVideo, FfmpegMissingError, checkFfmpeg, VICTORY_FREEZE_FRAMES } from "../export/video.js";
 import { defaultPlan, sourceFrames } from "../render/framePlan.js";
@@ -12,7 +14,15 @@ import { describeColdOpen, findColdOpen } from "../sim/coldOpen.js";
 import { findBestMatch } from "../sim/drama.js";
 import { FPS } from "../sim/types.js";
 import { isMain } from "../util/main.js";
-import { pairKey, readManifest, renderedPairs, writeManifest, type ManifestEntry } from "./manifest.js";
+import {
+  gauntletKey,
+  pairKey,
+  readManifest,
+  renderedGauntlets,
+  renderedPairs,
+  writeManifest,
+  type ManifestEntry,
+} from "./manifest.js";
 import { ProgressBar } from "./progress.js";
 
 /**
@@ -43,6 +53,12 @@ export interface GenerateOptions {
    * Off by default so both cuts can be posted and compared on watch time.
    */
   coldOpen: boolean;
+  /**
+   * Run the original one-on-one format instead of the gauntlet. The gauntlet
+   * is the default: one worker against three bosses is the format the
+   * reference uses and the one the titles are written for.
+   */
+  duel: boolean;
   /** Roster to draw from. Defaults to the shipped one. */
   roster?: Fighter[];
 }
@@ -77,6 +93,7 @@ export function parseArgs(argv: string[]): GenerateOptions {
     keepFrames: argv.includes("--keep-frames"),
     redo: argv.includes("--redo"),
     coldOpen: argv.includes("--cold-open"),
+    duel: argv.includes("--duel"),
   };
 }
 
@@ -156,6 +173,88 @@ async function generateOne(
   }
 }
 
+/** One gauntlet: pick the most dramatic seed, render it, encode it. */
+async function generateGauntlet(
+  challenger: Fighter,
+  members: Fighter[],
+  options: GenerateOptions,
+  bar: ProgressBar,
+  position: string,
+): Promise<ManifestEntry> {
+  const label = `${challenger.name} vs ${members.map((m) => m.name).join(", ")}`;
+  bar.setLabel(`${position} ${label}  drama`);
+  bar.update(0, 1);
+
+  const config = buildGauntlet(challenger, members);
+  const best = findBestGauntlet(config, { count: options.seeds, rules: GAUNTLET_RULES });
+  const result: GauntletResult = best.result;
+
+  const window = options.coldOpen ? findColdOpen(result) : null;
+  const plan = window
+    ? coldOpenPlan(result, window, VICTORY_FREEZE_FRAMES)
+    : defaultPlan(result, VICTORY_FREEZE_FRAMES);
+  const totalFrames = plan.length;
+
+  const framesDir = join(
+    options.outDir,
+    ".frames",
+    `${challenger.id}-vs-${members.map((m) => m.id).join("-")}-${best.seed}`,
+  );
+  await mkdir(framesDir, { recursive: true });
+
+  try {
+    bar.setLabel(`${position} ${label}  render`);
+    await renderFramesParallel(result, framesDir, {
+      plan,
+      workers: options.workers,
+      onProgress: (done) => bar.update(done, totalFrames),
+    });
+
+    bar.setLabel(`${position} ${label}  encode`);
+    bar.update(0, 1);
+    const exported = await exportVideo(result, {
+      framesDir,
+      outDir: options.outDir,
+      sourceFrames: sourceFrames(plan),
+    });
+    bar.update(1, 1);
+
+    return {
+      file: exported.path.split("/").pop()!,
+      fighters: [challenger.id, members.map((m) => m.id).join("+")],
+      fighterNames: [challenger.name, result.team.name],
+      seed: best.seed,
+      dramaScore: Math.round(best.score * 10) / 10,
+      durationSeconds: Math.round(exported.durationSeconds * 100) / 100,
+      frames: totalFrames,
+      winnerId: result.challengerWon ? challenger.id : (result.rounds.at(-1)?.opponentId ?? null),
+      sizeBytes: exported.sizeBytes,
+      generatedAt: new Date().toISOString(),
+      gauntlet: {
+        challengerId: challenger.id,
+        teamIds: members.map((m) => m.id),
+        cleared: result.challengerWon,
+        decidedInRound: result.rounds.length,
+        hpByRound: result.rounds.map((r) => Math.round(r.challengerHpEnd)),
+      },
+      ...(window
+        ? {
+            coldOpen: {
+              startFrame: window.startFrame,
+              endFrame: window.endFrame,
+              reason: window.reason,
+              damage: window.damage,
+              leadChanges: window.leadChanges,
+              why: describeColdOpen(window),
+            },
+          }
+        : {}),
+    };
+  } finally {
+    if (!options.keepFrames) rmSync(framesDir, { recursive: true, force: true });
+  }
+}
+
 export async function generate(options: GenerateOptions): Promise<GenerateSummary> {
   checkFfmpeg();
   await mkdir(options.outDir, { recursive: true });
@@ -163,14 +262,34 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
   const manifest = options.redo ? { entries: [] } : readManifest(options.outDir);
   const alreadyDone = renderedPairs(manifest);
 
-  console.log(
-    `Ranking matchups (${options.matchupSample} matches per pair)...`,
-  );
   const roster = options.roster ?? loadFighters();
-  const ranked = generateMatchups({ roster, sample: options.matchupSample });
-  const queue = ranked
-    .filter((m) => !alreadyDone.has(pairKey(m.a.id, m.b.id)))
-    .slice(0, options.count);
+
+  interface QueueItem {
+    label: string;
+    run: (bar: ProgressBar, position: string) => Promise<ManifestEntry>;
+  }
+  let queue: QueueItem[];
+
+  if (options.duel) {
+    console.log(`Ranking duels (${options.matchupSample} matches per pair)...`);
+    const ranked = generateMatchups({ roster, sample: options.matchupSample });
+    queue = ranked
+      .filter((m) => !alreadyDone.has(pairKey(m.a.id, m.b.id)))
+      .slice(0, options.count)
+      .map((matchup) => ({
+        label: `${matchup.a.name} vs ${matchup.b.name}`,
+        run: (bar, position) => generateOne(matchup, options, bar, position),
+      }));
+  } else {
+    const done = renderedGauntlets(manifest);
+    queue = gauntletMatchups(roster)
+      .filter((m) => !done.has(gauntletKey(m.challenger.id, m.members.map((x) => x.id))))
+      .slice(0, options.count)
+      .map((m) => ({
+        label: `${m.challenger.name} vs ${m.members.map((x) => x.name).join(", ")}`,
+        run: (bar, position) => generateGauntlet(m.challenger, m.members, options, bar, position),
+      }));
+  }
 
   if (queue.length === 0) {
     console.log("Nothing to do — every matchup is already in the manifest (use --redo to start over).");
@@ -184,12 +303,12 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
   const summary: GenerateSummary = { produced: [], failures: [] };
   const bar = new ProgressBar("");
 
-  for (const [index, matchup] of queue.entries()) {
+  for (const [index, item] of queue.entries()) {
     const position = `[${index + 1}/${queue.length}]`;
-    const label = `${matchup.a.name} vs ${matchup.b.name}`;
+    const label = item.label;
     const startedAt = Date.now();
     try {
-      const entry = await generateOne(matchup, options, bar, position);
+      const entry = await item.run(bar, position);
       summary.produced.push(entry);
       manifest.entries.push(entry);
       // Written after every video so an interrupted batch keeps its progress.

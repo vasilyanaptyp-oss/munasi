@@ -1,5 +1,4 @@
 import type { ColdOpenWindow } from "../sim/coldOpen.js";
-import type { MatchResult } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 
 /**
@@ -25,8 +24,13 @@ export interface PlannedFrame {
 
 export type FramePlan = PlannedFrame[];
 
+/** Anything with a frame count — a 1v1 match or a gauntlet run. */
+export interface Timeline {
+  durationFrames: number;
+}
+
 /** Straight play-through, with the winner freeze appended. */
-export function defaultPlan(result: MatchResult, victoryFrames = 0): FramePlan {
+export function defaultPlan(result: Timeline, victoryFrames = 0): FramePlan {
   const plan: FramePlan = [];
   for (let frame = 0; frame < result.durationFrames; frame += 1) plan.push({ source: frame });
   for (let i = 0; i < victoryFrames; i += 1) {
@@ -47,7 +51,7 @@ const START_BADGE_FRAMES = 20;
  * reads as a rewind rather than a glitch.
  */
 export function coldOpenPlan(
-  result: MatchResult,
+  result: Timeline,
   window: ColdOpenWindow,
   victoryFrames = 0,
 ): FramePlan {

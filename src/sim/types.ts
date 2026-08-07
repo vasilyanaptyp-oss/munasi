@@ -90,6 +90,17 @@ export interface MatchRules {
   comebackWaves?: number[];
   /** Minions per wave. */
   comebackWaveSize?: number;
+  /**
+   * Challenger's starting HP. Used by the gauntlet, where HP carries across
+   * rounds instead of resetting. Defaults to `a.maxHp`.
+   */
+  startHpA?: number;
+  /** Per-match frame cap. Defaults to the 60-second timeout. */
+  maxFrames?: number;
+  /** Overrides `DAMAGE_VARIANCE` for this match. */
+  damageVariance?: number;
+  /** Arena pickups. Omit to disable them. */
+  pickups?: PickupRules;
 }
 
 export type Side = "a" | "b";
@@ -118,6 +129,41 @@ export interface Snapshot {
   a: FighterSnapshot;
   b: FighterSnapshot;
   minions: MinionSnapshot[];
+  /** Item currently on the floor, if any. */
+  pickup?: PickupSnapshot;
+}
+
+export type PickupType = "heal" | "damage_buff" | "attack_speed";
+
+/**
+ * A pickup on the arena floor. There is no positional simulation: the item
+ * appears, both fighters reach for it, and who gets there first is decided by
+ * attack speed plus the seeded roll — which is all the viewer can read anyway.
+ */
+export interface PickupSnapshot {
+  id: string;
+  type: PickupType;
+  /** Frame it appeared on. */
+  spawnFrame: number;
+  /** Frame it will be claimed on. */
+  resolveFrame: number;
+}
+
+export interface PickupRules {
+  /** Frame of the first spawn. */
+  firstFrame?: number;
+  /** Frames between spawns. */
+  intervalFrames?: number;
+  /** Frames a pickup sits on the floor before someone reaches it. */
+  reachFrames?: number;
+  /** HP restored by a `heal`. */
+  healPower?: number;
+  /** Attack multiplier added by a `damage_buff`. */
+  damageBuff?: number;
+  /** Attack-speed multiplier added by an `attack_speed`. */
+  speedBuff?: number;
+  /** Seconds a pickup buff lasts. */
+  buffDuration?: number;
 }
 
 export type EventType =
@@ -130,7 +176,9 @@ export type EventType =
   | "spawn"
   | "death"
   | "minion_death"
-  | "victory";
+  | "victory"
+  | "pickup_spawn"
+  | "pickup_claim";
 
 export interface MatchEvent {
   /** Video frame the event belongs to. */

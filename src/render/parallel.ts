@@ -2,8 +2,7 @@ import { fork } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { MatchResult } from "../sim/types.js";
-import { planFor, renderFrames, type RenderFramesOptions } from "./index.js";
+import { planFor, renderFrames, type Renderable, type RenderFramesOptions } from "./index.js";
 import type { RenderJob, WorkerMessage } from "./renderWorker.js";
 
 const WORKER_PATH = fileURLToPath(new URL("./renderWorker.ts", import.meta.url));
@@ -31,7 +30,7 @@ export interface ParallelRenderOptions extends RenderFramesOptions {
  * byte-identical to rendering them all in one process.
  */
 export async function renderFramesParallel(
-  result: MatchResult,
+  result: Renderable,
   outDir: string,
   options: ParallelRenderOptions = {},
 ): Promise<void> {

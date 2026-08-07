@@ -1,4 +1,4 @@
-import type { MatchResult, Side } from "./types.js";
+import type { FighterSnapshot, MatchEvent, Side } from "./types.js";
 import { FPS } from "./types.js";
 
 /**
@@ -54,8 +54,21 @@ function isDamage(type: string): boolean {
  * Picks the window to open on, or null when the match is too short to spare
  * one that satisfies the rules.
  */
+/**
+ * The shape both formats share: a frame count, an HP curve for each side and
+ * an event list. Written against this so a gauntlet can be hooked the same way
+ * a duel is.
+ */
+export interface ColdOpenSource {
+  durationFrames: number;
+  events: MatchEvent[];
+  snapshots: { a?: FighterSnapshot; b?: FighterSnapshot; challenger?: FighterSnapshot; opponent?: FighterSnapshot }[];
+  fighters?: { a: { maxHp: number }; b: { maxHp: number } };
+  challenger?: { maxHp: number };
+}
+
 export function findColdOpen(
-  result: MatchResult,
+  result: ColdOpenSource,
   options: ColdOpenOptions = {},
 ): ColdOpenWindow | null {
   const length = options.length ?? COLD_OPEN_FRAMES;
@@ -83,13 +96,18 @@ export function findColdOpen(
   for (let f = 0; f < durationFrames; f += 1) {
     const snap = snapshots[f];
     if (!snap) continue;
+    const left = snap.a ?? snap.challenger;
+    const right = snap.b ?? snap.opponent;
+    if (!left || !right) continue;
     const gap =
-      (snap.a.maxHp > 0 ? snap.a.hp / snap.a.maxHp : 0) -
-      (snap.b.maxHp > 0 ? snap.b.hp / snap.b.maxHp : 0);
+      (left.maxHp > 0 ? left.hp / left.maxHp : 0) - (right.maxHp > 0 ? right.hp / right.maxHp : 0);
     leaderAt[f] = Math.abs(gap) >= LEAD_DEADBAND ? (gap > 0 ? "a" : "b") : null;
   }
 
-  const meanMaxHp = (result.fighters.a.maxHp + result.fighters.b.maxHp) / 2;
+  const firstSnap = snapshots[0];
+  const meanMaxHp = result.fighters
+    ? (result.fighters.a.maxHp + result.fighters.b.maxHp) / 2
+    : ((firstSnap?.challenger?.maxHp ?? 1000) + (firstSnap?.opponent?.maxHp ?? 1000)) / 2;
   const leadChangeValue = meanMaxHp * leadChangeWeight;
 
   let best: ColdOpenWindow | null = null;

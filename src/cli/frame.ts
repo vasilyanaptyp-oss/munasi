@@ -1,8 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getFighter, loadFighters } from "../content/index.js";
+import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
+import { findBestGauntlet } from "../sim/gauntlet.js";
 import { findBestMatch } from "../sim/drama.js";
-import { renderSingleFrame } from "../render/frame.js";
+import { renderAnyFrame } from "../render/index.js";
 
 /**
  * Renders sample frames of a real matchup for eyeballing the composition:
@@ -14,17 +16,36 @@ function main(): void {
   mkdirSync(outDir, { recursive: true });
 
   const roster = loadFighters();
+  const argv = process.argv.slice(2);
   const flag = (name: string): string | undefined =>
-    process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
-  const a = getFighter(flag("a") ?? "plumber", roster);
-  const b = getFighter(flag("b") ?? "councillor", roster);
-  console.log(`${a.name} vs ${b.name}`);
+    argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
 
-  const best = findBestMatch({ a, b }, { count: 500 });
-  const { result } = best;
+  let best: { seed: number; score: number; result: { durationFrames: number } };
+  let result: Parameters<typeof renderAnyFrame>[0];
+
+  if (argv.includes("--duel")) {
+    const a = getFighter(flag("a") ?? "plumber", roster);
+    const b = getFighter(flag("b") ?? "councillor", roster);
+    console.log(`${a.name} vs ${b.name}`);
+    const duel = findBestMatch({ a, b }, { count: 500 });
+    best = duel;
+    result = duel.result;
+  } else {
+    const challenger = getFighter(flag("a") ?? "plumber", roster);
+    const members = (flag("team") ?? "arbiter,councillor,inspector")
+      .split(",")
+      .map((id) => getFighter(id.trim(), roster));
+    console.log(`${challenger.name} vs ${members.map((m) => m.name).join(", ")}`);
+    const run = findBestGauntlet(buildGauntlet(challenger, members), {
+      count: 200,
+      rules: GAUNTLET_RULES,
+    });
+    best = run;
+    result = run.result;
+  }
   console.log(
     `seed ${best.seed}  drama ${best.score.toFixed(1)}  ` +
-      `${(result.durationFrames / 30).toFixed(1)}s  winner ${result.winnerId}`,
+      `${(best.result.durationFrames / 30).toFixed(1)}s`,
   );
 
   const requested = process.argv
@@ -43,8 +64,8 @@ function main(): void {
         ];
 
   for (const frame of frames) {
-    const png = renderSingleFrame(result, frame, {
-      victoryOverlay: frame === result.durationFrames - 1,
+    const png = renderAnyFrame(result, frame, {
+      planned: { source: frame, victoryOverlay: frame === result.durationFrames - 1 },
     });
     const path = join(outDir, `frame_${String(frame).padStart(6, "0")}.png`);
     writeFileSync(path, png);

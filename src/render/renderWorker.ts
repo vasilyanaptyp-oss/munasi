@@ -1,9 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { MatchResult } from "../sim/types.js";
-import { buildRenderIndex, renderSingleFrame } from "./frame.js";
+import { buildRenderIndex } from "./frame.js";
 import type { FramePlan } from "./framePlan.js";
-import { frameFileName } from "./index.js";
+import { frameFileName, renderAnyFrame, type Renderable } from "./index.js";
 
 /**
  * Frame-range renderer, run as a forked child by `parallel.ts`.
@@ -14,7 +13,7 @@ import { frameFileName } from "./index.js";
  */
 
 export interface RenderJob {
-  result: MatchResult;
+  result: Renderable;
   outDir: string;
   /** The whole frame plan; this worker renders a slice of it. */
   plan: FramePlan;
@@ -35,7 +34,7 @@ async function run(job: RenderJob): Promise<void> {
 
   for (let output = job.startIndex; output < job.endIndex; output += 1) {
     const planned = plan[output]!;
-    const png = renderSingleFrame(result, planned.source, { index, planned });
+    const png = renderAnyFrame(result, planned.source, { index, planned });
     await writeFile(join(outDir, frameFileName(output)), png);
     process.send?.({ type: "progress", frames: 1 } satisfies WorkerMessage);
   }
