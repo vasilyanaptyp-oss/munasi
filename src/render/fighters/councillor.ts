@@ -22,9 +22,12 @@ export const councillor: FighterArt = {
     // Orbiting folders. Drawn behind the body.
     for (let i = 0; i < 4; i += 1) {
       const angle = spin + (i * Math.PI) / 2;
-      const radius = 0.62 + scatter * (0.6 + i * 0.2);
+      // Разлёт нарочно короткий: бумаги разлетаются, но остаются рядом
+      // с телом. Широкий разлёт (радиус до 1.82) раздувал габарит фигуры
+      // с 0.83 до 1.30 и не давал держать бойца целиком в кадре.
+      const radius = 0.62 + scatter * (0.13 + i * 0.04);
       const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius * 0.42 - 0.1 - scatter * 0.4;
+      const y = Math.sin(angle) * radius * 0.42 - 0.1 - scatter * 0.16;
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(angle + scatter * 3);

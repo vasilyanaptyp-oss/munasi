@@ -54,24 +54,12 @@ const FIGHTER_GAP = Math.round(WIDTH * 0.03);
 /**
  * How far the two resting boxes may overlap, as a share of fighter size.
  *
- * The height floor and "never clipped" genuinely conflict for the widest pair
- * (gatekeeper against councillor, by 25px of size): the councillor's death
- * scatters its files across 1.30 of its box against 0.83 at rest. Standing the
- * pair a little closer buys back the room without shrinking anyone below the
- * floor or touching a character's animation.
+ * Standing the pair a little closer is what buys the room to keep everyone
+ * inside the frame at the height floor. With the councillor's death scatter
+ * narrowed (1.30 -> 0.85 of its box), all 36 worker-versus-boss pairs fit with
+ * room to spare — the tightest, baker against chairman, has 84px left over.
  */
 const MAX_OVERLAP = 0.16;
-/**
- * How far past its resting box a fighter is guaranteed to stay in frame.
- *
- * A death animation throws loose matter well beyond the body — the
- * councillor's files scatter to 1.30 of its box against 0.83 at rest. Holding
- * every last flying page inside the frame would mean drawing every fighter
- * ~25% smaller, which is the deadness this layout exists to fix. So the
- * guarantee covers the body and its immediate motion; debris past this may
- * cross the edge, and the gate is written against the same bound.
- */
-export const REACH_CAP = 0.24;
 /** Keep this clear of the frame edge. */
 const EDGE = Math.round(WIDTH * 0.012);
 
@@ -164,14 +152,30 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
  * area. The floor wins if they ever disagree.
  */
 export function fighterSizeFor(challengerSprite: string, opponentSprite: string): number {
-  const a = spriteBounds(challengerSprite);
-  const b = spriteBounds(opponentSprite);
+  const restA = spriteBounds(challengerSprite);
+  const restB = spriteBounds(opponentSprite);
+  const deadA = spriteMotionBounds(challengerSprite, true);
+  const deadB = spriteMotionBounds(opponentSprite, true);
+  const liveA = spriteMotionBounds(challengerSprite, false);
+  const liveB = spriteMotionBounds(opponentSprite, false);
+
   // Aim a whisker over the floor: solving for exactly 22% leaves the result
   // sitting on the boundary, where rounding can push it under.
-  const floor = (HEIGHT * MIN_FIGHTER_HEIGHT_SHARE * 1.01) / Math.min(a.height, b.height);
-  const roomy = (WIDTH - SAFE_X * 2 - FIGHTER_GAP) / (a.width + b.width);
-  // The floor is a floor; a pair that fits comfortably may go a little larger.
-  return Math.max(floor, Math.min(roomy, floor * 1.3));
+  const floor = (HEIGHT * MIN_FIGHTER_HEIGHT_SHARE * 1.01) / Math.min(restA.height, restB.height);
+
+  // Largest scale at which everything both fighters ever draw still fits the
+  // frame, with the pair as close as the overlap budget allows. Every term
+  // scales with size, so this solves directly.
+  const span =
+    restA.right - restB.left - MAX_OVERLAP +
+    Math.max(deadB.right, liveB.right) -
+    Math.min(deadA.left, liveA.left);
+  const widest = (WIDTH - EDGE * 2) / span;
+
+  const roomy = (WIDTH - SAFE_X * 2 - FIGHTER_GAP) / (restA.width + restB.width);
+  // The floor is a floor; a pair with room to spare may go a little larger,
+  // but never past what keeps both fighters whole inside the frame.
+  return Math.min(widest, Math.max(floor, Math.min(roomy, floor * 1.3)));
 }
 
 /**
@@ -194,10 +198,11 @@ export function roundPlacement(
   const liveA = spriteMotionBounds(challengerSprite, false);
   const liveB = spriteMotionBounds(opponentSprite, false);
 
-  // Widest the pair ever reaches: whichever side is dying, the other is alive,
-  // and each capped to the body-plus-motion bound.
-  const reachLeft = Math.max(Math.min(deadA.left, liveA.left), restA.left - REACH_CAP) * size;
-  const reachRight = Math.min(Math.max(deadB.right, liveB.right), restB.right + REACH_CAP) * size;
+  // Widest the pair ever reaches. Only one fighter is ever mid-death, so the
+  // worst case is one full death envelope against one living fighter.
+  // Nothing is capped: everything a fighter draws stays inside the frame.
+  const reachLeft = Math.min(deadA.left, liveA.left) * size;
+  const reachRight = Math.max(deadB.right, liveB.right) * size;
 
   const desired = (restA.right - restB.left) * size + FIGHTER_GAP;
   const minimum = (restA.right - restB.left) * size - MAX_OVERLAP * size;
@@ -282,19 +287,15 @@ export function gauntletFrameLayout(
 
   // Reach boxes use the true measured envelope, per side.
   const reachOf = (name: string, spriteId: string, originX: number, originY: number): Rect => {
+    // The full measured envelope, uncapped: if any part of a fighter would
+    // leave the frame, the gate must see it.
     const dead = spriteMotionBounds(spriteId, true);
-    const rest = spriteBounds(spriteId);
-    // Capped to the body bound; see REACH_CAP.
-    const left = Math.max(dead.left, rest.left - REACH_CAP);
-    const right = Math.min(dead.right, rest.right + REACH_CAP);
-    const top = Math.max(dead.top, rest.top - REACH_CAP);
-    const bottom = Math.min(dead.bottom, rest.bottom + REACH_CAP);
     return {
       name: `${name}Reach`,
-      x: originX + left * size,
-      y: originY + top * size,
-      w: (right - left) * size,
-      h: (bottom - top) * size,
+      x: originX + dead.left * size,
+      y: originY + dead.top * size,
+      w: dead.width * size,
+      h: dead.height * size,
     };
   };
 

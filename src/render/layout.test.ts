@@ -4,13 +4,16 @@ import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
 import { findBestGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import { buildRenderIndex } from "./frame.js";
 import { defaultPlan } from "./framePlan.js";
+import { byFaction } from "../content/teams.js";
 import {
   gauntletFrameLayout,
   hudLayout,
   intersects,
   MIN_FIGHTER_HEIGHT_SHARE,
+  roundPlacement,
   type Rect,
 } from "./gauntletLayout.js";
+import { spriteBounds } from "./silhouette.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 
 /**
@@ -188,6 +191,38 @@ describe("gauntlet composition", () => {
     // The challenger opens at full HP, which is the widest number it shows.
     expect(String(result.challenger.maxHp).length).toBeGreaterThanOrEqual(4);
     expect(layout.challenger.hp.w).toBeGreaterThan(WIDTH * 0.1);
+  });
+
+  it("holds the rules for every worker-versus-boss pair, not just this one", () => {
+    // Placement is solved per round from the two fighters' measured extents,
+    // so every pairing has to be checked, not the one this video happens to use.
+    const failures: string[] = [];
+    for (const worker of byFaction("workers", roster)) {
+      for (const boss of byFaction("bosses", roster)) {
+        const placement = roundPlacement(worker.spriteId, boss.spriteId);
+        const restA = spriteBounds(worker.spriteId);
+        const restB = spriteBounds(boss.spriteId);
+
+        const heightA = restA.height * placement.size;
+        const heightB = restB.height * placement.size;
+        const floor = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
+        if (heightA < floor || heightB < floor) {
+          failures.push(
+            `${worker.id} × ${boss.id}: heights ${heightA.toFixed(0)}/${heightB.toFixed(0)}px ` +
+              `below the ${floor.toFixed(0)}px floor`,
+          );
+        }
+
+        // Everything either fighter ever draws has to fit between the edges.
+        const span = placement.separation + (placement.reachRight - placement.reachLeft);
+        if (span > WIDTH) {
+          failures.push(
+            `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px of width, frame is ${WIDTH}px`,
+          );
+        }
+      }
+    }
+    expect(failures).toEqual([]);
   });
 
   it("plays a death animation instead of leaving the loser standing", () => {
