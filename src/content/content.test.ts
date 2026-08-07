@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { spriteFor } from "../render/sprites.js";
+import { artFor } from "../render/fighters/index.js";
 import { simulate } from "../sim/simulate.js";
 import { FPS } from "../sim/types.js";
 import { BALANCE_MAX, BALANCE_MIN, evaluatePair, evaluateRoster } from "./balance.js";
@@ -42,10 +42,11 @@ describe("roster loading", () => {
     }
   });
 
-  it("gives every fighter art that resolves to a real archetype", () => {
+  it("gives every fighter its own drawing function", () => {
+    // The silhouette gate proves they look different; this only checks wiring.
     for (const fighter of roster) {
-      expect(spriteFor(fighter.spriteId).archetype).toBeTruthy();
-      expect(fighter.spriteId).toMatch(/^[a-z]+:\d+$/);
+      expect(artFor(fighter.spriteId), `${fighter.id} has no art`).toBeDefined();
+      expect(fighter.spriteId).toBe(fighter.id);
     }
   });
 
@@ -80,7 +81,7 @@ describe("roster loading", () => {
   });
 
   it("looks fighters up by id", () => {
-    expect(getFighter("night_rogue", roster).name).toBe("NIGHT ROGUE");
+    expect(getFighter("nailmaster", roster).name).toBe("МАСТЕР МАНИКЮРА");
     expect(() => getFighter("nobody", roster)).toThrow(/unknown fighter/);
   });
 });
@@ -135,7 +136,7 @@ describe("calibrate", () => {
   });
 
   it("scales damage but never HP, healing or minion HP", () => {
-    const spec = ROSTER.find((s) => s.id === "void_summoner")!;
+    const spec = ROSTER.find((s) => s.id === "councillor")!;
     const base = scaleSpec(spec, 20, 1);
     const doubled = scaleSpec(spec, 20, 2);
     expect(doubled.attack).toBe(base.attack * 2);
@@ -145,7 +146,7 @@ describe("calibrate", () => {
   });
 
   it("leaves healing alone when scaling power", () => {
-    const spec = ROSTER.find((s) => s.id === "sun_knight")!;
+    const spec = ROSTER.find((s) => s.id === "arbiter")!;
     const scaled = scaleSpec(spec, 20, 3);
     expect(scaled.abilities[0]!.power).toBe(spec.abilities[0]!.power);
   });

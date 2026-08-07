@@ -2,15 +2,13 @@ import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
 import type { MatchEvent, MatchResult, Side, Snapshot } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
-import { drawSprite, minionSpriteFor, spriteFor } from "./sprites.js";
+import { DEATH_FRAMES, drawFighter, RECOVERY_FRAMES, WINDUP_FRAMES } from "./drawFighter.js";
 import { COLORS, ensureFonts, font, HEIGHT, LAYOUT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
 
 /** Frames a floating damage number stays on screen (0.5s at 30fps). */
 const DAMAGE_NUMBER_FRAMES = Math.round(FPS * 0.5);
-/** Frames of lunge after a fighter swings. */
-const LUNGE_FRAMES = 7;
 /** Frames the white damage flash lasts. */
 const FLASH_FRAMES = 4;
 /** Frames the screen keeps shaking after a crit. */
@@ -24,16 +22,22 @@ const GHOST_FRAMES = 14;
  */
 export interface RenderIndex {
   byFrame: Map<number, MatchEvent[]>;
+  /** Frame each fighter died on, for the death animation. */
+  deathFrame: Map<string, number>;
 }
 
 export function buildRenderIndex(result: MatchResult): RenderIndex {
   const byFrame = new Map<number, MatchEvent[]>();
+  const deathFrame = new Map<string, number>();
   for (const event of result.events) {
     const bucket = byFrame.get(event.frame);
     if (bucket) bucket.push(event);
     else byFrame.set(event.frame, [event]);
+    if (event.type === "death" && !deathFrame.has(event.actorId)) {
+      deathFrame.set(event.actorId, event.frame);
+    }
   }
-  return { byFrame };
+  return { byFrame, deathFrame };
 }
 
 function eventsAt(index: RenderIndex, frame: number): MatchEvent[] {
@@ -244,33 +248,61 @@ function drawProgress(ctx: Ctx, frame: number, total: number): void {
 }
 
 interface FighterVisualState {
+  /** 0..1 white damage flash. */
   flash: number;
-  lunge: number;
-  glow: number;
+  /** -1..1 attack phase, or null when not swinging. */
+  strike: number | null;
+  /** 0..1 death progress. */
+  death: number;
+}
+
+/**
+ * How far into a swing the fighter is on this frame.
+ *
+ * The whole event list is known up front, so the renderer can look *ahead* to
+ * the frame a blow lands on and play a wind-up before it — which is what makes
+ * an attack read as intent rather than a twitch.
+ */
+function strikePhase(index: RenderIndex, frame: number, fighterId: string): number | null {
+  let best: number | null = null;
+  for (let f = frame - RECOVERY_FRAMES; f <= frame + WINDUP_FRAMES; f += 1) {
+    if (f < 0) continue;
+    const swung = eventsAt(index, f).some((e) => e.actorId === fighterId && isAttack(e));
+    if (!swung) continue;
+    if (best === null || Math.abs(f - frame) < Math.abs(best - frame)) best = f;
+  }
+  if (best === null) return null;
+  return best > frame
+    ? (frame - best) / WINDUP_FRAMES // -1..0, winding up
+    : (frame - best) / RECOVERY_FRAMES; // 0..1, following through
+}
+
+function deathProgress(index: RenderIndex, frame: number, fighterId: string): number {
+  const died = index.deathFrame.get(fighterId);
+  if (died === undefined || frame < died) return 0;
+  return Math.min(1, (frame - died) / DEATH_FRAMES);
 }
 
 function fighterVisualState(
   index: RenderIndex,
   frame: number,
   fighterId: string,
-  buffed: boolean,
 ): FighterVisualState {
   let flash = 0;
-  let lunge = 0;
-  for (let back = 0; back <= Math.max(FLASH_FRAMES, LUNGE_FRAMES); back += 1) {
+  for (let back = 0; back <= FLASH_FRAMES; back += 1) {
     const f = frame - back;
     if (f < 0) break;
     for (const event of eventsAt(index, f)) {
-      if (event.targetId === fighterId && isAttack(event) && back <= FLASH_FRAMES) {
+      if (event.targetId === fighterId && isAttack(event)) {
         flash = Math.max(flash, 0.75 * (1 - back / (FLASH_FRAMES + 1)));
-      }
-      if (event.actorId === fighterId && isAttack(event) && back <= LUNGE_FRAMES) {
-        // Quick out, slow back: peak on the frame of the swing.
-        lunge = Math.max(lunge, 1 - back / LUNGE_FRAMES);
       }
     }
   }
-  return { flash, lunge, glow: buffed ? 0.8 : 0 };
+  return {
+    flash,
+    strike: strikePhase(index, frame, fighterId),
+    death: deathProgress(index, frame, fighterId),
+  };
 }
 
 function shakeOffset(index: RenderIndex, frame: number): { x: number; y: number } {
@@ -307,7 +339,6 @@ function drawMinions(
   baseY: number,
 ): void {
   const mine = snap.minions.filter((m) => m.ownerId === ownerId);
-  const def = minionSpriteFor(ownerSpriteId);
   const facing: 1 | -1 = baseY < LAYOUT.divider ? 1 : -1;
   mine.forEach((minion, i) => {
     const side = i % 2 === 0 ? -1 : 1;
@@ -316,7 +347,12 @@ function drawMinions(
     const y = baseY + 78 + (rank % 2) * 40;
     ctx.save();
     ctx.translate(x, y);
-    drawSprite(ctx, def, { size: LAYOUT.minionSize, facing });
+    drawFighter(ctx, ownerSpriteId, {
+      size: LAYOUT.minionSize,
+      facing,
+      frame: snap.frame,
+      asMinion: true,
+    });
     ctx.restore();
 
     // Slim HP pip under each minion.
@@ -468,22 +504,18 @@ export function renderSingleFrame(
     const fighter = result.fighters[side];
     const state = snap[side];
     const facing: 1 | -1 = side === "a" ? 1 : -1;
-    const vis = fighterVisualState(index, frame, fighter.id, state.buffed);
-    const bob = Math.sin(frame * 0.14 + (side === "a" ? 0 : Math.PI / 2)) * 12;
-    const y = (side === "a" ? LAYOUT.a.spriteY : LAYOUT.b.spriteY) + bob + facing * vis.lunge * 62;
+    const vis = fighterVisualState(index, frame, fighter.id);
 
     ctx.save();
-    ctx.translate(LAYOUT.centerX, y);
-    if (!state.alive) {
-      // Toppled over, faded out.
-      ctx.globalAlpha = 0.45;
-      ctx.rotate(facing * 1.35);
-    }
-    drawSprite(ctx, spriteFor(fighter.spriteId), {
+    ctx.translate(LAYOUT.centerX, side === "a" ? LAYOUT.a.spriteY : LAYOUT.b.spriteY);
+    drawFighter(ctx, fighter.spriteId, {
       size: LAYOUT.spriteSize,
       facing,
+      frame,
+      strike: vis.strike,
+      death: vis.death,
       flash: vis.flash,
-      glow: vis.glow,
+      buffed: state.buffed,
     });
     ctx.restore();
   }

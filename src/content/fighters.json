@@ -1,8 +1,8 @@
 [
   {
-    "id": "iron_warden",
-    "name": "IRON WARDEN",
-    "spriteId": "warden:210",
+    "id": "plumber",
+    "name": "САНТЕХНИК ЖЭКА",
+    "spriteId": "plumber",
     "maxHp": 1400,
     "attack": 31.1,
     "attackSpeed": 0.8,
@@ -17,9 +17,9 @@
     ]
   },
   {
-    "id": "ember_mage",
-    "name": "EMBER MAGE",
-    "spriteId": "mage:18",
+    "id": "baker",
+    "name": "НОЧНОЙ ПЕКАРЬ",
+    "spriteId": "baker",
     "maxHp": 1050,
     "attack": 26,
     "attackSpeed": 1.05,
@@ -34,9 +34,9 @@
     ]
   },
   {
-    "id": "frost_wisp",
-    "name": "FROST WISP",
-    "spriteId": "wisp:195",
+    "id": "courier",
+    "name": "КУРЬЕР НА СМЕНЕ",
+    "spriteId": "courier",
     "maxHp": 1000,
     "attack": 24.1,
     "attackSpeed": 1.45,
@@ -52,9 +52,9 @@
     ]
   },
   {
-    "id": "stone_golem",
-    "name": "STONE GOLEM",
-    "spriteId": "golem:35",
+    "id": "loader",
+    "name": "ГРУЗЧИК С РЫНКА",
+    "spriteId": "loader",
     "maxHp": 1400,
     "attack": 35.6,
     "attackSpeed": 0.75,
@@ -63,9 +63,9 @@
     "abilities": []
   },
   {
-    "id": "night_rogue",
-    "name": "NIGHT ROGUE",
-    "spriteId": "rogue:280",
+    "id": "nailmaster",
+    "name": "МАСТЕР МАНИКЮРА",
+    "spriteId": "nailmaster",
     "maxHp": 1000,
     "attack": 23.2,
     "attackSpeed": 1.35,
@@ -74,9 +74,9 @@
     "abilities": []
   },
   {
-    "id": "bone_reaper",
-    "name": "BONE REAPER",
-    "spriteId": "reaper:330",
+    "id": "chairman",
+    "name": "ПРЕДСЕДАТЕЛЬ КОМИССИИ",
+    "spriteId": "chairman",
     "maxHp": 1150,
     "attack": 25.5,
     "attackSpeed": 0.95,
@@ -97,9 +97,9 @@
     ]
   },
   {
-    "id": "thorn_beast",
-    "name": "THORN BEAST",
-    "spriteId": "beast:100",
+    "id": "silencer",
+    "name": "ГЛАВНЫЙ ПО ТИШИНЕ",
+    "spriteId": "silencer",
     "maxHp": 1200,
     "attack": 23.8,
     "attackSpeed": 1.4,
@@ -108,9 +108,9 @@
     "abilities": []
   },
   {
-    "id": "sun_knight",
-    "name": "SUN KNIGHT",
-    "spriteId": "knight:45",
+    "id": "arbiter",
+    "name": "ВЕРХОВНЫЙ АРБИТР",
+    "spriteId": "arbiter",
     "maxHp": 1300,
     "attack": 25.4,
     "attackSpeed": 1,
@@ -125,9 +125,9 @@
     ]
   },
   {
-    "id": "void_summoner",
-    "name": "VOID SUMMONER",
-    "spriteId": "mage:265",
+    "id": "councillor",
+    "name": "ТАЙНЫЙ СОВЕТНИК",
+    "spriteId": "councillor",
     "maxHp": 1100,
     "attack": 26.8,
     "attackSpeed": 0.9,
@@ -148,9 +148,9 @@
     ]
   },
   {
-    "id": "storm_herald",
-    "name": "STORM HERALD",
-    "spriteId": "wisp:55",
+    "id": "viceroy",
+    "name": "НАМЕСТНИК ОКРУГА",
+    "spriteId": "viceroy",
     "maxHp": 1100,
     "attack": 21.6,
     "attackSpeed": 1.2,
@@ -166,9 +166,9 @@
     ]
   },
   {
-    "id": "rust_brawler",
-    "name": "RUST BRAWLER",
-    "spriteId": "knight:15",
+    "id": "gatekeeper",
+    "name": "СТАРШИЙ ПО ШЛАГБАУМУ",
+    "spriteId": "gatekeeper",
     "maxHp": 1250,
     "attack": 25.9,
     "attackSpeed": 1.15,
@@ -177,9 +177,9 @@
     "abilities": []
   },
   {
-    "id": "plague_warden",
-    "name": "PLAGUE WARDEN",
-    "spriteId": "warden:130",
+    "id": "inspector",
+    "name": "ВЕЧНЫЙ ИНСПЕКТОР",
+    "spriteId": "inspector",
     "maxHp": 1250,
     "attack": 25.2,
     "attackSpeed": 0.95,

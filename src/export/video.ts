@@ -54,8 +54,13 @@ export function slug(name: string): string {
   );
 }
 
+/**
+ * Named from fighter ids rather than display names: names are free to be
+ * non-ASCII (the roster is in Russian), and transliterating them into a
+ * filename would be lossy and locale-dependent. Ids stay ASCII by convention.
+ */
 export function videoFileName(result: MatchResult): string {
-  return `${slug(result.fighters.a.name)}-vs-${slug(result.fighters.b.name)}-${result.seed}.mp4`;
+  return `${slug(result.fighters.a.id)}-vs-${slug(result.fighters.b.id)}-${result.seed}.mp4`;
 }
 
 export interface ExportOptions {

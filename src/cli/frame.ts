@@ -1,25 +1,37 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { getFighter, loadFighters } from "../content/index.js";
 import { findBestMatch } from "../sim/drama.js";
-import { abilityMatch } from "../sim/testFixtures.js";
 import { renderSingleFrame } from "../render/frame.js";
 
 /**
- * Renders a handful of sample frames for eyeballing the composition:
- *   pnpm frame [frame ...]
+ * Renders sample frames of a real matchup for eyeballing the composition:
+ *   pnpm frame [frame ...]           frames of the default matchup
+ *   pnpm frame --a=plumber --b=baker chosen fighters
  */
 function main(): void {
   const outDir = join(process.cwd(), "out", "preview");
   mkdirSync(outDir, { recursive: true });
 
-  const best = findBestMatch(abilityMatch(), { count: 500 });
+  const roster = loadFighters();
+  const flag = (name: string): string | undefined =>
+    process.argv.slice(2).find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+  const a = getFighter(flag("a") ?? "plumber", roster);
+  const b = getFighter(flag("b") ?? "councillor", roster);
+  console.log(`${a.name} vs ${b.name}`);
+
+  const best = findBestMatch({ a, b }, { count: 500 });
   const { result } = best;
   console.log(
     `seed ${best.seed}  drama ${best.score.toFixed(1)}  ` +
       `${(result.durationFrames / 30).toFixed(1)}s  winner ${result.winnerId}`,
   );
 
-  const requested = process.argv.slice(2).map(Number).filter((n) => Number.isFinite(n));
+  const requested = process.argv
+    .slice(2)
+    .filter((arg) => !arg.startsWith("--"))
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
   const frames =
     requested.length > 0
       ? requested

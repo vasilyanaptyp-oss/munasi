@@ -1,14 +1,12 @@
-import type { Canvas, SKRSContext2D } from "@napi-rs/canvas";
-import { createCanvas } from "@napi-rs/canvas";
+import type { SKRSContext2D } from "@napi-rs/canvas";
 
 /**
- * Procedural fighter art. Everything is drawn from code, so the repo ships no
- * third-party images — no real people, no borrowed franchises — and a sprite
- * looks identical on every machine.
+ * Generic archetype sprites — the fallback for any fighter without art of its
+ * own in `fighters/`. Roster fighters all have their own drawing function; this
+ * keeps test fixtures and ad-hoc configs renderable.
  *
  * Shapes are authored in unit space (-1..1 on both axes) and scaled to the
- * requested pixel size, which is why the same code draws a 300px fighter and a
- * 96px minion.
+ * requested pixel size by `drawFighter`.
  */
 
 export type Archetype =
@@ -151,7 +149,7 @@ function eyes(ctx: Ctx, y: number, spread: number, r: number, color: string): vo
  * `facing` is +1 when the enemy is below this fighter and -1 when above; it
  * points weapons and claws at the opponent.
  */
-function drawArchetype(ctx: Ctx, def: SpriteDef, facing: number): void {
+export function paintArchetype(ctx: Ctx, def: SpriteDef, facing: number): void {
   const { palette: p, archetype } = def;
   const f = facing;
 
@@ -302,66 +300,4 @@ function drawArchetype(ctx: Ctx, def: SpriteDef, facing: number): void {
       break;
     }
   }
-}
-
-/** Scratch layers, keyed by pixel size and reused across frames. */
-const scratch = new Map<number, Canvas>();
-
-function scratchCanvas(size: number): Canvas {
-  let canvas = scratch.get(size);
-  if (!canvas) {
-    canvas = createCanvas(size, size);
-    scratch.set(size, canvas);
-  }
-  return canvas;
-}
-
-export interface DrawSpriteOptions {
-  /** Pixel width/height of the sprite box. */
-  size: number;
-  /** +1 when the opponent is below, -1 when above. */
-  facing: 1 | -1;
-  /** 0..1 white overlay for the damage flash. */
-  flash?: number;
-  /** 0..1 extra glow, used while an attack buff is active. */
-  glow?: number;
-}
-
-/**
- * Draws a sprite centred on the current origin. The sprite is composed on its
- * own layer so the damage flash can be masked to the silhouette instead of
- * washing out the whole frame.
- */
-export function drawSprite(ctx: Ctx, def: SpriteDef, opts: DrawSpriteOptions): void {
-  const { size, facing } = opts;
-  const flash = opts.flash ?? 0;
-  const glow = opts.glow ?? 0;
-  // 1.5x box so weapons and horns reaching past the body are not clipped.
-  const boxSize = Math.round(size * 1.5);
-  const layer = scratchCanvas(boxSize);
-  const lc = layer.getContext("2d");
-
-  lc.clearRect(0, 0, boxSize, boxSize);
-  lc.save();
-  lc.translate(boxSize / 2, boxSize / 2);
-  lc.scale(size / 2, size / 2);
-  lc.lineJoin = "round";
-  drawArchetype(lc, def, facing);
-  lc.restore();
-
-  if (flash > 0) {
-    lc.save();
-    lc.globalCompositeOperation = "source-atop";
-    lc.fillStyle = `rgba(255,255,255,${Math.min(1, flash).toFixed(3)})`;
-    lc.fillRect(0, 0, boxSize, boxSize);
-    lc.restore();
-  }
-
-  ctx.save();
-  if (glow > 0) {
-    ctx.shadowColor = def.palette.trim;
-    ctx.shadowBlur = 40 * glow;
-  }
-  ctx.drawImage(layer, -boxSize / 2, -boxSize / 2);
-  ctx.restore();
 }
