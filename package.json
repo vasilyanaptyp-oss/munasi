@@ -14,7 +14,9 @@
     "test:watch": "vitest",
     "generate": "tsx src/cli/generate.ts",
     "balance": "tsx src/content/validateBalance.ts",
-    "frame": "tsx src/cli/frame.ts"
+    "frame": "tsx src/cli/frame.ts",
+    "calibrate": "tsx src/content/calibrate.ts",
+    "matchups": "tsx src/content/generateMatchups.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"

@@ -1,4 +1,4 @@
-import { mulberry32 } from "./rng.js";
+import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
   Fighter,
@@ -14,8 +14,13 @@ import type {
 } from "./types.js";
 import { MAX_FRAMES, TICKS_PER_FRAME, TICKS_PER_SECOND } from "./types.js";
 
-/** Damage rolls land within ±12% of the fighter's attack stat. */
-const DAMAGE_VARIANCE = 0.12;
+/**
+ * Damage rolls land within this fraction of the fighter's attack stat.
+ * Deliberately wide: with ~25 swings per match, per-hit spread is what keeps
+ * the outcome genuinely uncertain. Tighten it and a 3% stat edge becomes a
+ * 100% winrate, which makes both balance and drama impossible.
+ */
+export const DAMAGE_VARIANCE = 0.35;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
 const DERIVED_MINION_ATTACK_SPEED = 0.9;
@@ -32,6 +37,12 @@ interface ActiveBuff {
 interface FighterState {
   side: Side;
   base: Fighter;
+  /**
+   * Each side rolls from its own stream. Sharing one stream interleaves the
+   * two fighters' draws, and the serial correlation that introduces is worth a
+   * measurable winrate edge to whichever side draws first.
+   */
+  rng: Rng;
   hp: number;
   /** Ticks until the next basic attack. */
   attackCooldown: number;
@@ -87,12 +98,21 @@ function minionSpec(ability: Ability): MinionSpec {
  * mutated. Identical `(config, seed)` always yields a byte-identical result.
  */
 export function simulate(config: MatchConfig, seed: number): MatchResult {
-  const rng = mulberry32(seed);
   const fighters = { a: cloneFighter(config.a), b: cloneFighter(config.b) };
 
-  const makeState = (side: Side, base: Fighter): FighterState => ({
+  // Two independent streams derived from the one seed, so the match stays
+  // reproducible while neither side's rolls disturb the other's.
+  const deriveSeed = (salt: number): number => {
+    let h = (seed ^ 0x9e3779b9) | 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ salt, 0xc2b2ae35);
+    return (h ^ (h >>> 13)) | 0;
+  };
+
+  const makeState = (side: Side, base: Fighter, rng: Rng): FighterState => ({
     side,
     base,
+    rng,
     hp: base.maxHp,
     attackCooldown: ticksPerAttack(base.attackSpeed),
     abilityCooldowns: base.abilities.map((ab) => ab.cooldown * TICKS_PER_SECOND),
@@ -102,8 +122,8 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
   });
 
   const sides: Record<Side, FighterState> = {
-    a: makeState("a", fighters.a),
-    b: makeState("b", fighters.b),
+    a: makeState("a", fighters.a, mulberry32(deriveSeed(1))),
+    b: makeState("b", fighters.b, mulberry32(deriveSeed(2))),
   };
   const opponentOf = (s: FighterState): FighterState =>
     s.side === "a" ? sides.b : sides.a;
@@ -115,13 +135,28 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
   let frame = 0;
   let winner: Winner | null = null;
 
-  const rollDamage = (attack: number): number =>
+  const rollDamage = (rng: Rng, attack: number): number =>
     Math.max(1, Math.round(attack * rng.range(1 - DAMAGE_VARIANCE, 1 + DAMAGE_VARIANCE)));
 
+  /**
+   * Damage is queued during a tick and applied once every actor has swung.
+   * Resolving it immediately would hand the fighter checked first a free win on
+   * any tick where both would have landed a killing blow — a systematic ~3
+   * percentage point edge for side A.
+   */
+  const pendingFighterDamage: { target: FighterState; amount: number }[] = [];
+  const pendingMinionDamage: { target: MinionState; amount: number }[] = [];
+
   const damageFighter = (target: FighterState, amount: number): number => {
-    const dealt = Math.min(target.hp, amount);
-    target.hp -= dealt;
-    return dealt;
+    pendingFighterDamage.push({ target, amount });
+    return amount;
+  };
+
+  const applyPendingDamage = (): void => {
+    for (const { target, amount } of pendingFighterDamage) target.hp -= amount;
+    for (const { target, amount } of pendingMinionDamage) target.hp -= amount;
+    pendingFighterDamage.length = 0;
+    pendingMinionDamage.length = 0;
   };
 
   const castAbility = (state: FighterState, ability: Ability): void => {
@@ -193,7 +228,7 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
           value: dealt,
         });
         for (const minion of enemy.minions) {
-          minion.hp -= damage;
+          pendingMinionDamage.push({ target: minion, amount: damage });
         }
         break;
       }
@@ -227,9 +262,9 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
       const enemy = opponentOf(side);
       side.attackCooldown -= 1;
       if (side.attackCooldown > 0) continue;
-      const isCrit = rng.chance(side.base.critChance);
+      const isCrit = side.rng.chance(side.base.critChance);
       const raw = effectiveAttack(side) * (isCrit ? side.base.critMult : 1);
-      const dealt = damageFighter(enemy, rollDamage(raw));
+      const dealt = damageFighter(enemy, rollDamage(side.rng, raw));
       events.push({
         frame,
         type: isCrit ? "crit" : "hit",
@@ -240,14 +275,14 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
       side.attackCooldown += ticksPerAttack(side.base.attackSpeed);
     }
 
-    // Minions: attack the enemy fighter, then age out.
+    // Minions attack the enemy fighter and age.
     for (const side of [sides.a, sides.b]) {
       const enemy = opponentOf(side);
       for (const minion of side.minions) {
         if (minion.hp <= 0) continue;
         minion.attackCooldown -= 1;
         if (minion.attackCooldown <= 0) {
-          const dealt = damageFighter(enemy, rollDamage(minion.attack));
+          const dealt = damageFighter(enemy, rollDamage(side.rng, minion.attack));
           events.push({
             frame,
             type: "minion_hit",
@@ -259,6 +294,12 @@ export function simulate(config: MatchConfig, seed: number): MatchResult {
         }
         minion.ticksLeft -= 1;
       }
+    }
+
+    applyPendingDamage();
+
+    // Minions that ran out of HP or lifetime leave the field.
+    for (const side of [sides.a, sides.b]) {
       const survivors: MinionState[] = [];
       for (const minion of side.minions) {
         if (minion.hp > 0 && minion.ticksLeft > 0) {
