@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { simulate } from "../sim/simulate.js";
-import { abilityMatch, lopsidedMatch } from "../sim/testFixtures.js";
+import { abilityMatch, lopsidedMatch, makeFighter } from "../sim/testFixtures.js";
 import type { MatchResult } from "../sim/types.js";
 import { buildRenderIndex, renderSingleFrame } from "./frame.js";
 import { frameFileName, renderFrames } from "./index.js";
@@ -93,6 +93,43 @@ describe("renderSingleFrame", () => {
     for (let i = 0; i < 10; i += 1) renderSingleFrame(result, 200 + i, { index });
     const perFrame = (performance.now() - start) / 10;
     expect(perFrame).toBeLessThan(400);
+  });
+});
+
+describe("text fitting", () => {
+  it("keeps long names inside the frame", async () => {
+    const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+    const long = simulate(
+      {
+        a: makeFighter({ id: "a", name: "СТАРШИЙ ПО ШЛАГБАУМУ ОКРУГА", spriteId: "gatekeeper" }),
+        b: makeFighter({ id: "b", name: "ПРЕДСЕДАТЕЛЬ КОМИССИИ ПО ЭТИКЕ", spriteId: "chairman" }),
+      },
+      5,
+    );
+    // Read the frame back so the outer columns of the title band and the
+    // HP-bar labels can be checked for text that ran off the edge.
+    const image = await loadImage(renderSingleFrame(long, 0));
+    const canvas = createCanvas(WIDTH, HEIGHT);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0);
+
+    const bands: [number, number][] = [
+      [90, 175], // title
+      [250, 290], // fighter A's bar label
+    ];
+    const margin = 20;
+    for (const [top, bottom] of bands) {
+      const left = ctx.getImageData(0, top, margin, bottom - top).data;
+      const right = ctx.getImageData(WIDTH - margin, top, margin, bottom - top).data;
+      for (const strip of [left, right]) {
+        let bright = 0;
+        for (let i = 0; i < strip.length; i += 4) {
+          // Background is very dark; text is stroked near-black but filled bright.
+          if (strip[i]! > 90 && strip[i + 1]! > 90 && strip[i + 2]! > 90) bright += 1;
+        }
+        expect(bright).toBe(0);
+      }
+    }
   });
 });
 

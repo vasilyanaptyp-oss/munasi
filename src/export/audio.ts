@@ -222,6 +222,12 @@ export interface SfxTrackOptions {
   totalFrames: number;
   /** Where the WAV assets live. */
   audioDir?: string;
+  /**
+   * Simulation frame shown at each output frame. Needed whenever the video is
+   * not a straight play-through — a cold open replays part of the fight, and
+   * those hits have to be heard again at the position they are shown.
+   */
+  sourceFrames?: number[];
 }
 
 /**
@@ -249,14 +255,31 @@ export function buildSfxTrack(result: MatchResult, options: SfxTrackOptions): Fl
   const length = Math.round((options.totalFrames / FPS) * SAMPLE_RATE) + SAMPLE_RATE;
   const track = new Float32Array(length);
 
+  // Output frames each simulation frame appears at. Usually one, but a frame
+  // replayed in a cold open appears twice and must sound twice.
+  const playedAt = new Map<number, number[]>();
+  if (options.sourceFrames) {
+    options.sourceFrames.forEach((source, output) => {
+      const list = playedAt.get(source);
+      if (list) list.push(output);
+      else playedAt.set(source, [output]);
+    });
+  }
+
   for (const event of result.events) {
     const name = sfxForEvent(event.type);
     if (!name) continue;
     const sample = load(name);
     const gain = SFX_GAIN[name];
-    const start = Math.round((event.frame / FPS) * SAMPLE_RATE);
-    const count = Math.min(sample.length, length - start);
-    for (let i = 0; i < count; i += 1) track[start + i]! += sample[i]! * gain;
+    const outputs = options.sourceFrames
+      ? (playedAt.get(event.frame) ?? [])
+      : [event.frame];
+    for (const output of outputs) {
+      const start = Math.round((output / FPS) * SAMPLE_RATE);
+      if (start >= length) continue;
+      const count = Math.min(sample.length, length - start);
+      for (let i = 0; i < count; i += 1) track[start + i]! += sample[i]! * gain;
+    }
   }
 
   // Soft-clip so a pile-up of simultaneous hits does not turn into distortion.

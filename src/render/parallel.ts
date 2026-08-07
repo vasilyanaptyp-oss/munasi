@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { MatchResult } from "../sim/types.js";
-import { renderFrames, type RenderFramesOptions } from "./index.js";
+import { planFor, renderFrames, type RenderFramesOptions } from "./index.js";
 import type { RenderJob, WorkerMessage } from "./renderWorker.js";
 
 const WORKER_PATH = fileURLToPath(new URL("./renderWorker.ts", import.meta.url));
@@ -35,9 +35,9 @@ export async function renderFramesParallel(
   outDir: string,
   options: ParallelRenderOptions = {},
 ): Promise<void> {
-  const victoryFrames = options.victoryFrames ?? 0;
-  const total = result.durationFrames + victoryFrames;
-  const workers = Math.max(1, Math.min(options.workers ?? defaultWorkerCount(), result.durationFrames));
+  const plan = planFor(result, options);
+  const total = plan.length;
+  const workers = Math.max(1, Math.min(options.workers ?? defaultWorkerCount(), total));
 
   if (workers === 1) {
     await renderFrames(result, outDir, options);
@@ -46,20 +46,13 @@ export async function renderFramesParallel(
 
   await mkdir(outDir, { recursive: true });
 
-  const perWorker = Math.ceil(result.durationFrames / workers);
+  const perWorker = Math.ceil(total / workers);
   const jobs: RenderJob[] = [];
   for (let i = 0; i < workers; i += 1) {
-    const startFrame = i * perWorker;
-    const endFrame = Math.min(result.durationFrames, startFrame + perWorker);
-    if (startFrame >= endFrame) continue;
-    jobs.push({
-      result,
-      outDir,
-      startFrame,
-      endFrame,
-      // The freeze frames all repeat the last frame, so one worker takes them.
-      victoryFrames: i === 0 ? victoryFrames : 0,
-    });
+    const startIndex = i * perWorker;
+    const endIndex = Math.min(total, startIndex + perWorker);
+    if (startIndex >= endIndex) continue;
+    jobs.push({ result, outDir, plan, startIndex, endIndex });
   }
 
   let done = 0;

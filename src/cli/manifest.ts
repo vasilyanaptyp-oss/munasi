@@ -1,6 +1,16 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+export interface ManifestColdOpen {
+  startFrame: number;
+  endFrame: number;
+  reason: "damage_burst" | "lead_change";
+  damage: number;
+  leadChanges: number;
+  /** Human-readable reason this window was picked. */
+  why: string;
+}
+
 export interface ManifestEntry {
   /** File name inside the output directory. */
   file: string;
@@ -15,6 +25,8 @@ export interface ManifestEntry {
   winnerId: string | null;
   sizeBytes: number;
   generatedAt: string;
+  /** Present when the video opens on an earlier moment of the fight. */
+  coldOpen?: ManifestColdOpen;
 }
 
 export interface Manifest {

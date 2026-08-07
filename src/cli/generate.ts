@@ -5,7 +5,10 @@ import { generateMatchups, type Matchup } from "../content/generateMatchups.js";
 import { loadFighters } from "../content/index.js";
 import type { Fighter } from "../sim/types.js";
 import { exportVideo, FfmpegMissingError, checkFfmpeg, VICTORY_FREEZE_FRAMES } from "../export/video.js";
+import { defaultPlan, sourceFrames } from "../render/framePlan.js";
+import { coldOpenPlan } from "../render/framePlan.js";
 import { defaultWorkerCount, renderFramesParallel } from "../render/parallel.js";
+import { describeColdOpen, findColdOpen } from "../sim/coldOpen.js";
 import { findBestMatch } from "../sim/drama.js";
 import { FPS } from "../sim/types.js";
 import { isMain } from "../util/main.js";
@@ -35,6 +38,11 @@ export interface GenerateOptions {
   keepFrames: boolean;
   /** Ignore the manifest and generate from the top of the list. */
   redo: boolean;
+  /**
+   * Open on the fight's most arresting earlier moment before starting it.
+   * Off by default so both cuts can be posted and compared on watch time.
+   */
+  coldOpen: boolean;
   /** Roster to draw from. Defaults to the shipped one. */
   roster?: Fighter[];
 }
@@ -68,6 +76,7 @@ export function parseArgs(argv: string[]): GenerateOptions {
     matchupSample: Math.floor(number("sample", 40)),
     keepFrames: argv.includes("--keep-frames"),
     redo: argv.includes("--redo"),
+    coldOpen: argv.includes("--cold-open"),
   };
 }
 
@@ -87,7 +96,12 @@ async function generateOne(
   bar.setLabel(`${position} ${label}  drama`);
   bar.update(0, 1);
   const best = findBestMatch({ a: matchup.a, b: matchup.b }, { count: options.seeds });
-  const totalFrames = best.result.durationFrames + VICTORY_FREEZE_FRAMES;
+
+  const window = options.coldOpen ? findColdOpen(best.result) : null;
+  const plan = window
+    ? coldOpenPlan(best.result, window, VICTORY_FREEZE_FRAMES)
+    : defaultPlan(best.result, VICTORY_FREEZE_FRAMES);
+  const totalFrames = plan.length;
 
   const framesDir = join(
     options.outDir,
@@ -99,7 +113,7 @@ async function generateOne(
   try {
     bar.setLabel(`${position} ${label}  render`);
     await renderFramesParallel(best.result, framesDir, {
-      victoryFrames: VICTORY_FREEZE_FRAMES,
+      plan,
       workers: options.workers,
       onProgress: (done) => bar.update(done, totalFrames),
     });
@@ -109,6 +123,7 @@ async function generateOne(
     const exported = await exportVideo(best.result, {
       framesDir,
       outDir: options.outDir,
+      sourceFrames: sourceFrames(plan),
     });
     bar.update(1, 1);
 
@@ -123,6 +138,18 @@ async function generateOne(
       winnerId: best.result.winnerId,
       sizeBytes: exported.sizeBytes,
       generatedAt: new Date().toISOString(),
+      ...(window
+        ? {
+            coldOpen: {
+              startFrame: window.startFrame,
+              endFrame: window.endFrame,
+              reason: window.reason,
+              damage: window.damage,
+              leadChanges: window.leadChanges,
+              why: describeColdOpen(window),
+            },
+          }
+        : {}),
     };
   } finally {
     if (!options.keepFrames) rmSync(framesDir, { recursive: true, force: true });

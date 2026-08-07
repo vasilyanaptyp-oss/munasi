@@ -188,6 +188,7 @@ describe("generate", () => {
       matchupSample: 4,
       keepFrames: false,
       redo: false,
+      coldOpen: false,
       roster: quickRoster,
     });
 
@@ -233,6 +234,7 @@ describe("generate", () => {
       matchupSample: 4,
       keepFrames: false,
       redo: false,
+      coldOpen: false,
       roster: quickRoster,
     });
     expect(summary.produced).toEqual([]);

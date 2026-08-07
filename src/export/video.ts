@@ -72,6 +72,11 @@ export interface ExportOptions {
   audioDir?: string;
   /** Skip the audio track entirely (used by fast tests). */
   silent?: boolean;
+  /**
+   * Simulation frame shown at each output frame, when the video is not a
+   * straight play-through. Keeps the SFX bus lined up with a cold open.
+   */
+  sourceFrames?: number[];
 }
 
 export interface ExportResult {
@@ -130,6 +135,7 @@ export async function exportVideo(
       buildSfxTrack(result, {
         totalFrames,
         ...(options.audioDir === undefined ? {} : { audioDir: options.audioDir }),
+        ...(options.sourceFrames === undefined ? {} : { sourceFrames: options.sourceFrames }),
       }),
     );
     const musicPath = join(options.audioDir ?? join(process.cwd(), "assets", "audio"), MUSIC_FILE);

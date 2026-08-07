@@ -1,8 +1,9 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
-import type { MatchEvent, MatchResult, Side, Snapshot } from "../sim/types.js";
+import type { Fighter, MatchEvent, MatchResult, Side, Snapshot } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { DEATH_FRAMES, drawFighter, RECOVERY_FRAMES, WINDUP_FRAMES } from "./drawFighter.js";
+import type { PlannedFrame } from "./framePlan.js";
 import { COLORS, ensureFonts, font, HEIGHT, LAYOUT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
@@ -15,6 +16,8 @@ const FLASH_FRAMES = 4;
 const SHAKE_FRAMES = 8;
 /** How far back the HP bar's "ghost" trail remembers. */
 const GHOST_FRAMES = 14;
+/** Frames the opening "VS" badge stays up instead of the clock. */
+const INTRO_FRAMES = 26;
 
 /**
  * Events bucketed by frame. Built once per match so a 1800-frame render does
@@ -134,41 +137,79 @@ function drawDivider(ctx: Ctx, frame: number): void {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  strokedText(ctx, `${(frame / FPS).toFixed(1)}`, LAYOUT.centerX, y - 6, 44, COLORS.ink, 8);
-  strokedText(ctx, "SEC", LAYOUT.centerX, y + 30, 22, COLORS.inkDim, 5);
+  if (frame < INTRO_FRAMES) {
+    // Frame 0 is the feed thumbnail, so the badge sells the matchup rather
+    // than reporting a clock that reads 0.0.
+    strokedText(ctx, "VS", LAYOUT.centerX, y + 2, 52, COLORS.accent, 9);
+  } else {
+    strokedText(ctx, `${(frame / FPS).toFixed(1)}`, LAYOUT.centerX, y - 6, 44, COLORS.ink, 8);
+    strokedText(ctx, "SEC", LAYOUT.centerX, y + 30, 22, COLORS.inkDim, 5);
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
+/**
+ * Stat line under a fighter's HP bar. Fills what was dead space at the top of
+ * the arena and gives a still frame something to read.
+ */
+function drawStatLine(ctx: Ctx, fighter: Fighter, y: number, accent: string): void {
+  const x = (WIDTH - LAYOUT.barWidth) / 2;
+  const chips: [string, string][] = [
+    ["УРОН", String(Math.round(fighter.attack))],
+    ["СКОР", fighter.attackSpeed.toFixed(2)],
+    ["КРИТ", `${Math.round(fighter.critChance * 100)}%`],
+  ];
+  const gap = 14;
+  const width = (LAYOUT.barWidth - gap * (chips.length - 1)) / chips.length;
+
+  ctx.textBaseline = "middle";
+  chips.forEach(([label, value], i) => {
+    const cx = x + i * (width + gap);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.fillRect(cx, y, width, 54);
+    ctx.fillStyle = accent;
+    ctx.fillRect(cx, y, 5, 54);
+
+    ctx.textAlign = "left";
+    strokedText(ctx, label, cx + 18, y + 27, 22, COLORS.inkDim, 5);
+    ctx.textAlign = "right";
+    strokedText(ctx, value, cx + width - 16, y + 27, 30, COLORS.ink, 6);
+  });
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
 
 function drawTitle(ctx: Ctx, nameA: string, nameB: string): void {
-  const gap = 34;
-  let size = 84;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+  const maxWidth = WIDTH - 72;
 
-  const widths = (s: number): { a: number; vs: number; b: number; total: number } => {
-    ctx.font = font(s);
+  const measure = (size: number): { a: number; vs: number; gap: number; total: number } => {
+    const gap = size * 0.4;
+    ctx.font = font(size);
     const a = ctx.measureText(nameA).width;
     const b = ctx.measureText(nameB).width;
-    ctx.font = font(s * 0.72);
+    ctx.font = font(size * 0.72);
     const vs = ctx.measureText("vs").width;
-    return { a, vs, b, total: a + b + vs + gap * 2 };
+    return { a, vs, gap, total: a + b + vs + gap * 2 };
   };
 
-  // Long names shrink to fit rather than running off the frame.
-  let m = widths(size);
-  const maxWidth = WIDTH - 80;
-  if (m.total > maxWidth) {
-    size = Math.max(40, Math.floor(size * (maxWidth / m.total)));
-    m = widths(size);
+  // Shrink until it fits. One proportional guess is not enough: the gaps and
+  // the "vs" scale too, and roster names run long enough to overflow twice.
+  let size = 84;
+  let m = measure(size);
+  while (m.total > maxWidth && size > 30) {
+    size = Math.max(30, Math.floor(size * Math.min(0.94, maxWidth / m.total)));
+    m = measure(size);
   }
 
   let x = (WIDTH - m.total) / 2;
   const y = LAYOUT.titleBaseline;
   strokedText(ctx, nameA, x, y, size, COLORS.hpFillA);
-  x += m.a + gap;
+  x += m.a + m.gap;
   strokedText(ctx, "vs", x, y - size * 0.08, size * 0.72, COLORS.inkDim);
-  x += m.vs + gap;
+  x += m.vs + m.gap;
   strokedText(ctx, nameB, x, y, size, COLORS.hpFillB);
 }
 
@@ -222,18 +263,23 @@ function drawHpBar(
   ctx.restore();
 
   ctx.textBaseline = "alphabetic";
+  const readout = `${Math.round(hp)} / ${Math.round(maxHp)}`;
+  ctx.font = font(34);
+  const readoutWidth = ctx.measureText(readout).width;
+
+  // Long names shrink rather than run into the HP readout.
+  const room = LAYOUT.barWidth - readoutWidth - 36;
+  let nameSize = 34;
+  ctx.font = font(nameSize);
+  while (ctx.measureText(name).width > room && nameSize > 20) {
+    nameSize -= 1;
+    ctx.font = font(nameSize);
+  }
+
   ctx.textAlign = "left";
-  strokedText(ctx, name, x + 6, y - 16, 34, COLORS.inkDim, 6);
+  strokedText(ctx, name, x + 6, y - 16, nameSize, COLORS.inkDim, 6);
   ctx.textAlign = "right";
-  strokedText(
-    ctx,
-    `${Math.round(hp)} / ${Math.round(maxHp)}`,
-    x + LAYOUT.barWidth - 6,
-    y - 16,
-    34,
-    COLORS.ink,
-    6,
-  );
+  strokedText(ctx, readout, x + LAYOUT.barWidth - 6, y - 16, 34, COLORS.ink, 6);
   ctx.textAlign = "left";
 }
 
@@ -431,6 +477,24 @@ function drawDamageNumbers(ctx: Ctx, index: RenderIndex, frame: number, result: 
   ctx.textBaseline = "alphabetic";
 }
 
+/** Corner badge used by the cold open and the cut back to the start. */
+function drawBadge(ctx: Ctx, text: string, accent: string): void {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = font(36);
+  const width = ctx.measureText(text).width + 56;
+  const x = WIDTH / 2 - width / 2;
+  const y = LAYOUT.titleBaseline + 22;
+
+  ctx.fillStyle = "rgba(5,7,13,0.78)";
+  ctx.fillRect(x, y, width, 58);
+  ctx.fillStyle = accent;
+  ctx.fillRect(x, y, 8, 58);
+  strokedText(ctx, text, WIDTH / 2 + 4, y + 30, 36, accent, 7);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 function drawVictoryBanner(ctx: Ctx, name: string, color: string): void {
   ctx.fillStyle = "rgba(5,7,13,0.62)";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -447,6 +511,8 @@ export interface RenderFrameOptions {
   index?: RenderIndex;
   /** Draws the winner overlay on top of the frame. */
   victoryOverlay?: boolean;
+  /** Overlays carried by the frame plan (cold-open badge, cut flash). */
+  planned?: PlannedFrame;
 }
 
 /**
@@ -497,6 +563,9 @@ export function renderSingleFrame(
     COLORS.hpFillB,
   );
 
+  drawStatLine(ctx, result.fighters.a, LAYOUT.a.barY + LAYOUT.barHeight + 22, COLORS.hpFillA);
+  drawStatLine(ctx, result.fighters.b, LAYOUT.b.barY + LAYOUT.barHeight + 22, COLORS.hpFillB);
+
   drawMinions(ctx, snap, result.fighters.a.id, result.fighters.a.spriteId, LAYOUT.a.spriteY);
   drawMinions(ctx, snap, result.fighters.b.id, result.fighters.b.spriteId, LAYOUT.b.spriteY);
 
@@ -524,7 +593,15 @@ export function renderSingleFrame(
   drawProgress(ctx, frame, result.durationFrames);
   ctx.restore();
 
-  if (options.victoryOverlay && result.winnerId !== null) {
+  const planned = options.planned;
+  if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, COLORS.crit);
+  if (planned?.startLabel !== undefined) drawBadge(ctx, planned.startLabel, COLORS.hpFillA);
+  if (planned?.flash !== undefined && planned.flash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(1, planned.flash).toFixed(3)})`;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  if ((options.victoryOverlay || planned?.victoryOverlay) && result.winnerId !== null) {
     const winnerIsA = result.winnerId === result.fighters.a.id;
     drawVictoryBanner(
       ctx,
