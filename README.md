@@ -31,12 +31,20 @@ synthesised into `assets/audio/` the first time you export.
 | `pnpm calibrate` | regenerate `fighters.json` from `roster.ts` |
 | `pnpm matchups` | list pairs, most even first |
 | `pnpm frame [n...]` | render sample frames to `out/preview/` |
+| `pnpm diagnose` | drama distribution, side-bias check (`--comeback` for the prototype) |
 | `pnpm test` / `pnpm typecheck` | tests and types |
 
 `generate` skips pairs already in the manifest, so running it again continues
 where the last batch left off. `--redo` starts from the top, `--seeds N`
 changes how many seeds are searched per matchup, `--workers N` sets render
 parallelism, `--keep-frames` leaves the intermediate PNGs behind.
+
+`--cold-open` opens the video on the fight's most arresting earlier moment
+before cutting back to the start. It is off by default so you can post both
+cuts of the same matchup and compare watch time; the window chosen and the
+reason go into `manifest.json`. The window can never contain a killing blow
+or come from the last 20% of the fight — spoiling the ending costs more
+retention than a slow opening.
 
 ## How it fits together
 
@@ -68,9 +76,18 @@ Project rules and the reasoning behind the combat model live in
 
 ## Art and audio
 
-Fighters are drawn from code: eight archetypes (knight, mage, beast, golem,
-rogue, wisp, warden, reaper) tinted by a hue, addressed as `"mage:265"` in a
-fighter's `spriteId`. No third-party images, no real people, no borrowed
-franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into
+Every fighter has its own drawing function in `src/render/fighters/` — its own
+silhouette, a signature prop readable at thumbnail size, its own idle tell, its
+own wind-up and its own death. The roster is a plumber, a night baker, a
+courier and a market loader against a supreme arbiter, a privy councillor, an
+eternal inspector and a committee chairman; the joke is in the pairing, and it
+lands in the title before the fight starts.
+
+`silhouette.test.ts` keeps them apart by measurement, not by eye: each fighter
+is rendered as a solid mask at a common height and every pair must score under
+0.70 intersection-over-union. The shipped roster's worst pair is 0.663.
+
+Nothing is loaded from disk — no third-party images, no real people, no
+borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into
 `assets/audio/` under the names listed there; existing files are never
 overwritten.
