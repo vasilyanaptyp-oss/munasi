@@ -21,8 +21,8 @@ export function makeFighter(overrides: Partial<Fighter> & { id: string }): Fight
 /** Two identical fighters — the fairest possible match. */
 export function mirrorMatch(): MatchConfig {
   return {
-    a: makeFighter({ id: "alpha", name: "ALPHA" }),
-    b: makeFighter({ id: "beta", name: "BETA" }),
+    a: makeFighter({ id: "alpha", name: "ALPHA", spriteId: "knight:210" }),
+    b: makeFighter({ id: "beta", name: "BETA", spriteId: "reaper:340" }),
   };
 }
 
@@ -33,6 +33,7 @@ export function lopsidedMatch(): MatchConfig {
     a: makeFighter({
       id: "titan",
       name: "TITAN",
+      spriteId: "golem:35",
       maxHp: 2400,
       hp: 2400,
       attack: 130,
@@ -43,6 +44,7 @@ export function lopsidedMatch(): MatchConfig {
     b: makeFighter({
       id: "weakling",
       name: "WEAKLING",
+      spriteId: "wisp:190",
       maxHp: 500,
       hp: 500,
       attack: 12,
@@ -59,6 +61,7 @@ export function abilityMatch(): MatchConfig {
     a: makeFighter({
       id: "summoner",
       name: "SUMMONER",
+      spriteId: "mage:265",
       attack: 26,
       abilities: [
         { type: "spawn_minion", cooldown: 6, power: 90 },
@@ -68,6 +71,7 @@ export function abilityMatch(): MatchConfig {
     b: makeFighter({
       id: "berserker",
       name: "BERSERKER",
+      spriteId: "beast:15",
       attack: 30,
       abilities: [
         { type: "buff_attack", cooldown: 8, power: 0.5, duration: 4 },
