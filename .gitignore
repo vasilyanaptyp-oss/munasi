@@ -5,3 +5,6 @@ out/
 .vitest/
 dist/
 tmp/
+
+# Generated audio assets (see src/export/audio.ts)
+assets/audio/*.wav
