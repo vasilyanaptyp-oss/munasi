@@ -78,6 +78,144 @@ export function silhouetteMask(
   return { width, height, bits, area, aspect: boxW / boxH };
 }
 
+/** Drawn extent of a sprite, in multiples of `drawFighter`'s `size`. */
+export interface SpriteBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+const boundsCache = new Map<string, SpriteBounds>();
+
+/**
+ * Measures how much of its box a sprite actually fills, so layout code can
+ * reason about where a fighter really is rather than about its nominal size.
+ * Cached: the measurement renders the sprite once.
+ */
+export function spriteBounds(spriteId: string): SpriteBounds {
+  const cached = boundsCache.get(spriteId);
+  if (cached) return cached;
+
+  const render = createCanvas(RENDER_SIZE, RENDER_SIZE);
+  const ctx = render.getContext("2d");
+  ctx.save();
+  ctx.translate(RENDER_SIZE / 2, RENDER_SIZE / 2);
+  drawFighter(ctx, spriteId, { size: SPRITE_SIZE, facing: 1, frame: 0, silhouette: true });
+  ctx.restore();
+
+  const pixels = ctx.getImageData(0, 0, RENDER_SIZE, RENDER_SIZE).data;
+  let minX = RENDER_SIZE;
+  let minY = RENDER_SIZE;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < RENDER_SIZE; y += 1) {
+    for (let x = 0; x < RENDER_SIZE; x += 1) {
+      if (pixels[(y * RENDER_SIZE + x) * 4 + 3]! < 128) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) throw new Error(`spriteBounds: ${spriteId} drew nothing`);
+
+  const centre = RENDER_SIZE / 2;
+  const bounds: SpriteBounds = {
+    left: (minX - centre) / SPRITE_SIZE,
+    right: (maxX + 1 - centre) / SPRITE_SIZE,
+    top: (minY - centre) / SPRITE_SIZE,
+    bottom: (maxY + 1 - centre) / SPRITE_SIZE,
+    width: (maxX + 1 - minX) / SPRITE_SIZE,
+    height: (maxY + 1 - minY) / SPRITE_SIZE,
+  };
+  boundsCache.set(spriteId, bounds);
+  return bounds;
+}
+
+const motionCache = new Map<string, SpriteBounds>();
+
+/**
+ * The full extent a sprite reaches once its motion is applied — idle, the
+ * wind-up and follow-through of a strike, and the death animation, which
+ * rotates a fighter by well over a radian.
+ *
+ * Sampled rather than estimated: a guessed margin is either too tight (and a
+ * dying fighter clips the frame) or too loose (and every fighter is drawn
+ * smaller than it needs to be).
+ */
+export function spriteMotionBounds(spriteId: string, includeDeath = true): SpriteBounds {
+  const key = includeDeath ? spriteId : `${spriteId}:alive`;
+  const cached = motionCache.get(key);
+  if (cached) return cached;
+
+  const alive: { frame: number; strike?: number; death?: number }[] = [
+    { frame: 0 },
+    { frame: 11 },
+    { frame: 23 },
+    { frame: 0, strike: -1 },
+    { frame: 0, strike: -0.5 },
+    { frame: 0, strike: 0 },
+    { frame: 0, strike: 0.5 },
+  ];
+  const poses: { frame: number; strike?: number; death?: number }[] = includeDeath
+    ? [
+      ...alive,
+    { frame: 0, death: 0.25 },
+    { frame: 0, death: 0.5 },
+    { frame: 0, death: 0.75 },
+    { frame: 0, death: 1 },
+      ]
+    : alive;
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const pose of poses) {
+    for (const facing of [1, -1] as const) {
+      const render = createCanvas(RENDER_SIZE, RENDER_SIZE);
+      const ctx = render.getContext("2d");
+      ctx.save();
+      ctx.translate(RENDER_SIZE / 2, RENDER_SIZE / 2);
+      drawFighter(ctx, spriteId, {
+        size: SPRITE_SIZE,
+        facing,
+        frame: pose.frame,
+        ...(pose.strike === undefined ? {} : { strike: pose.strike }),
+        ...(pose.death === undefined ? {} : { death: pose.death }),
+      });
+      ctx.restore();
+      const pixels = ctx.getImageData(0, 0, RENDER_SIZE, RENDER_SIZE).data;
+      for (let y = 0; y < RENDER_SIZE; y += 1) {
+        for (let x = 0; x < RENDER_SIZE; x += 1) {
+          if (pixels[(y * RENDER_SIZE + x) * 4 + 3]! < 40) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+  }
+  if (maxX === Number.NEGATIVE_INFINITY) throw new Error(`spriteMotionBounds: ${spriteId} drew nothing`);
+
+  const centre = RENDER_SIZE / 2;
+  const bounds: SpriteBounds = {
+    left: (minX - centre) / SPRITE_SIZE,
+    right: (maxX + 1 - centre) / SPRITE_SIZE,
+    top: (minY - centre) / SPRITE_SIZE,
+    bottom: (maxY + 1 - centre) / SPRITE_SIZE,
+    width: (maxX + 1 - minX) / SPRITE_SIZE,
+    height: (maxY + 1 - minY) / SPRITE_SIZE,
+  };
+  motionCache.set(key, bounds);
+  return bounds;
+}
+
 /** Intersection over union of two masks of the same size. */
 export function iou(a: Mask, b: Mask): number {
   if (a.width !== b.width || a.height !== b.height) {

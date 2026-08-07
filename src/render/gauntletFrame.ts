@@ -4,22 +4,22 @@ import type { GauntletResult, GauntletSnapshot } from "../sim/gauntlet.js";
 import type { PickupType } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { DEATH_FRAMES, drawFighter, RECOVERY_FRAMES, WINDUP_FRAMES } from "./drawFighter.js";
-import {
-  buildRenderIndex,
-  eventsAt,
-  jitter,
-  strokedText,
-  type RenderIndex,
-} from "./frame.js";
+import { buildRenderIndex, eventsAt, strokedText, type RenderIndex } from "./frame.js";
 import type { PlannedFrame } from "./framePlan.js";
-import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
+import {
+  gauntletFrameLayout,
+  hudLayout,
+  type GauntletFrameLayout,
+  type HudMetrics,
+  type Rect,
+} from "./gauntletLayout.js";
+import { GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
 
 const DAMAGE_NUMBER_FRAMES = Math.round(FPS * 0.5);
 const FLASH_FRAMES = 4;
-const SHAKE_FRAMES = 8;
 
 /**
  * The gauntlet frame, following the reference's composition: a flat blue field,
@@ -31,59 +31,6 @@ const SHAKE_FRAMES = 8;
  * enough that losing half of one costs the joke, so the overlay is screen-fixed
  * and only the arena and its occupants move.
  */
-
-/** Where a fighter stands in scene space. */
-function fighterPosition(side: "challenger" | "opponent"): { x: number; y: number } {
-  const spread = ARENA.inner * L.fighterSpread;
-  return {
-    x: L.sceneCentre.x + (side === "challenger" ? -spread : spread),
-    y: L.sceneCentre.y + ARENA.inner * 0.16,
-  };
-}
-
-/**
- * Camera offset for a frame. Pure: it reads the event list, never previous
- * frames, so workers can render any stripe and get identical bytes.
- */
-export function cameraOffset(
-  index: RenderIndex,
-  frame: number,
-  result: GauntletResult,
-): { x: number; y: number } {
-  // Drift keeps the shot alive even when nothing is happening.
-  let x = Math.sin(frame * 0.013) * (WIDTH * 0.035);
-  let y = Math.cos(frame * 0.0171) * (HEIGHT * 0.018);
-
-  // Lean toward whoever was hit most recently, easing off over half a second.
-  const challengerId = result.challenger.id;
-  const FOLLOW_FRAMES = 16;
-  for (let back = 0; back <= FOLLOW_FRAMES; back += 1) {
-    const f = frame - back;
-    if (f < 0) break;
-    const hit = eventsAt(index, f).find(
-      (e) => e.type === "hit" || e.type === "crit" || e.type === "aoe",
-    );
-    if (!hit) continue;
-    const towardChallenger = hit.targetId === challengerId;
-    const weight = (1 - back / (FOLLOW_FRAMES + 1)) * 0.55;
-    const target = fighterPosition(towardChallenger ? "challenger" : "opponent");
-    x += (target.x - L.sceneCentre.x) * weight;
-    break;
-  }
-
-  // Crits and deaths kick the camera.
-  for (let back = 0; back <= SHAKE_FRAMES; back += 1) {
-    const f = frame - back;
-    if (f < 0) break;
-    const punch = eventsAt(index, f).find((e) => e.type === "crit" || e.type === "death");
-    if (!punch) continue;
-    const amp = (punch.type === "death" ? 40 : 24) * (1 - back / (SHAKE_FRAMES + 1));
-    x += Math.sin(frame * 2.7) * amp;
-    y += Math.cos(frame * 3.1) * amp * 0.6;
-    break;
-  }
-  return { x, y };
-}
 
 /** Traces the plus-shaped HP widget, centred on the origin. */
 function plusPath(ctx: Ctx, w: number, h: number, stem: number, barW: number, barH: number): void {
@@ -116,12 +63,14 @@ function plusPath(ctx: Ctx, w: number, h: number, stem: number, barW: number, ba
  * HP as a plus sign that fills bottom-up: white while healthy, red once past
  * halfway, with the current HP printed across the bar.
  */
-function drawHpWidget(ctx: Ctx, x: number, y: number, hp: number, maxHp: number): void {
-  const { width: w, height: h, stem, barWidth, barHeight } = HP_WIDGET;
+function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
+  const { stem, barWidth, barHeight } = HP_WIDGET;
+  const w = rect.w;
+  const h = rect.h;
   const share = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;
 
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
 
   plusPath(ctx, w, h, stem, barWidth, barHeight);
   ctx.fillStyle = C.hpEmpty;
@@ -179,13 +128,14 @@ const PICKUP_COLOR: Record<PickupType, string> = {
 };
 
 /** The item on the floor: a disc that pulses until someone reaches it. */
-function drawPickup(ctx: Ctx, snap: GauntletSnapshot): void {
+function drawPickup(ctx: Ctx, snap: GauntletSnapshot, layout: GauntletFrameLayout): void {
   const pickup = snap.pickup;
   if (!pickup) return;
   const age = snap.frame - pickup.spawnFrame;
   const pulse = 1 + Math.sin(age * 0.25) * 0.08;
-  const x = L.sceneCentre.x;
-  const y = L.sceneCentre.y - ARENA.inner * 0.2;
+  // Between the fighters, on the floor.
+  const x = (layout.challenger.centre.x + layout.opponent.centre.x) / 2;
+  const y = layout.groundY - WIDTH * 0.1;
   const r = WIDTH * 0.045 * pulse;
 
   ctx.save();
@@ -242,22 +192,18 @@ function visualState(
 }
 
 /** Team panel, top right: heading, then members with the active one marked. */
-function drawRosterPanel(ctx: Ctx, result: GauntletResult, snap: GauntletSnapshot): void {
+function drawRosterPanel(
+  ctx: Ctx,
+  result: GauntletResult,
+  snap: GauntletSnapshot,
+  metrics: HudMetrics,
+): void {
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";
   const x = L.panelRight;
-  let y = L.panelTop + L.panelLineHeight;
-
-  // The panel owns the right half; names shrink rather than reach across it.
-  const maxWidth = WIDTH * 0.47;
-  let size = Math.round(HEIGHT * 0.028);
-  const longest = result.team.members.reduce((a, b) => (a.name.length >= b.name.length ? a : b)).name;
-  ctx.font = font(size);
-  while (ctx.measureText(longest).width > maxWidth && size > 18) {
-    size -= 1;
-    ctx.font = font(size);
-  }
-  const lineHeight = Math.round(size * 1.34);
+  const size = metrics.panelSize;
+  const lineHeight = metrics.panelLineHeight;
+  let y = L.panelTop + lineHeight;
 
   strokedText(ctx, result.team.name, x, y, Math.round(size * 1.1), C.teamHeading, 8);
   y += lineHeight;
@@ -287,82 +233,71 @@ function drawRosterPanel(ctx: Ctx, result: GauntletResult, snap: GauntletSnapsho
 }
 
 /** Challenger's name and the VS mark, left of the panel. */
-function drawChallengerLabel(ctx: Ctx, name: string): void {
+function drawChallengerLabel(ctx: Ctx, name: string, metrics: HudMetrics): void {
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  const maxWidth = WIDTH * 0.36;
-  let size = Math.round(HEIGHT * 0.030);
-  ctx.font = font(size);
-  while (ctx.measureText(name).width > maxWidth && size > 18) {
-    size -= 1;
-    ctx.font = font(size);
-  }
-  // Sits against the middle of the roster block, not across its first line.
+  const size = metrics.challengerNameSize;
+  const x = Math.round(WIDTH * 0.03);
   const y = L.panelTop + Math.round(HEIGHT * 0.052);
-  strokedText(ctx, name, Math.round(WIDTH * 0.035), y, size, C.ink, 8);
-
-  // VS sits under the challenger's name, so the panel keeps the right half
-  // to itself no matter how long either side's names run.
-  const vsSize = Math.round(HEIGHT * 0.038);
-  strokedText(ctx, "VS", Math.round(WIDTH * 0.035), y + vsSize * 1.15, vsSize, C.vs, 9);
+  strokedText(ctx, name, x, y, size, C.ink, 8);
+  // VS sits under the name, so the panel keeps the right half to itself no
+  // matter how long either side's names run.
+  strokedText(ctx, "VS", x, y + metrics.vsSize * 1.15, metrics.vsSize, C.vs, 9);
 }
 
 function drawDamageNumbers(
   ctx: Ctx,
   index: RenderIndex,
   frame: number,
-  result: GauntletResult,
+  layout: GauntletFrameLayout,
 ): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const rects = layout.damageNumbers;
+  let i = 0;
   for (let back = 0; back <= DAMAGE_NUMBER_FRAMES; back += 1) {
     const f = frame - back;
     if (f < 0) break;
     for (const event of eventsAt(index, f)) {
       let text: string;
       let colour: string;
-      let size: number;
       switch (event.type) {
         case "crit":
           text = `-${event.value}!`;
           colour = C.critText;
-          size = Math.round(WIDTH * 0.085);
           break;
         case "hit":
-          text = `-${event.value}`;
-          colour = C.damageText;
-          size = Math.round(WIDTH * 0.058);
-          break;
         case "minion_hit":
         case "aoe":
           text = `-${event.value}`;
           colour = C.damageText;
-          size = Math.round(WIDTH * 0.045);
           break;
         case "heal":
           text = `+${event.value}`;
           colour = C.buffText;
-          size = Math.round(WIDTH * 0.055);
           break;
         case "pickup_claim":
           text = "+БАФ";
           colour = C.buffText;
-          size = Math.round(WIDTH * 0.05);
           break;
         default:
           continue;
       }
-
-      const onChallenger =
-        event.type === "pickup_claim" || event.type === "heal"
-          ? event.actorId === result.challenger.id
-          : event.targetId === result.challenger.id;
-      const anchor = fighterPosition(onChallenger ? "challenger" : "opponent");
+      // Positions come from the layout, which the gate also reads.
+      const rect = rects[i];
+      i += 1;
+      if (!rect) continue;
       const age = back / DAMAGE_NUMBER_FRAMES;
-      const x = anchor.x + jitter(`${event.frame}:${event.actorId}:${event.type}`, WIDTH * 0.07);
-      const y = anchor.y - L.fighterSize * 0.78 - HP_WIDGET.height * 0.9 - age * (HEIGHT * 0.07);
       ctx.globalAlpha = 1 - age;
-      strokedText(ctx, text, x, y, size * (1 + 0.12 * (1 - age)), colour, size * 0.16);
+      strokedText(
+        ctx,
+        text,
+        rect.x + rect.w / 2,
+        rect.y + rect.h / 2,
+        rect.h / 1.05,
+        colour,
+        rect.h * 0.15,
+      );
       ctx.globalAlpha = 1;
     }
   }
@@ -400,6 +335,8 @@ export interface GauntletFrameOptions {
   index?: RenderIndex;
   victoryOverlay?: boolean;
   planned?: PlannedFrame;
+  /** Precomputed HUD, so a long render lays it out once. */
+  hud?: ReturnType<typeof hudLayout>;
 }
 
 /**
@@ -427,52 +364,50 @@ export function renderGauntletFrame(
   ctx.fillStyle = C.background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  const camera = cameraOffset(index, frame, result);
-  ctx.save();
-  ctx.translate(-camera.x, -camera.y);
+  const hud = options.hud ?? hudLayout(result);
+  const layout = gauntletFrameLayout(result, frame, index, hud);
 
-  // Square arena, wider than the frame, so a wall is usually off screen.
-  const half = ARENA.outer / 2;
-  ctx.lineWidth = ARENA.border;
+  // The arena frames the pair rather than sitting behind them at a fixed size.
+  ctx.lineWidth = Math.round(WIDTH * 0.042);
   ctx.strokeStyle = C.outline;
   ctx.strokeRect(
-    L.sceneCentre.x - half + ARENA.border / 2,
-    L.sceneCentre.y - half + ARENA.border / 2,
-    ARENA.outer - ARENA.border,
-    ARENA.outer - ARENA.border,
+    layout.arena.x + ctx.lineWidth / 2,
+    layout.arena.y + ctx.lineWidth / 2,
+    layout.arena.w - ctx.lineWidth,
+    layout.arena.h - ctx.lineWidth,
   );
 
-  drawPickup(ctx, snap);
+  drawPickup(ctx, snap, layout);
 
   const sides = [
-    { key: "challenger" as const, state: snap.challenger, fighter: result.challenger },
     {
-      key: "opponent" as const,
+      state: snap.challenger,
+      fighter: result.challenger,
+      place: layout.challenger,
+      facing: 1 as const,
+    },
+    {
       state: snap.opponent,
       fighter: result.team.members[snap.round] ?? result.team.members[0]!,
+      place: layout.opponent,
+      facing: -1 as const,
     },
   ];
 
-  for (const { key, state, fighter } of sides) {
-    const pos = fighterPosition(key);
+  for (const { state, fighter, place, facing } of sides) {
     const vis = visualState(index, frame, state.id);
-    const facing: 1 | -1 = key === "challenger" ? 1 : -1;
+    const size = layout.fighterSize;
 
-    // Minions cluster behind their owner.
+    // Minions cluster behind their owner, on the ground line.
     snap.minions
       .filter((m) => m.ownerId === state.id)
       .forEach((minion, i) => {
         const side = i % 2 === 0 ? -1 : 1;
-        const mx = pos.x + side * (L.fighterSize * 0.62 + Math.floor(i / 2) * L.minionSize);
-        const my = pos.y + L.fighterSize * 0.18;
+        const mx = place.centre.x + side * (place.sprite.w * 0.6 + Math.floor(i / 2) * L.minionSize);
+        const my = layout.groundY - L.minionSize * 0.5;
         ctx.save();
         ctx.translate(mx, my);
-        drawFighter(ctx, fighter.spriteId, {
-          size: L.minionSize,
-          facing,
-          frame,
-          asMinion: true,
-        });
+        drawFighter(ctx, fighter.spriteId, { size: L.minionSize, facing, frame, asMinion: true });
         ctx.restore();
         const w = L.minionSize * 0.7;
         const share = Math.max(0, Math.min(1, minion.hp / minion.maxHp));
@@ -483,9 +418,9 @@ export function renderGauntletFrame(
       });
 
     ctx.save();
-    ctx.translate(pos.x, pos.y);
+    ctx.translate(place.centre.x, place.centre.y);
     drawFighter(ctx, fighter.spriteId, {
-      size: L.fighterSize,
+      size,
       facing,
       frame,
       strike: vis.strike,
@@ -495,21 +430,14 @@ export function renderGauntletFrame(
     });
     ctx.restore();
 
-    drawHpWidget(
-      ctx,
-      pos.x,
-      pos.y - L.fighterSize * 0.78,
-      state.hp,
-      state.maxHp,
-    );
+    drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
   }
 
-  drawDamageNumbers(ctx, index, frame, result);
-  ctx.restore();
+  drawDamageNumbers(ctx, index, frame, layout);
 
   // Overlay is screen-fixed so long names stay readable.
-  drawChallengerLabel(ctx, result.challenger.name);
-  drawRosterPanel(ctx, result, snap);
+  drawChallengerLabel(ctx, result.challenger.name, hud.metrics);
+  drawRosterPanel(ctx, result, snap, hud.metrics);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";

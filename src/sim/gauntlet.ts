@@ -33,10 +33,18 @@ export interface GauntletConfig {
 
 /** Frames one round may run before it is called on remaining HP. */
 export const ROUND_FRAME_CAP = 20 * FPS;
+/**
+ * Frames held on the last snapshot of a round. Without this the loser's death
+ * animation has a single frame to play before the next round replaces them,
+ * so the figure appears to stand there intact at 0 HP.
+ */
+export const ROUND_HOLD_FRAMES = 26;
 
 export interface GauntletRules {
   /** Per-round frame cap. */
   roundFrameCap?: number;
+  /** Frames held after a round ends, for the death animation. */
+  roundHoldFrames?: number;
   /** Overrides the simulation's damage spread. */
   damageVariance?: number;
   /** Arena pickups. Omit for none. */
@@ -104,6 +112,7 @@ export function simulateGauntlet(
 ): GauntletResult {
   const { challenger, team } = config;
   const frameCap = rules.roundFrameCap ?? ROUND_FRAME_CAP;
+  const holdFrames = rules.roundHoldFrames ?? ROUND_HOLD_FRAMES;
 
   const rounds: GauntletRound[] = [];
   const snapshots: GauntletSnapshot[] = [];
@@ -144,6 +153,20 @@ export function simulateGauntlet(
     const last = round.snapshots[round.snapshots.length - 1]!;
     const startFrame = offset;
     offset += round.snapshots.length - skip;
+
+    // Hold on the final frame so the death plays out before the next member
+    // walks on. The events are already recorded, so the renderer just keeps
+    // advancing the death animation.
+    for (let i = 0; i < holdFrames; i += 1) {
+      snapshots.push({
+        frame: offset + i,
+        round: index,
+        challenger: last.a,
+        opponent: last.b,
+        minions: last.minions,
+      });
+    }
+    offset += holdFrames;
 
     const wonRound = last.a.hp > 0 && last.b.hp <= 0;
     rounds.push({

@@ -3,8 +3,11 @@
 Generates short vertical battle videos — two fighters, 1080x1920, 30fps, ready
 for TikTok/Shorts.
 
-The pipeline is: simulate a fight, score how dramatic it was, keep the best of
-500 seeds, render it to frames, and mux it into an mp4 with sound.
+The default format is a gauntlet: one worker against three bosses, one at a
+time, carrying their health between rounds. The pipeline simulates the run,
+scores how dramatic it was, keeps the best of 500 seeds, renders it to frames,
+and muxes it into an mp4 with sound. `--duel` runs the original one-on-one
+format instead.
 
 ```
 pnpm install
@@ -32,6 +35,7 @@ synthesised into `assets/audio/` the first time you export.
 | `pnpm matchups` | list pairs, most even first |
 | `pnpm frame [n...]` | render sample frames to `out/preview/` |
 | `pnpm diagnose` | drama distribution, side-bias check (`--comeback` for the prototype) |
+| `pnpm calibrate:gauntlet` | gauntlet balance table (`--solve`, `--variance`) |
 | `pnpm test` / `pnpm typecheck` | tests and types |
 
 `generate` skips pairs already in the manifest, so running it again continues
