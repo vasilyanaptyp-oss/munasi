@@ -46,8 +46,11 @@ export const baker: FighterArt = {
 
     // The toque: three stacked puffs, taller than the head is wide.
     ctx.save();
-    ctx.translate(hatDrop * -0.55, hatDrop * 0.95);
-    ctx.rotate(hatDrop * -1.1);
+    // Falls off him rather than across the arena: the wide version put the
+    // toque 0.40 of a body width past his own outline and pushed the pair
+    // apart for the whole fight to make room for two seconds of dying.
+    ctx.translate(hatDrop * -0.1, hatDrop * 1.06);
+    ctx.rotate(hatDrop * -0.7);
     box(ctx, 0, -0.58, 0.46, 0.14, APRON);
     ellipse(ctx, -0.16, -0.78, 0.19, 0.2, APRON);
     ellipse(ctx, 0.16, -0.78, 0.19, 0.2, APRON);

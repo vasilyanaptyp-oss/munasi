@@ -83,15 +83,15 @@ export const HP_WIDGET = {
 } as const;
 
 /**
- * HP widgets are chrome pinned inside the arena's top band, not markers that
- * ride above whoever is standing there. Fighters vary in height by a third, so
- * a widget that tracks the head moves frame to frame and can leave the arena
- * entirely on a tall fighter.
+ * HP widgets sit in a fixed band at the top of the arena.
+ *
+ * Vertically pinned, horizontally free: letting the widget ride the head made
+ * it bob and, on a tall fighter, climb out of the arena — but pinning both axes
+ * left the viewer working out which plus belonged to whom. So the band is
+ * constant and the widget tracks its own fighter along it.
  */
 export const HP_WIDGET_SLOTS = {
   y: ARENA.inner.y + Math.round(HEIGHT * 0.004),
-  challengerX: ARENA.inner.x + Math.round(ARENA.inner.w * 0.17),
-  opponentX: ARENA.inner.x + Math.round(ARENA.inner.w * 0.83),
 } as const;
 
 export const GAUNTLET_LAYOUT = {

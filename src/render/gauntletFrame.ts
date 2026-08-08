@@ -215,7 +215,7 @@ function drawRosterPanel(
   const x = L.panelRight;
   const size = metrics.panelSize;
   const lineHeight = metrics.panelLineHeight;
-  let y = L.panelTop + lineHeight;
+  let y = metrics.panelTop + lineHeight;
 
   strokedText(ctx, result.team.name, x, y, Math.round(size * 1.1), C.teamHeading, 8);
   y += lineHeight;
@@ -248,13 +248,11 @@ function drawRosterPanel(
 function drawChallengerLabel(ctx: Ctx, name: string, metrics: HudMetrics): void {
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  const size = metrics.challengerNameSize;
   const x = Math.round(WIDTH * 0.03);
-  const y = L.panelTop + Math.round(HEIGHT * 0.052);
-  strokedText(ctx, name, x, y, size, C.ink, 8);
-  // VS sits under the name, so the panel keeps the right half to itself no
-  // matter how long either side's names run.
-  strokedText(ctx, "VS", x, y + metrics.vsSize * 1.15, metrics.vsSize, C.vs, 9);
+  // The name owns a full-width line of its own; VS sits under it, and the
+  // roster panel starts below both. See the note in `hudLayout`.
+  strokedText(ctx, name, x, metrics.nameBaseline, metrics.challengerNameSize, C.ink, 8);
+  strokedText(ctx, "VS", x, metrics.vsBaseline, metrics.vsSize, C.vs, 9);
 }
 
 function drawDamageNumbers(
@@ -308,6 +306,29 @@ function drawDamageNumbers(
       ctx.globalAlpha = 1;
     }
   }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
+/**
+ * Cold-open / cut badge, in the gap between the arena and the caption so it
+ * never lands on the HUD or on a fighter.
+ */
+function drawBadge(ctx: Ctx, text: string, accent: string): void {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const size = Math.round(HEIGHT * 0.026);
+  ctx.font = font(size);
+  const w = ctx.measureText(text).width + size * 1.6;
+  const h = size * 1.7;
+  const x = WIDTH / 2 - w / 2;
+  const y = ARENA_RECT.y + ARENA_RECT.h + Math.round(HEIGHT * 0.03);
+
+  ctx.fillStyle = "rgba(5,18,26,0.82)";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = accent;
+  ctx.fillRect(x, y, Math.round(WIDTH * 0.008), h);
+  strokedText(ctx, text, WIDTH / 2, y + h / 2, size, accent, 6);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
@@ -487,6 +508,8 @@ export function renderGauntletFrame(
   );
 
   const planned = options.planned;
+  if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, C.critText);
+  if (planned?.startLabel !== undefined) drawBadge(ctx, planned.startLabel, C.hpHealthy);
   if (planned?.flash !== undefined && planned.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(1, planned.flash).toFixed(3)})`;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);

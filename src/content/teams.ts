@@ -52,6 +52,13 @@ export const GAUNTLET_TUNING: GauntletTuning = { tempo: 1.03, challengerPower: 2
 export const GAUNTLET_RULES = {
   damageVariance: 0.15,
   pickups: {},
+  /**
+   * A round opens on a short fuse. Measured: every gap over 1.2s in a finished
+   * video sat at a round change, and it was 27 frames of death animation plus
+   * 20-33 frames waiting for the newcomer's first swing. Both sides get the
+   * same head start, so it costs the race nothing.
+   */
+  openingCooldown: 0.22,
 } as const;
 
 function scaled(fighter: Fighter, damageMultiplier: number): Fighter {

@@ -1,5 +1,7 @@
 node_modules/
 out/
+# ...except the sample videos, which are the deliverable.
+!out/samples/
 *.log
 .DS_Store
 .vitest/

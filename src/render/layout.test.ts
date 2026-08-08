@@ -2,16 +2,20 @@ import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
 import { findBestGauntlet, type GauntletResult } from "../sim/gauntlet.js";
+import { DEATH_FRAMES } from "./drawFighter.js";
 import { buildRenderIndex } from "./frame.js";
-import { defaultPlan } from "./framePlan.js";
+import { coldOpenPlan, defaultPlan } from "./framePlan.js";
+import { COLD_OPEN_FRAMES, findGauntletColdOpen } from "../sim/coldOpen.js";
 import { byFaction } from "../content/teams.js";
 import {
+  ARENA_INNER,
   ARENA_RECT,
   gauntletFrameLayout,
   hudLayout,
   intersects,
   MIN_FIGHTER_HEIGHT_SHARE,
   roundPlacement,
+  RELAXED_FIGHTER_HEIGHT_SHARE,
   type Rect,
 } from "./gauntletLayout.js";
 import { ARENA } from "./gauntletTheme.js";
@@ -22,8 +26,8 @@ import { HEIGHT, WIDTH } from "./theme.js";
  * Composition gate.
  *
  * Runs every frame of a generated video and checks the rules a viewer would
- * notice being broken: nothing in the HUD overlapping, nobody clipped by the
- * frame edge, fighters big enough to read, and damage numbers clear of the HP
+ * notice being broken: nothing in the HUD overlapping, nobody crossing the
+ * arena wall, fighters big enough to read, and damage numbers clear of the HP
  * widgets. Failures name the frame and the elements involved, because "the
  * composition is dead" is not something you can act on.
  *
@@ -55,8 +59,6 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
   const violations: Violation[] = [];
   const minHeight = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
 
-  const inside = (r: Rect): boolean =>
-    r.x >= 0 && r.y >= 0 && r.x + r.w <= WIDTH && r.y + r.h <= HEIGHT;
   const contains = (outer: Rect, r: Rect): boolean =>
     r.x >= outer.x &&
     r.y >= outer.y &&
@@ -81,17 +83,21 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
       }
     }
 
-    // 2. Both fighters fully inside the frame, and 3. tall enough to read.
+    // 2. Both fighters fully inside the ARENA, and 3. tall enough to read.
     for (const side of [layout.challenger, layout.opponent]) {
-      // Checked against the motion box: a fighter mid-death must stay in frame.
-      if (!inside(side.reach)) {
+      // Checked against the motion box: a fighter mid-death must stay inside
+      // the wall of the square it is being fought in, not merely inside the
+      // frame — the frame is 1080 wide and the arena only 924.
+      if (!contains(ARENA_INNER, side.reach)) {
         violations.push({
           frame,
-          rule: "fighter clipped",
+          rule: "fighter crosses the arena wall",
           detail:
             `${side.reach.name} box x ${side.reach.x.toFixed(0)}..` +
             `${(side.reach.x + side.reach.w).toFixed(0)}, y ${side.reach.y.toFixed(0)}..` +
-            `${(side.reach.y + side.reach.h).toFixed(0)}`,
+            `${(side.reach.y + side.reach.h).toFixed(0)} ` +
+            `(arena x ${ARENA_INNER.x}..${ARENA_INNER.x + ARENA_INNER.w}, ` +
+            `y ${ARENA_INNER.y}..${ARENA_INNER.y + ARENA_INNER.h})`,
         });
       }
       if (side.sprite.h < minHeight) {
@@ -103,13 +109,20 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
             `${((side.sprite.h / HEIGHT) * 100).toFixed(1)}% (floor ${minHeight.toFixed(0)}px)`,
         });
       }
-      if (!inside(side.hp)) {
+      if (!contains(ARENA_INNER, side.hp)) {
         violations.push({
           frame,
-          rule: "hp widget clipped",
-          detail: `${side.hp.name} y ${side.hp.y.toFixed(0)}..${(side.hp.y + side.hp.h).toFixed(0)}`,
+          rule: "hp widget outside the arena",
+          detail: `${side.hp.name} x ${side.hp.x.toFixed(0)}, y ${side.hp.y.toFixed(0)}`,
         });
       }
+    }
+    if (intersects(layout.challenger.hp, layout.opponent.hp)) {
+      violations.push({ frame, rule: "hp widgets overlap", detail: "the two plus signs collide" });
+    }
+    // The band is fixed; only the horizontal position tracks the fighter.
+    if (layout.challenger.hp.y !== layout.opponent.hp.y) {
+      violations.push({ frame, rule: "hp widgets off their band", detail: "widgets at different heights" });
     }
 
     // 4. Damage numbers stay off the HP widgets, and inside the arena.
@@ -274,6 +287,7 @@ describe("gauntlet composition", () => {
     // Placement is solved per round from the two fighters' measured extents,
     // so every pairing has to be checked, not the one this video happens to use.
     const failures: string[] = [];
+    const relaxedPairs: string[] = [];
     for (const worker of byFaction("workers", roster)) {
       for (const boss of byFaction("bosses", roster)) {
         const placement = roundPlacement(worker.spriteId, boss.spriteId);
@@ -282,7 +296,15 @@ describe("gauntlet composition", () => {
 
         const heightA = restA.height * placement.size;
         const heightB = restB.height * placement.size;
-        const floor = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
+        const share = placement.relaxed
+          ? RELAXED_FIGHTER_HEIGHT_SHARE
+          : MIN_FIGHTER_HEIGHT_SHARE;
+        const floor = HEIGHT * share;
+        if (placement.relaxed) {
+          relaxedPairs.push(
+            `${worker.id} × ${boss.id} (${(placement.overlap * 100).toFixed(0)}% overlap)`,
+          );
+        }
         if (heightA < floor || heightB < floor) {
           failures.push(
             `${worker.id} × ${boss.id}: heights ${heightA.toFixed(0)}/${heightB.toFixed(0)}px ` +
@@ -290,16 +312,66 @@ describe("gauntlet composition", () => {
           );
         }
 
-        // Everything either fighter ever draws has to fit between the edges.
+        // Everything either fighter ever draws has to fit inside the arena.
         const span = placement.separation + (placement.reachRight - placement.reachLeft);
-        if (span > WIDTH) {
+        if (span > ARENA_INNER.w) {
           failures.push(
-            `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px of width, frame is ${WIDTH}px`,
+            `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px, arena is ${ARENA_INNER.w}px`,
           );
         }
       }
     }
     expect(failures).toEqual([]);
+    // Not an assertion — the exception list, printed so it cannot go unnoticed.
+    if (relaxedPairs.length > 0) {
+      console.warn(`height floor relaxed to 21% for: ${relaxedPairs.join(", ")}`);
+    }
+    expect(relaxedPairs.length).toBeLessThanOrEqual(2);
+  });
+
+  it("works as a feed thumbnail on frame 0", () => {
+    // Frame 0 is the still image the feed shows before anyone presses play, so
+    // it has to carry the joke on its own: both names legible, both fighters
+    // present, and the team panel clear of the challenger's name.
+    const index = buildRenderIndex(result);
+    const hud = hudLayout(result);
+    const layout = gauntletFrameLayout(result, 0, index, hud);
+
+    const named = (n: string): Rect => layout.hud.find((r) => r.name === n)!;
+    const name = named("challengerName");
+    const panel = named("teamPanel");
+    expect(intersects(name, panel), "the panel sits on the challenger's name").toBe(false);
+    expect(intersects(named("vs"), panel)).toBe(false);
+
+    // Legible means a real cap height, not merely "it fitted".
+    expect(hud.metrics.challengerNameSize).toBeGreaterThanOrEqual(HEIGHT * 0.022);
+    expect(hud.metrics.panelSize).toBeGreaterThanOrEqual(HEIGHT * 0.019);
+    // Every team member is named, not just the first.
+    expect(result.team.members.length).toBeGreaterThan(1);
+    expect(panel.h).toBeGreaterThan(hud.metrics.panelLineHeight * result.team.members.length);
+
+    // Both fighters are on screen, at full size, neither dead nor mid-swing.
+    for (const side of [layout.challenger, layout.opponent]) {
+      expect(side.sprite.h).toBeGreaterThanOrEqual(HEIGHT * MIN_FIGHTER_HEIGHT_SHARE);
+      expect(side.sprite.x).toBeGreaterThanOrEqual(ARENA_INNER.x);
+      expect(side.sprite.x + side.sprite.w).toBeLessThanOrEqual(ARENA_INNER.x + ARENA_INNER.w);
+    }
+    const snap = result.snapshots[0]!;
+    expect(snap.challenger.hp).toBe(result.challenger.maxHp);
+    expect(snap.round).toBe(0);
+  });
+
+  it("holds the composition rules on the cold-open frames too", () => {
+    // With the hook on, output frame 0 is a mid-fight frame rather than the
+    // fight's own frame 0, so the thumbnail rules have to survive there.
+    const window = findGauntletColdOpen(result);
+    expect(window).not.toBeNull();
+    const plan = coldOpenPlan(result, window!, 0);
+    const violations = auditFrames(
+      result,
+      plan.slice(0, COLD_OPEN_FRAMES + 20).map((p) => p.source),
+    );
+    expect(summarise(violations)).toBe("");
   });
 
   it("plays a death animation instead of leaving the loser standing", () => {
@@ -309,7 +381,8 @@ describe("gauntlet composition", () => {
       (e) => e.type === "death" && e.frame < firstRound.endFrame,
     );
     expect(deathFrame).toBeDefined();
+    // The hold has to outlast the animation, or the loser swaps out mid-fall.
     const framesAfterDeath = firstRound.endFrame - deathFrame!.frame;
-    expect(framesAfterDeath).toBeGreaterThanOrEqual(20);
+    expect(framesAfterDeath).toBeGreaterThan(DEATH_FRAMES);
   });
 });

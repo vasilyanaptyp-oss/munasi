@@ -99,6 +99,16 @@ export interface MatchRules {
   maxFrames?: number;
   /** Overrides `DAMAGE_VARIANCE` for this match. */
   damageVariance?: number;
+  /**
+   * Multiplier on both fighters' first attack cooldown, 0..1.
+   *
+   * The gauntlet uses it to shorten the dead air at a round change: after a
+   * death the video held ~0.9s for the death animation and then waited another
+   * 0.7-1.1s for the newcomer's first swing. Both sides get the same head
+   * start, so the race is unchanged. Defaults to 1, which is what the duel
+   * uses — the 1v1 format is untouched.
+   */
+  openingCooldown?: number;
   /** Arena pickups. Omit to disable them. */
   pickups?: PickupRules;
 }

@@ -10,7 +10,7 @@ import { exportVideo, FfmpegMissingError, checkFfmpeg, VICTORY_FREEZE_FRAMES } f
 import { defaultPlan, sourceFrames } from "../render/framePlan.js";
 import { coldOpenPlan } from "../render/framePlan.js";
 import { defaultWorkerCount, renderFramesParallel } from "../render/parallel.js";
-import { describeColdOpen, findColdOpen } from "../sim/coldOpen.js";
+import { describeColdOpen, findColdOpen, findGauntletColdOpen } from "../sim/coldOpen.js";
 import { findBestMatch } from "../sim/drama.js";
 import { FPS } from "../sim/types.js";
 import { isMain } from "../util/main.js";
@@ -54,6 +54,11 @@ export interface GenerateOptions {
    */
   coldOpen: boolean;
   /**
+   * Indices into the matchup list, for producing a chosen set rather than the
+   * next few in order. Used to cut sample videos that span several challengers.
+   */
+  pick?: number[];
+  /**
    * Run the original one-on-one format instead of the gauntlet. The gauntlet
    * is the default: one worker against three bosses is the format the
    * reference uses and the one the titles are written for.
@@ -92,8 +97,13 @@ export function parseArgs(argv: string[]): GenerateOptions {
     matchupSample: Math.floor(number("sample", 40)),
     keepFrames: argv.includes("--keep-frames"),
     redo: argv.includes("--redo"),
-    coldOpen: argv.includes("--cold-open"),
+    // On by default: the first two seconds decide whether the video is
+    // watched at all. `--no-cold-open` posts the straight cut for comparison.
+    coldOpen: !argv.includes("--no-cold-open"),
     duel: argv.includes("--duel"),
+    ...(flag("pick") === undefined
+      ? {}
+      : { pick: flag("pick")!.split(",").map((n) => Number(n.trim())).filter(Number.isFinite) }),
   };
 }
 
@@ -189,7 +199,7 @@ async function generateGauntlet(
   const best = findBestGauntlet(config, { count: options.seeds, rules: GAUNTLET_RULES });
   const result: GauntletResult = best.result;
 
-  const window = options.coldOpen ? findColdOpen(result) : null;
+  const window = options.coldOpen ? findGauntletColdOpen(result) : null;
   const plan = window
     ? coldOpenPlan(result, window, VICTORY_FREEZE_FRAMES)
     : defaultPlan(result, VICTORY_FREEZE_FRAMES);
@@ -282,7 +292,9 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
       }));
   } else {
     const done = renderedGauntlets(manifest);
-    queue = gauntletMatchups(roster)
+    const all = gauntletMatchups(roster);
+    const chosen = options.pick ? options.pick.map((i) => all[i]).filter((m) => m !== undefined) : all;
+    queue = chosen
       .filter((m) => !done.has(gauntletKey(m.challenger.id, m.members.map((x) => x.id))))
       .slice(0, options.count)
       .map((m) => ({

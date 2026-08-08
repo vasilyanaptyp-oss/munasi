@@ -43,12 +43,15 @@ where the last batch left off. `--redo` starts from the top, `--seeds N`
 changes how many seeds are searched per matchup, `--workers N` sets render
 parallelism, `--keep-frames` leaves the intermediate PNGs behind.
 
-`--cold-open` opens the video on the fight's most arresting earlier moment
-before cutting back to the start. It is off by default so you can post both
-cuts of the same matchup and compare watch time; the window chosen and the
-reason go into `manifest.json`. The window can never contain a killing blow
-or come from the last 20% of the fight — spoiling the ending costs more
-retention than a slow opening.
+The video opens cold by default: 30 frames of the fight's most arresting moment
+from the **last** round, then a cut back to the real beginning. `--no-cold-open`
+posts the straight cut instead, so you can put both versions of a matchup up and
+compare watch time; the window chosen and the reason go into `manifest.json`.
+The window can never contain a killing blow or come from the last 20% of the
+fight — spoiling the ending costs more retention than a slow opening.
+
+`--pick=0,33,66,99` selects matchups by index instead of taking the next few in
+order, which is how `out/samples/` was cut.
 
 ## How it fits together
 
@@ -69,6 +72,12 @@ is what lets frames be split across worker processes.
 `findBestMatch` simulates 500 seeds (~350ms) and keeps the one that scores
 highest on closeness, lead changes, comebacks, pacing and how late the outcome
 stayed in doubt.
+
+**Nothing stands still.** `src/sim/tempo.ts` measures the longest stretch of a
+finished video with no visible event, and `tempo.test.ts` fails the build over
+1.2 seconds. Every breach turned out to sit at a round change rather than inside
+a round, so the fix was to compress the pause — rounds now open on a short first
+cooldown — not to paper over it with effects.
 
 **The roster is balanced by construction.** Fighter `attack` values are solved
 for, not hand-written: see `src/content/calibrate.ts`. Every pair currently sits

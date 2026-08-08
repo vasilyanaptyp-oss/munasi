@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { loadFighters } from "../content/index.js";
+import { getFighter, loadFighters } from "../content/index.js";
+import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
+import { coldOpenPlan } from "../render/framePlan.js";
+import { findBestGauntlet } from "./gauntlet.js";
 import {
   COLD_OPEN_FRAMES,
   COLD_OPEN_LATEST,
   describeColdOpen,
   findColdOpen,
+  findGauntletColdOpen,
 } from "./coldOpen.js";
 import { findBestMatch } from "./drama.js";
 import { simulate } from "./simulate.js";
@@ -103,5 +107,74 @@ describe("findColdOpen", () => {
     const text = describeColdOpen(window);
     expect(text).toMatch(/damage|lead changed/);
     expect(text.length).toBeGreaterThan(10);
+  });
+});
+
+describe("findGauntletColdOpen", () => {
+  const roster = loadFighters();
+
+  /** Runs the same matchups the sample videos use. */
+  function run(challenger: string, team: string[]) {
+    const config = buildGauntlet(
+      getFighter(challenger, roster),
+      team.map((id) => getFighter(id, roster)),
+    );
+    return findBestGauntlet(config, { count: 120, rules: GAUNTLET_RULES }).result;
+  }
+
+  const cases: [string, string[]][] = [
+    ["plumber", ["chairman", "silencer", "arbiter"]],
+    ["baker", ["silencer", "councillor", "inspector"]],
+    ["courier", ["chairman", "arbiter", "viceroy"]],
+    ["gatekeeper", ["councillor", "viceroy", "inspector"]],
+  ];
+
+  it("takes its window from the last round, where the run is decided", () => {
+    for (const [challenger, team] of cases) {
+      const result = run(challenger, team);
+      const window = findGauntletColdOpen(result);
+      expect(window, `${challenger} vs ${team.join("/")}`).not.toBeNull();
+      const lastRound = result.rounds.at(-1)!;
+      expect(
+        window!.startFrame,
+        `${challenger}: window at ${window!.startFrame}, last round starts ${lastRound.startFrame}`,
+      ).toBeGreaterThanOrEqual(lastRound.startFrame);
+    }
+  }, 60_000);
+
+  it("never shows the killing blow — that is the whole point of the rule", () => {
+    for (const [challenger, team] of cases) {
+      const result = run(challenger, team);
+      const window = findGauntletColdOpen(result)!;
+      const spoilers = result.events.filter(
+        (e) =>
+          (e.type === "death" || e.type === "victory") &&
+          e.frame >= window.startFrame &&
+          e.frame < window.endFrame,
+      );
+      expect(spoilers, `${challenger} vs ${team.join("/")}`).toEqual([]);
+    }
+  }, 60_000);
+
+  it("never reaches into the last 20% of the run", () => {
+    for (const [challenger, team] of cases) {
+      const result = run(challenger, team);
+      const window = findGauntletColdOpen(result)!;
+      expect(window.endFrame).toBeLessThanOrEqual(
+        Math.floor(result.durationFrames * COLD_OPEN_LATEST),
+      );
+    }
+  }, 60_000);
+
+  it("is exactly 30 frames, and the plan puts them first", () => {
+    const result = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const window = findGauntletColdOpen(result)!;
+    expect(window.endFrame - window.startFrame).toBe(COLD_OPEN_FRAMES);
+    const plan = coldOpenPlan(result, window, 0);
+    expect(plan.slice(0, COLD_OPEN_FRAMES).map((p) => p.source)).toEqual(
+      Array.from({ length: COLD_OPEN_FRAMES }, (_, i) => window.startFrame + i),
+    );
+    // ...and then the fight starts from its real beginning.
+    expect(plan[COLD_OPEN_FRAMES]!.source).toBe(0);
   });
 });

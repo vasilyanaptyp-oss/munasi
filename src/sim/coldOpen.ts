@@ -39,6 +39,14 @@ export interface ColdOpenOptions {
   /** Window length in frames. Defaults to 30. */
   length?: number;
   /**
+   * Earliest frame the window may start at.
+   *
+   * The gauntlet sets this to the last round, because that is the round with
+   * anything at stake: the challenger arrives worn down and the run is decided
+   * there. Rounds one and two look like any other exchange.
+   */
+  earliestFrame?: number;
+  /**
    * A lead change is worth this multiple of the average fighter's max HP when
    * scoring against a pure damage burst. A swap of who is winning is rarer and
    * reads better than a big number, so it outweighs a typical burst.
@@ -73,11 +81,12 @@ export function findColdOpen(
 ): ColdOpenWindow | null {
   const length = options.length ?? COLD_OPEN_FRAMES;
   const leadChangeWeight = options.leadChangeWeight ?? 0.35;
+  const earliest = Math.max(0, options.earliestFrame ?? 0);
   const { snapshots, durationFrames } = result;
 
   // Never reach into the closing stretch: seeing the finish first kills it.
   const latestEnd = Math.floor(durationFrames * COLD_OPEN_LATEST);
-  if (latestEnd < length || snapshots.length === 0) return null;
+  if (latestEnd < earliest + length || snapshots.length === 0) return null;
 
   // Frames that must not appear in the window at all.
   const forbidden = new Set<number>();
@@ -111,7 +120,7 @@ export function findColdOpen(
   const leadChangeValue = meanMaxHp * leadChangeWeight;
 
   let best: ColdOpenWindow | null = null;
-  for (let start = 0; start + length <= latestEnd; start += 1) {
+  for (let start = earliest; start + length <= latestEnd; start += 1) {
     const end = start + length;
 
     let blocked = false;
@@ -148,6 +157,25 @@ export function findColdOpen(
     }
   }
   return best;
+}
+
+/**
+ * The gauntlet's hook: the strongest window inside the last round.
+ *
+ * Falls back to the whole run when the last round starts too late to hold a
+ * window before the 80% cutoff — a hook from round two beats no hook at all,
+ * and both hard rules still apply either way.
+ */
+export function findGauntletColdOpen(
+  result: ColdOpenSource & { rounds?: { startFrame: number }[] },
+  options: ColdOpenOptions = {},
+): ColdOpenWindow | null {
+  const lastRound = result.rounds?.at(-1);
+  if (lastRound) {
+    const inLastRound = findColdOpen(result, { ...options, earliestFrame: lastRound.startFrame });
+    if (inLastRound) return inLastRound;
+  }
+  return findColdOpen(result, options);
 }
 
 /** One-line explanation for the manifest. */

@@ -28,8 +28,10 @@ export const silencer: FighterArt = {
 
     // The arm and finger: raised straight up past the head.
     ctx.save();
-    ctx.translate(0.24, -0.2);
-    ctx.rotate(droop * 1.5);
+    // The finger folds down against him, it does not sweep out sideways: a
+    // full 1.5 rad swing threw the fingertip 0.37 past his own outline.
+    ctx.translate(0.24 - droop * 0.14, -0.2 + droop * 0.2);
+    ctx.rotate(droop * 0.45);
     roundedBox(ctx, 0, -0.18, 0.15, 0.48, 0.06, SUIT_DARK);
     circle(ctx, 0, -0.46, 0.11, SKIN);
     roundedBox(ctx, 0, -0.74, 0.11, 0.44, 0.05, SKIN);

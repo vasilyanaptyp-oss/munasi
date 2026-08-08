@@ -162,7 +162,9 @@ export function simulate(
     rng,
     // The gauntlet carries the challenger's HP in from the previous round.
     hp: side === "a" ? (rules.startHpA ?? base.maxHp) : base.maxHp,
-    attackCooldown: ticksPerAttack(base.attackSpeed),
+    // Multiplied, never rounded: at the default 1 this has to be bit-identical
+    // to the old expression or every 1v1 replay changes.
+    attackCooldown: ticksPerAttack(base.attackSpeed) * (rules.openingCooldown ?? 1),
     abilityCooldowns: base.abilities.map((ab) => ab.cooldown * TICKS_PER_SECOND),
     buffs: [],
     speedBuffs: [],

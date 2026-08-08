@@ -37,6 +37,11 @@ export const ROUND_FRAME_CAP = 20 * FPS;
  * Frames held on the last snapshot of a round. Without this the loser's death
  * animation has a single frame to play before the next round replaces them,
  * so the figure appears to stand there intact at 0 HP.
+ *
+ * Sized to outlast `DEATH_FRAMES` (24), so the collapse always finishes. It was
+ * tempting to trim this when the round change turned out to be the only dead
+ * air in the video, but a half-played death is a worse problem than a short
+ * pause — the tempo came out of the opening cooldown instead.
  */
 export const ROUND_HOLD_FRAMES = 26;
 
@@ -47,6 +52,8 @@ export interface GauntletRules {
   roundHoldFrames?: number;
   /** Overrides the simulation's damage spread. */
   damageVariance?: number;
+  /** Multiplier on the first attack cooldown of each round. */
+  openingCooldown?: number;
   /** Arena pickups. Omit for none. */
   pickups?: PickupRules;
 }
@@ -128,6 +135,7 @@ export function simulateGauntlet(
       startHpA: carriedHp,
       maxFrames: frameCap,
       ...(rules.damageVariance === undefined ? {} : { damageVariance: rules.damageVariance }),
+      ...(rules.openingCooldown === undefined ? {} : { openingCooldown: rules.openingCooldown }),
       ...(rules.pickups === undefined ? {} : { pickups: rules.pickups }),
     });
 
