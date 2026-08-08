@@ -111,10 +111,16 @@ renderer rather than by each fighter's art, so it lands even on the ones whose
 idle is deliberately still.
 
 The arena itself is a constant: a fixed square at a fixed place with a fixed
-border and a fixed ground line. Between frames only the camera moves, panning
-and zooming inside it, and the zoom aims each pair at 30% of frame height —
-16 of the 36 pairs reach it, the rest are held back by having to keep
-everything both fighters ever draw inside the arena walls.
+border. The pair is staged in depth rather than on one floor — the boss stands
+on the lower line, drawn 12% larger and in front; the challenger stands higher
+up and smaller.
+
+Width, not the floor, is what limits how big they get: a fighter 30% of frame
+height is 430-590px wide, and two of those do not fit clear of each other in a
+924px arena. Measured with no overlap at all, 32 of 36 pairs miss the 30% target
+and 14 miss even the 22% floor. So the pair slides together by exactly the
+shortfall and no more — 22 of 36 stand fully clear, and `layout.test.ts` names
+the rest.
 
 Nothing is loaded from disk — no third-party images, no real people, no
 borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into

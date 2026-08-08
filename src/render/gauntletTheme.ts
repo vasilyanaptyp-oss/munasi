@@ -35,8 +35,16 @@ const F = {
   arenaSide: 0.92, // square side, of frame width
   arenaTop: 0.295, // of frame height
   border: 0.032, // of frame width
-  /** Ground line, as a share of the arena's inner height. */
-  ground: 0.88,
+  /**
+   * Two ground lines, as shares of the arena's inner height.
+   *
+   * There is no single floor: the pair is staged in depth, as in the reference.
+   * The near fighter stands lower and is drawn larger and on top; the far one
+   * stands higher up the arena and smaller. One shared line left the top third
+   * of the square empty in every frame.
+   */
+  groundNear: 0.9,
+  groundFar: 0.7,
   hpWidgetWidth: 0.13, // of frame width
   hpStemWidth: 0.036,
   hpBarWidth: 0.115,
@@ -72,8 +80,12 @@ export const ARENA = {
     h: innerSide,
   },
   centre: { x: originX + side / 2, y: originY + side / 2 },
-  /** Screen y the fighters stand on. Constant, inside the arena. */
-  groundY: originY + border + Math.round(innerSide * F.ground),
+  /** Screen y the near fighter stands on. Constant, inside the arena. */
+  groundY: originY + border + Math.round(innerSide * F.groundNear),
+  /** Screen y the far fighter stands on — higher up, because it is further off. */
+  groundFarY: originY + border + Math.round(innerSide * F.groundFar),
+  /** How much larger the near fighter is drawn. Perspective, not importance. */
+  nearScale: 1.12,
 } as const;
 
 export const HP_WIDGET = {

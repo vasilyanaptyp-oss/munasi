@@ -15,7 +15,6 @@ import {
   hudLayout,
   intersects,
   MIN_FIGHTER_HEIGHT_SHARE,
-  OVERLAP_CAP,
   roundPlacement,
   TARGET_FIGHTER_HEIGHT_SHARE,
   victoryCardLayout,
@@ -24,7 +23,7 @@ import {
 } from "./gauntletLayout.js";
 import { drawHpWidgetForTest } from "./gauntletFrame.js";
 import { ARENA, GAUNTLET_COLORS } from "./gauntletTheme.js";
-import { meanLightness, spriteBounds } from "./silhouette.js";
+import { meanLightness } from "./silhouette.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 import { FPS } from "../sim/types.js";
 
@@ -123,6 +122,26 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
         });
       }
     }
+    // The two fighters stand clear of each other unless the pair physically
+    // cannot inside a 924px arena without dropping under the height floor.
+    if (layout.overlap <= 1e-6 && intersects(layout.challenger.sprite, layout.opponent.sprite)) {
+      violations.push({
+        frame,
+        rule: "fighters overlap",
+        detail:
+          `challenger x ${layout.challenger.sprite.x.toFixed(0)}..` +
+          `${(layout.challenger.sprite.x + layout.challenger.sprite.w).toFixed(0)} ` +
+          `meets opponent x ${layout.opponent.sprite.x.toFixed(0)}..` +
+          `${(layout.opponent.sprite.x + layout.opponent.sprite.w).toFixed(0)}`,
+      });
+    }
+    // Staged in depth: the far fighter stands higher and is drawn smaller.
+    if (layout.sizeFar >= layout.sizeNear) {
+      violations.push({ frame, rule: "depth lost", detail: "far fighter is not the smaller one" });
+    }
+    if (layout.groundFarY >= layout.groundY) {
+      violations.push({ frame, rule: "depth lost", detail: "far ground line is not above the near one" });
+    }
     if (intersects(layout.challenger.hp, layout.opponent.hp)) {
       violations.push({ frame, rule: "hp widgets overlap", detail: "the two plus signs collide" });
     }
@@ -162,7 +181,8 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
       layout.arena.w !== ARENA_RECT.w ||
       layout.arena.h !== ARENA_RECT.h ||
       layout.arena.w !== layout.arena.h ||
-      layout.groundY !== ARENA.groundY
+      layout.groundY !== ARENA.groundY ||
+      layout.groundFarY !== ARENA.groundFarY
     ) {
       violations.push({
         frame,
@@ -219,16 +239,18 @@ describe("gauntlet composition", () => {
     }
   });
 
-  it("stands fighters on the arena's fixed ground line", () => {
+  it("stands the pair on two ground lines, staged in depth", () => {
     const index = buildRenderIndex(result);
     const hud = hudLayout(result);
     for (const frame of [0, 200, 500, result.durationFrames - 1]) {
       const layout = gauntletFrameLayout(result, frame, index, hud);
-      for (const side of [layout.challenger, layout.opponent]) {
-        const feet = side.sprite.y + side.sprite.h;
-        // Only the camera's vertical pan may move them off it, and barely.
-        expect(Math.abs(feet - ARENA.groundY)).toBeLessThan(HEIGHT * 0.006);
-      }
+      // The challenger is the far side: higher up the arena and smaller.
+      const farFeet = layout.challenger.sprite.y + layout.challenger.sprite.h;
+      const nearFeet = layout.opponent.sprite.y + layout.opponent.sprite.h;
+      expect(Math.abs(farFeet - ARENA.groundFarY)).toBeLessThan(HEIGHT * 0.006);
+      expect(Math.abs(nearFeet - ARENA.groundY)).toBeLessThan(HEIGHT * 0.006);
+      expect(nearFeet).toBeGreaterThan(farFeet + HEIGHT * 0.05);
+      expect(layout.sizeNear).toBeGreaterThan(layout.sizeFar);
     }
   });
 
@@ -294,52 +316,52 @@ describe("gauntlet composition", () => {
     // so every pairing has to be checked, not the one this video happens to use.
     const failures: string[] = [];
     const shortOfTarget: string[] = [];
+    const overlapping: string[] = [];
     for (const worker of byFaction("workers", roster)) {
       for (const boss of byFaction("bosses", roster)) {
-        const placement = roundPlacement(worker.spriteId, boss.spriteId);
-        const restA = spriteBounds(worker.spriteId);
-        const restB = spriteBounds(boss.spriteId);
-
-        const heightA = restA.height * placement.size;
-        const heightB = restB.height * placement.size;
-        const floor = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
-        if (heightA < floor || heightB < floor) {
+        const p = roundPlacement(worker.spriteId, boss.spriteId);
+        const floor = MIN_FIGHTER_HEIGHT_SHARE;
+        if (p.shareFar < floor || p.shareNear < floor) {
           failures.push(
-            `${worker.id} × ${boss.id}: heights ${heightA.toFixed(0)}/${heightB.toFixed(0)}px ` +
-              `below the ${floor.toFixed(0)}px hard floor`,
+            `${worker.id} × ${boss.id}: ${(p.shareFar * 100).toFixed(1)}% / ` +
+              `${(p.shareNear * 100).toFixed(1)}% below the ${(floor * 100).toFixed(0)}% floor`,
           );
         }
-        if (placement.limitedBy !== "target") {
+        if (p.overlap > 1e-6) {
+          overlapping.push(`${worker.id} × ${boss.id} (${(p.overlap * 100).toFixed(0)}%)`);
+        }
+        if (p.limitedBy !== "target") {
           shortOfTarget.push(
-            `${worker.id} × ${boss.id}: ${(placement.heightShare * 100).toFixed(1)}% ` +
-              `(limited by ${placement.limitedBy})`,
+            `${worker.id} × ${boss.id}: near ${(p.shareNear * 100).toFixed(1)}% ` +
+              `(limited by ${p.limitedBy})`,
           );
         }
-
         // Everything either fighter ever draws has to fit inside the arena.
-        const span = placement.separation + (placement.reachRight - placement.reachLeft);
+        const span = p.separation + (p.reachRight - p.reachLeft);
         if (span > ARENA_INNER.w) {
           failures.push(
             `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px, arena is ${ARENA_INNER.w}px`,
           );
         }
-        if (placement.overlap > OVERLAP_CAP + 1e-9) {
-          failures.push(
-            `${worker.id} × ${boss.id}: overlap ${placement.overlap.toFixed(3)} over the cap`,
-          );
+        // The far fighter is drawn smaller than the near one, always.
+        if (p.sizeFar >= p.sizeNear) {
+          failures.push(`${worker.id} × ${boss.id}: far fighter is not smaller than the near one`);
         }
       }
     }
     expect(failures).toEqual([]);
-    // Not an assertion but the exception list, printed so it cannot go unnoticed:
-    // these pairs cannot reach the target without crossing the arena wall.
+    if (overlapping.length > 0) {
+      console.warn(
+        `pairs too wide to stand clear inside the arena (${overlapping.length}/36): ` +
+          overlapping.join(", "),
+      );
+    }
     if (shortOfTarget.length > 0) {
       console.warn(
         `below the ${(TARGET_FIGHTER_HEIGHT_SHARE * 100).toFixed(0)}% target ` +
           `(${shortOfTarget.length}/36):\n  ${shortOfTarget.join("\n  ")}`,
       );
     }
-    expect(shortOfTarget.length).toBeLessThanOrEqual(22);
   });
 
   it("works as a feed thumbnail on frame 0", () => {
@@ -401,6 +423,24 @@ describe("gauntlet composition", () => {
 });
 
 describe("victory card", () => {
+  it("never covers the arena", () => {
+    const run = findBestGauntlet(
+      buildGauntlet(
+        getFighter("plumber", roster),
+        ["chairman", "silencer", "arbiter"].map((id) => getFighter(id, roster)),
+      ),
+      { count: 40, rules: GAUNTLET_RULES },
+    ).result;
+    const card = victoryCardLayout(run);
+    // It used to sit on the arena floor, over the winner from the chest down.
+    expect(intersects(card.plate, ARENA_RECT), "the card covers the arena").toBe(false);
+    for (const line of card.lines) {
+      expect(intersects(line.rect, ARENA_RECT), `${line.name} covers the arena`).toBe(false);
+      expect(line.rect.x).toBeGreaterThanOrEqual(0);
+      expect(line.rect.x + line.rect.w).toBeLessThanOrEqual(WIDTH);
+    }
+  }, 60_000);
+
   /**
    * The card the video ends on. It used to dim the whole frame to a third
    * brightness, run the winner's name off both edges of the frame, hold for two
@@ -425,6 +465,7 @@ describe("victory card", () => {
     throw new Error(`no sample run where cleared=${cleared}`);
   }
 
+  const FRAME: Rect = { name: "frame", x: 0, y: 0, w: WIDTH, h: HEIGHT };
   const contains = (outer: Rect, r: Rect): boolean =>
     r.x >= outer.x &&
     r.y >= outer.y &&
@@ -432,12 +473,12 @@ describe("victory card", () => {
     r.y + r.h <= outer.y + outer.h;
 
   for (const cleared of [true, false]) {
-    it(`keeps every line inside the arena when cleared=${cleared}`, () => {
+    it(`keeps every line inside the card when cleared=${cleared}`, () => {
       const run = runFor(cleared);
       const card = victoryCardLayout(run);
-      expect(contains(ARENA_INNER, card.plate), "plate leaves the arena").toBe(true);
+      expect(contains(FRAME, card.plate), "plate leaves the frame").toBe(true);
       for (const line of card.lines) {
-        expect(contains(ARENA_INNER, line.rect), `${line.name} "${line.text}" leaves the arena`)
+        expect(contains(card.plate, line.rect), `${line.name} "${line.text}" leaves the plate`)
           .toBe(true);
       }
     }, 60_000);

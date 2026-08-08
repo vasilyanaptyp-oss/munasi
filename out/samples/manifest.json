@@ -15,8 +15,8 @@
       "durationSeconds": 34.63,
       "frames": 1039,
       "winnerId": "plumber",
-      "sizeBytes": 5463862,
-      "generatedAt": "2026-08-08T11:04:17.174Z",
+      "sizeBytes": 5276921,
+      "generatedAt": "2026-08-08T13:56:14.051Z",
       "gauntlet": {
         "challengerId": "plumber",
         "teamIds": [
@@ -48,8 +48,8 @@
       "durationSeconds": 30.1,
       "frames": 903,
       "winnerId": "viceroy",
-      "sizeBytes": 4878919,
-      "generatedAt": "2026-08-08T11:05:11.419Z",
+      "sizeBytes": 4536416,
+      "generatedAt": "2026-08-08T13:57:18.099Z",
       "gauntlet": {
         "challengerId": "baker",
         "teamIds": [
@@ -81,8 +81,8 @@
       "durationSeconds": 35.67,
       "frames": 1070,
       "winnerId": "inspector",
-      "sizeBytes": 5331952,
-      "generatedAt": "2026-08-08T11:06:53.413Z",
+      "sizeBytes": 5176232,
+      "generatedAt": "2026-08-08T13:58:35.303Z",
       "gauntlet": {
         "challengerId": "loader",
         "teamIds": [
@@ -122,8 +122,8 @@
       "durationSeconds": 29.3,
       "frames": 879,
       "winnerId": "nailmaster",
-      "sizeBytes": 4813994,
-      "generatedAt": "2026-08-08T11:07:55.585Z",
+      "sizeBytes": 4532916,
+      "generatedAt": "2026-08-08T13:59:42.561Z",
       "gauntlet": {
         "challengerId": "nailmaster",
         "teamIds": [

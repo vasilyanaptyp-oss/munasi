@@ -48,10 +48,16 @@ export interface Camera {
 }
 
 export interface GauntletFrameLayout {
-  /** Pixels per unit of `drawFighter`'s `size` — world size times zoom. */
+  /** Scale of the near fighter. Kept for callers that want one number. */
   fighterSize: number;
-  /** Screen y the fighters stand on. */
+  /** Per-side scales: the far fighter is drawn smaller. */
+  sizeFar: number;
+  sizeNear: number;
+  /** Screen y each fighter stands on — two lines, staged in depth. */
   groundY: number;
+  groundFarY: number;
+  /** Resting-box overlap this pair needed, 0 when they stand clear. */
+  overlap: number;
   /** Always the `ARENA` constant; the gate checks that it stays that way. */
   arena: Rect;
   camera: Camera;
@@ -90,11 +96,8 @@ export const ARENA_INNER: Rect = {
 export const DAMAGE_NUMBER_FRAMES = 15;
 
 /**
- * Height the shorter fighter of a pair is aimed at, as a share of the frame.
- *
- * Raised from 22% because the arena was visibly empty — a 22% fighter standing
- * on a ground line 813px below the arena's roof left a quarter of the square as
- * bare blue. 26 of the 36 pairs reach it.
+ * Height the near fighter is aimed at, as a share of the frame. The far one
+ * follows at 1 / `ARENA.nearScale` of it, which is what depth means.
  */
 export const TARGET_FIGHTER_HEIGHT_SHARE = 0.3;
 /**
@@ -103,17 +106,8 @@ export const TARGET_FIGHTER_HEIGHT_SHARE = 0.3;
  * the gate prints the shortfall with its cause.
  */
 export const MIN_FIGHTER_HEIGHT_SHARE = 0.22;
-/** Gap kept between the two fighters' boxes when there is room for one. */
-const FIGHTER_GAP = Math.round(WIDTH * 0.03);
-/**
- * How far the two resting boxes may overlap, as a share of fighter size.
- *
- * Standing the pair closer is the first lever for fitting a wide pair inside
- * the arena, and partial overlap is fine — the keyline keeps the two figures
- * apart where they cross. Solved per pair: a pair takes exactly as much overlap
- * as it needs and no more.
- */
-export const OVERLAP_CAP = 0.4;
+/** Clear space kept between the two fighters' resting boxes. */
+const BODY_GAP = Math.round(WIDTH * 0.016);
 /** Breathing room inside the arena walls, where the pair has to stay. */
 const ARENA_PAD = Math.round(WIDTH * 0.01);
 /** Width the pair, and everything it ever draws, must fit into. */
@@ -127,14 +121,6 @@ const HEAD_PAD = Math.round(HEIGHT * 0.006);
  * the keyline, both of which move drawn pixels after the size is chosen.
  */
 const VERTICAL_PAD = HEAD_PAD + FIGHTER_OUTLINE + 2;
-/**
- * Vertical room a fighter has: the arena's roof down to the ground line.
- *
- * A tall fighter may reach up behind the HP widgets. They are chrome drawn over
- * the scene, as in the reference, and holding fighters below them cost 9% of
- * frame height for nothing.
- */
-const HEAD_ROOM = ARENA.groundY - ARENA.inner.y - VERTICAL_PAD;
 
 /**
  * Floor of the band damage numbers may occupy: under the HP widgets, inside the
@@ -260,119 +246,135 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
 }
 
 export interface RoundPlacement {
-  size: number;
+  /** Scale of the far fighter (the challenger) and the near one (the boss). */
+  sizeFar: number;
+  sizeNear: number;
+  /** Distance between the two origins, far to near. */
   separation: number;
-  /** Leftmost and rightmost pixel the pair ever draws, relative to origin A. */
+  /** Leftmost and rightmost pixel the pair ever draws, relative to the far origin. */
   reachLeft: number;
   reachRight: number;
-  /** Resting-box overlap actually granted, in fighter-size units. */
+  /** Height each fighter ends up at, as a share of the frame. */
+  shareFar: number;
+  shareNear: number;
+  /**
+   * Resting-box overlap in fighter-size units, 0 for most pairs. Non-zero only
+   * where standing clear would push a fighter under the height floor.
+   */
   overlap: number;
-  /** Height the shorter of the two ends up at, as a share of the frame. */
-  heightShare: number;
   /** Which constraint decided the size. "target" means the pair got what it asked for. */
   limitedBy: "target" | "width" | "roof";
 }
 
 /**
- * Stable per-round geometry: the scale, how far apart the pair stands, and how
- * much the two are allowed to overlap.
+ * Stable per-round geometry: two scales, two ground lines, one separation.
  *
- * **The guarantee is the arena wall.** Everything either fighter ever draws —
- * body, prop, the debris of its death — stays inside the arena's inner box.
- * Not the frame edge: the frame is 1080 wide and the arena only 924, so the old
- * frame guarantee let a death spray across the wall of the very square it was
- * supposed to be fought inside.
+ * **The pair is staged in depth, not on a shared floor.** The near fighter — the
+ * team's, always, so the challenger reads as the one facing something bigger —
+ * stands on the lower line and is drawn `ARENA.nearScale` larger and on top; the
+ * challenger stands on the higher line, smaller. A single ground line left the
+ * top third of the arena empty in every frame.
  *
- * Three levers, applied in this order:
- *   1. Scale down to `noOverlap`, the size at which the pair fits with the
- *      bodies just touching.
- *   2. Below the 22% height floor, stop scaling and start overlapping instead,
- *      taking exactly as much overlap as the pair needs, up to `OVERLAP_CAP`.
- *   3. Only if that is not enough, drop that one pair to the relaxed 21% floor
- *      and flag it. Nothing on the current roster reaches step 3.
+ * **The two resting boxes never touch.** There is no overlap budget any more:
+ * with the pair at two depths the old trick of sliding them into each other is
+ * both unnecessary to read and, at these sizes, ugly.
  *
- * Computed once per round rather than per frame, because the reach depends on
- * who is mid-death and the fighters must not slide sideways when someone dies.
- * Only one fighter is ever dying, so the worst case is one full death envelope
- * against one living fighter — not two.
+ * **The guarantee is still the arena wall.** Everything either fighter ever
+ * draws — body, prop, the debris of its death — stays inside the arena's inner
+ * box, and that is what caps the size for most pairs: a fighter 30% of the frame
+ * tall is 430-590px wide, and two of those plus a gap do not fit in a 924px
+ * arena. `TARGET_FIGHTER_HEIGHT_SHARE` is an aim, and the gate prints every pair
+ * that falls short of it with the reason.
  */
 export function roundPlacement(
   challengerSprite: string,
   opponentSprite: string,
 ): RoundPlacement {
-  const restA = spriteBounds(challengerSprite);
-  const restB = spriteBounds(opponentSprite);
-  const deadA = spriteMotionBounds(challengerSprite, true);
-  const deadB = spriteMotionBounds(opponentSprite, true);
-  const liveA = spriteMotionBounds(challengerSprite, false);
-  const liveB = spriteMotionBounds(opponentSprite, false);
-
-  // Widest the pair ever reaches, in fighter-size units. Only one fighter is
-  // ever dying, so the worst case is one death envelope against one live one.
-  const reachLeftUnits = Math.min(deadA.left, liveA.left);
-  const reachRightUnits = Math.max(deadB.right, liveB.right);
-  const bodies = restA.right - restB.left;
-  // Total width the pair needs at scale 1 with the bodies exactly touching.
-  const span = bodies + (reachRightUnits - reachLeftUnits);
+  const restFar = spriteBounds(challengerSprite);
+  const restNear = spriteBounds(opponentSprite);
+  const motionFar = spriteMotionBounds(challengerSprite, true);
+  const motionNear = spriteMotionBounds(opponentSprite, true);
 
   // Aim a whisker over the target: solving for exactly 30% leaves the result
   // sitting on the boundary, where rounding can push it under.
-  const target = (HEIGHT * TARGET_FIGHTER_HEIGHT_SHARE * 1.01) / Math.min(restA.height, restB.height);
-  // Nobody's crown pokes through the arena's roof, and nobody's collapse goes
-  // through its floor. Measured from the *motion* envelope, not the resting
-  // box: an idle bob or the recoil lifts the crown above where the fighter
-  // stands, and sizing off the resting height let that through by a few pixels.
-  const crown = Math.max(restA.bottom - deadA.top, restB.bottom - deadB.top);
-  const slump = Math.max(deadA.bottom - restA.bottom, deadB.bottom - restB.bottom);
-  const byRoof = HEAD_ROOM / crown;
-  const byFloor =
-    slump > 0
-      ? (ARENA.inner.y + ARENA.inner.h - ARENA.groundY - VERTICAL_PAD) / slump
-      : Number.POSITIVE_INFINITY;
-  // Widest the pair may be drawn and still fit between the walls once it has
-  // spent its whole overlap budget.
-  const byWidth = ARENA_BUDGET / (span - OVERLAP_CAP);
+  // Anchored on whichever of the two ends up shorter on screen, not on the near
+  // one: the near fighter is 12% bigger by construction, so aiming at it left
+  // the far fighter under the floor whenever it was the stubbier of the pair.
+  const shorter = Math.min(restFar.height / ARENA.nearScale, restNear.height);
+  const aim = (HEIGHT * TARGET_FIGHTER_HEIGHT_SHARE * 1.01) / shorter;
 
-  // As big as the target asks for, but never past what the arena allows on
-  // either axis. Whichever of the three binds, the arena wall is never crossed.
-  const size = Math.min(target, byRoof, byFloor, byWidth);
-  const overlap = Math.max(0, span - ARENA_BUDGET / size);
-  const reachedTarget = size >= target - 1e-6;
-  const limit: RoundPlacement["limitedBy"] = reachedTarget
-    ? "target"
-    : byWidth <= Math.min(byRoof, byFloor)
-      ? "width"
-      : "roof";
+  // Vertical room each fighter has above its own line, and below the near one
+  // for the collapse. Measured from the motion envelope: an idle bob or the
+  // recoil lifts the crown above where the fighter stands.
+  const roomNear = ARENA.groundY - ARENA.inner.y - VERTICAL_PAD;
+  const roomFar = ARENA.groundFarY - ARENA.inner.y - VERTICAL_PAD;
+  const underNear = ARENA.inner.y + ARENA.inner.h - ARENA.groundY - VERTICAL_PAD;
+  const underFar = ARENA.inner.y + ARENA.inner.h - ARENA.groundFarY - VERTICAL_PAD;
 
-  const reachLeft = reachLeftUnits * size;
-  const reachRight = reachRightUnits * size;
-  const desired = bodies * size + FIGHTER_GAP;
-  const minimum = (bodies - overlap) * size;
-  const maximum = ARENA_BUDGET - (reachRight - reachLeft);
-  const separation = Math.max(minimum, Math.min(desired, Math.max(minimum, maximum)));
+  const crownNear = restNear.bottom - motionNear.top;
+  const crownFar = restFar.bottom - motionFar.top;
+  const slumpNear = Math.max(0, motionNear.bottom - restNear.bottom);
+  const slumpFar = Math.max(0, motionFar.bottom - restFar.bottom);
+
+  // Everything scales with the near size, so every limit solves directly.
+  const scale = ARENA.nearScale;
+  const widthUnits =
+    (restFar.right / scale - restNear.left) +
+    (motionNear.right - motionFar.left / scale);
+
+  const vertical = Math.min(
+    roomNear / crownNear,
+    (roomFar / crownFar) * scale,
+    slumpNear > 0 ? underNear / slumpNear : Number.POSITIVE_INFINITY,
+    slumpFar > 0 ? (underFar / slumpFar) * scale : Number.POSITIVE_INFINITY,
+  );
+  const byWidth = (ARENA_BUDGET - BODY_GAP) / widthUnits;
+
+  // Preferred: the pair apart, nothing touching.
+  let sizeNear = Math.min(aim, vertical, byWidth);
+  let overlap = 0;
+  // The floor wins over "apart". Two fighters at 22% of frame height are
+  // 320-450px wide each and 14 of the 36 pairs cannot stand clear of each
+  // other inside a 924px arena — the worst is 260px short. Those pairs slide
+  // together by exactly the shortfall and no more.
+  const floorSize = (HEIGHT * MIN_FIGHTER_HEIGHT_SHARE * 1.01) / shorter;
+  if (sizeNear < floorSize) {
+    sizeNear = Math.min(floorSize, vertical);
+    overlap = Math.max(0, widthUnits - (ARENA_BUDGET - BODY_GAP) / sizeNear);
+  }
+  const sizeFar = sizeNear / scale;
+
+  const reachLeft = (motionFar.left / scale) * sizeNear;
+  const reachRight = motionNear.right * sizeNear;
+  const separation =
+    (restFar.right / scale - restNear.left - overlap) * sizeNear + BODY_GAP;
+
   return {
-    size,
+    sizeFar,
+    sizeNear,
     separation,
     reachLeft,
     reachRight,
+    shareFar: (restFar.height * sizeFar) / HEIGHT,
+    shareNear: (restNear.height * sizeNear) / HEIGHT,
     overlap,
-    heightShare: (Math.min(restA.height, restB.height) * size) / HEIGHT,
-    limitedBy: limit,
+    limitedBy:
+      sizeNear >= aim - 1e-6 ? "target" : byWidth <= vertical ? "width" : "roof",
   };
 }
 
-/** On-screen fighter scale for a round. */
+/** On-screen scale of the near fighter for a round. */
 export function fighterSizeFor(challengerSprite: string, opponentSprite: string): number {
-  return roundPlacement(challengerSprite, opponentSprite).size;
+  return roundPlacement(challengerSprite, opponentSprite).sizeNear;
 }
 
-/** The camera settings a round is fought at. Zoom is what meets the 22% floor. */
+/** The camera settings a round is fought at. Zoom is what sizes the pair. */
 export function roundCamera(
   challengerSprite: string,
   opponentSprite: string,
 ): { zoom: number; worldSeparation: number; reachLeft: number; reachRight: number } {
   const placement = roundPlacement(challengerSprite, opponentSprite);
-  const zoom = placement.size / L.fighterWorld;
+  const zoom = placement.sizeNear / L.fighterWorld;
   return {
     zoom,
     worldSeparation: placement.separation / zoom,
@@ -411,22 +413,24 @@ export function gauntletFrameLayout(
 ): GauntletFrameLayout {
   const snap = result.snapshots[frame]!;
   const opponent = result.team.members[snap.round] ?? result.team.members[0]!;
+  const placement = roundPlacement(result.challenger.spriteId, opponent.spriteId);
   const camera = roundCamera(result.challenger.spriteId, opponent.spriteId);
   const zoom = camera.zoom;
-  const size = L.fighterWorld * zoom;
+  // Far is the challenger, near is the boss. Two scales, two ground lines.
+  const sizeFar = placement.sizeFar;
+  const sizeNear = placement.sizeNear;
   const boundsA = spriteBounds(result.challenger.spriteId);
   const boundsB = spriteBounds(opponent.spriteId);
 
-  const groundY = ARENA.groundY;
-  const separation = camera.worldSeparation * zoom;
+  const separation = placement.separation;
   const wobble = drift(index, frame);
 
   // Centre the pair on the bodies, not on the reach. Centring on the reach
   // shoves the pair off to one side whenever one fighter's death throws debris
   // much further than the other's — which is most rounds, and it reads as a
   // composition mistake for the whole fight to pay for two seconds of dying.
-  const restLeft = boundsA.left * size;
-  const restRight = separation + boundsB.right * size;
+  const restLeft = boundsA.left * sizeFar;
+  const restRight = separation + boundsB.right * sizeNear;
   const centred =
     ARENA.inner.x + (ARENA.inner.w - (restRight - restLeft)) / 2 - restLeft;
   // The pan is clamped against the arena wall, not the frame edge.
@@ -436,24 +440,24 @@ export function gauntletFrameLayout(
   const originAx = Math.max(lowest, Math.min(centred + wobble.x, Math.max(lowest, highest)));
   const originBx = originAx + separation;
 
-  // Vertical pan is bounded to a hair so the fixed ground line stays fixed.
+  // Vertical pan is bounded to a hair so the two ground lines stay fixed.
   const panY = Math.max(-HEAD_PAD, Math.min(wobble.y, HEAD_PAD));
-  const originAy = groundY - boundsA.bottom * size + panY;
-  const originBy = groundY - boundsB.bottom * size + panY;
+  const originAy = ARENA.groundFarY - boundsA.bottom * sizeFar + panY;
+  const originBy = ARENA.groundY - boundsB.bottom * sizeNear + panY;
 
   const spriteA: Rect = {
     name: "challengerSprite",
-    x: originAx + boundsA.left * size,
-    y: originAy + boundsA.top * size,
-    w: boundsA.width * size,
-    h: boundsA.height * size,
+    x: originAx + boundsA.left * sizeFar,
+    y: originAy + boundsA.top * sizeFar,
+    w: boundsA.width * sizeFar,
+    h: boundsA.height * sizeFar,
   };
   const spriteB: Rect = {
     name: "opponentSprite",
-    x: originBx + boundsB.left * size,
-    y: originBy + boundsB.top * size,
-    w: boundsB.width * size,
-    h: boundsB.height * size,
+    x: originBx + boundsB.left * sizeNear,
+    y: originBy + boundsB.top * sizeNear,
+    w: boundsB.width * sizeNear,
+    h: boundsB.height * sizeNear,
   };
 
   // Pinned vertically to the arena's top band — that is what stopped the
@@ -475,17 +479,23 @@ export function gauntletFrameLayout(
   });
   let hpA = hpFor("challengerHp", originAx);
   let hpB = hpFor("opponentHp", originBx);
-  // A heavily overlapped pair would stack its widgets; push them apart evenly.
-  const overlapPx = hpA.x + HP_WIDGET.width + HP_WIDGET_GAP - hpB.x;
-  if (overlapPx > 0) {
-    hpA = hpFor("challengerHp", originAx - overlapPx / 2);
-    hpB = hpFor("opponentHp", originBx + overlapPx / 2);
+  // Two widgets on a narrow pair would stack; push them apart evenly.
+  const clash = hpA.x + HP_WIDGET.width + HP_WIDGET_GAP - hpB.x;
+  if (clash > 0) {
+    hpA = hpFor("challengerHp", originAx - clash / 2);
+    hpB = hpFor("opponentHp", originBx + clash / 2);
   }
 
   // Reach boxes use the true measured envelope, per side.
-  const reachOf = (name: string, spriteId: string, originX: number, originY: number): Rect => {
+  const reachOf = (
+    name: string,
+    spriteId: string,
+    originX: number,
+    originY: number,
+    size: number,
+  ): Rect => {
     // The full measured envelope, uncapped: if any part of a fighter would
-    // leave the frame, the gate must see it.
+    // cross the arena wall, the gate must see it.
     // Grown by the keyline, because the keyline is drawn pixels too.
     const dead = spriteMotionBounds(spriteId, true);
     return {
@@ -515,8 +525,12 @@ export function gauntletFrameLayout(
   });
 
   return {
-    fighterSize: size,
-    groundY,
+    fighterSize: sizeNear,
+    sizeFar,
+    sizeNear,
+    groundY: ARENA.groundY,
+    groundFarY: ARENA.groundFarY,
+    overlap: placement.overlap,
     arena: { ...ARENA_RECT },
     camera: {
       // Screen pan expressed back in world units, which is what it means.
@@ -526,13 +540,13 @@ export function gauntletFrameLayout(
     },
     challenger: {
       sprite: spriteA,
-      reach: reachOf("challengerSprite", result.challenger.spriteId, originAx, originAy),
+      reach: reachOf("challengerSprite", result.challenger.spriteId, originAx, originAy, sizeFar),
       centre: { x: originAx, y: originAy },
       hp: hpA,
     },
     opponent: {
       sprite: spriteB,
-      reach: reachOf("opponentSprite", opponent.spriteId, originBx, originBy),
+      reach: reachOf("opponentSprite", opponent.spriteId, originBx, originBy, sizeNear),
       centre: { x: originBx, y: originBy },
       hp: hpB,
     },
@@ -569,35 +583,39 @@ export function victoryCardLayout(result: GauntletResult): VictoryCard {
   const hpLeft = Math.max(0, Math.round(won ? last.challenger.hp : last.opponent.hp));
   const name = won ? result.challenger.name : (result.rounds.at(-1)?.opponentName ?? "");
 
-  const pad = Math.round(WIDTH * 0.03);
-  const room = ARENA.inner.w - ARENA_PAD * 2 - pad * 2;
+  // The card lives in the band under the arena — the strip the round caption
+  // already occupies. Over the arena it covered the winner from the chest down,
+  // which defeated the point of keeping them in shot.
+  const pad = Math.round(WIDTH * 0.02);
+  const room = WIDTH - Math.round(WIDTH * 0.03) * 2 - pad * 2;
 
   // Both sides can hit zero on the same tick — damage is applied after every
   // actor has swung, so a mutual kill is a real outcome, not a rounding
   // artefact. "ОСТАЛОСЬ 0 HP" is true there and reads as a broken card, so that
   // case gets its own line.
   const trade = hpLeft <= 0;
-  const headlineSize = Math.round(WIDTH * 0.042);
-  const nameSize = fitText(name, Math.round(WIDTH * 0.075), room, Math.round(WIDTH * 0.036));
+  const headlineSize = Math.round(WIDTH * 0.036);
+  const nameSize = fitText(name, Math.round(WIDTH * 0.062), room, Math.round(WIDTH * 0.03));
   const hpText = trade ? "РАЗМЕН — УПАЛИ ОБА" : `ОСТАЛОСЬ ${hpLeft} HP`;
-  const hpSize = fitText(hpText, Math.round(WIDTH * 0.055), room, Math.round(WIDTH * 0.03));
+  const hpSize = fitText(hpText, Math.round(WIDTH * 0.048), room, Math.round(WIDTH * 0.026));
 
   const headline = trade ? "ДОБИЛ И УПАЛ" : won ? "ПРОШЁЛ ВСЕХ" : "НЕ СПРАВИЛСЯ";
   const sizes = [headlineSize, nameSize, hpSize];
   const texts = [headline, name, hpText];
   const names = ["victoryHeadline", "victoryName", "victoryHp"];
-  const gap = Math.round(HEIGHT * 0.008);
+  const gap = Math.round(HEIGHT * 0.005);
   const bodyHeight = sizes.reduce((sum, size) => sum + size * 1.2, 0) + gap * (sizes.length - 1);
 
-  // Anchored to the arena floor, not to its middle. Centred, the plate lay
-  // across both fighters' chests and the winner was not really *in* the shot —
-  // which was the complaint about the old blackout in the first place.
+  // Under the arena, never over it. The strip between the arena's bottom edge
+  // and the progress bar is already empty and already meant for text.
   const plateHeight = bodyHeight + pad * 2;
+  const bandTop = ARENA.y + ARENA.side;
+  const bandBottom = L.progressY - Math.round(HEIGHT * 0.008);
   const plate: Rect = {
     name: "victoryPlate",
-    x: ARENA.inner.x + ARENA_PAD,
-    y: ARENA.inner.y + ARENA.inner.h - ARENA_PAD - plateHeight,
-    w: ARENA.inner.w - ARENA_PAD * 2,
+    x: Math.round(WIDTH * 0.03),
+    y: Math.round(bandTop + (bandBottom - bandTop - plateHeight) / 2),
+    w: WIDTH - Math.round(WIDTH * 0.03) * 2,
     h: plateHeight,
   };
 

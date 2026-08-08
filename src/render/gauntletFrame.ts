@@ -444,31 +444,40 @@ export function renderGauntletFrame(
     ARENA_RECT.h - ARENA.border,
   );
   // The floor the pair stands on, also fixed.
-  ctx.strokeStyle = "rgba(0,0,0,0.16)";
   ctx.lineWidth = Math.max(2, Math.round(HEIGHT * 0.002));
-  ctx.beginPath();
-  ctx.moveTo(ARENA.inner.x, layout.groundY);
-  ctx.lineTo(ARENA.inner.x + ARENA.inner.w, layout.groundY);
-  ctx.stroke();
+  // Two lines: the far one fainter, which is most of what reads as depth.
+  for (const [y, alpha] of [
+    [layout.groundFarY, 0.1],
+    [layout.groundY, 0.18],
+  ] as const) {
+    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(ARENA.inner.x, y);
+    ctx.lineTo(ARENA.inner.x + ARENA.inner.w, y);
+    ctx.stroke();
+  }
 
+  // Far first, near second: the near fighter is drawn over the far one, which
+  // is what sells the depth. The challenger is always the far side.
   const sides = [
     {
       state: snap.challenger,
       fighter: result.challenger,
       place: layout.challenger,
+      size: layout.sizeFar,
       facing: 1 as const,
     },
     {
       state: snap.opponent,
       fighter: result.team.members[snap.round] ?? result.team.members[0]!,
       place: layout.opponent,
+      size: layout.sizeNear,
       facing: -1 as const,
     },
   ];
 
-  for (const { state, fighter, place, facing } of sides) {
+  for (const { state, fighter, place, size, facing } of sides) {
     const vis = visualState(index, frame, state.id);
-    const size = layout.fighterSize;
 
     // Minions cluster behind their owner, on the ground line.
     snap.minions
