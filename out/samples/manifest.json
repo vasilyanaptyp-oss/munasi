@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "plumber-vs-chairman-silencer-arbiter-33.mp4",
+      "file": "plumber-vs-chairman-silencer-arbiter-377.mp4",
       "fighters": [
         "plumber",
         "chairman+silencer+arbiter"
@@ -10,13 +10,13 @@
         "САНТЕХНИК ЖЭКА",
         "КОМИССИЯ"
       ],
-      "seed": 33,
-      "dramaScore": 99.7,
-      "durationSeconds": 34.63,
-      "frames": 1039,
+      "seed": 377,
+      "dramaScore": 99.2,
+      "durationSeconds": 36.1,
+      "frames": 1083,
       "winnerId": "plumber",
-      "sizeBytes": 5276921,
-      "generatedAt": "2026-08-08T13:56:14.051Z",
+      "sizeBytes": 10029897,
+      "generatedAt": "2026-08-08T18:52:25.541Z",
       "gauntlet": {
         "challengerId": "plumber",
         "teamIds": [
@@ -27,14 +27,14 @@
         "cleared": true,
         "decidedInRound": 3,
         "hpByRound": [
-          1072,
-          606,
-          8
+          1062,
+          567,
+          22
         ]
       }
     },
     {
-      "file": "baker-vs-silencer-councillor-viceroy-390.mp4",
+      "file": "baker-vs-silencer-councillor-viceroy-54.mp4",
       "fighters": [
         "baker",
         "silencer+councillor+viceroy"
@@ -43,13 +43,13 @@
         "НОЧНОЙ ПЕКАРЬ",
         "КОМИССИЯ"
       ],
-      "seed": 390,
+      "seed": 54,
       "dramaScore": 100,
-      "durationSeconds": 30.1,
-      "frames": 903,
+      "durationSeconds": 28.73,
+      "frames": 862,
       "winnerId": "viceroy",
-      "sizeBytes": 4536416,
-      "generatedAt": "2026-08-08T13:57:18.099Z",
+      "sizeBytes": 7628315,
+      "generatedAt": "2026-08-08T18:53:46.848Z",
       "gauntlet": {
         "challengerId": "baker",
         "teamIds": [
@@ -60,14 +60,14 @@
         "cleared": false,
         "decidedInRound": 3,
         "hpByRound": [
-          630,
-          397,
+          697,
+          364,
           0
         ]
       }
     },
     {
-      "file": "loader-vs-chairman-arbiter-inspector-93.mp4",
+      "file": "loader-vs-chairman-arbiter-inspector-273.mp4",
       "fighters": [
         "loader",
         "chairman+arbiter+inspector"
@@ -76,13 +76,13 @@
         "ГРУЗЧИК С РЫНКА",
         "КОМИССИЯ"
       ],
-      "seed": 93,
-      "dramaScore": 100,
-      "durationSeconds": 35.67,
-      "frames": 1070,
-      "winnerId": "inspector",
-      "sizeBytes": 5176232,
-      "generatedAt": "2026-08-08T13:58:35.303Z",
+      "seed": 273,
+      "dramaScore": 99.9,
+      "durationSeconds": 34.9,
+      "frames": 1047,
+      "winnerId": "loader",
+      "sizeBytes": 8885353,
+      "generatedAt": "2026-08-08T18:55:44.855Z",
       "gauntlet": {
         "challengerId": "loader",
         "teamIds": [
@@ -90,25 +90,25 @@
           "arbiter",
           "inspector"
         ],
-        "cleared": false,
+        "cleared": true,
         "decidedInRound": 3,
         "hpByRound": [
-          897,
-          341,
-          0
+          946,
+          493,
+          2
         ]
       },
       "coldOpen": {
-        "startFrame": 751,
-        "endFrame": 781,
+        "startFrame": 647,
+        "endFrame": 677,
         "reason": "damage_burst",
-        "damage": 382,
+        "damage": 226,
         "leadChanges": 0,
-        "why": "biggest damage burst: 382 at 25.0s"
+        "why": "biggest damage burst: 226 at 21.6s"
       }
     },
     {
-      "file": "nailmaster-vs-councillor-viceroy-inspector-79.mp4",
+      "file": "nailmaster-vs-councillor-viceroy-inspector-73.mp4",
       "fighters": [
         "nailmaster",
         "councillor+viceroy+inspector"
@@ -117,13 +117,13 @@
         "МАСТЕР МАНИКЮРА",
         "КОМИССИЯ"
       ],
-      "seed": 79,
+      "seed": 73,
       "dramaScore": 100,
-      "durationSeconds": 29.3,
-      "frames": 879,
+      "durationSeconds": 28.7,
+      "frames": 861,
       "winnerId": "nailmaster",
-      "sizeBytes": 4532916,
-      "generatedAt": "2026-08-08T13:59:42.561Z",
+      "sizeBytes": 8008669,
+      "generatedAt": "2026-08-08T18:57:15.767Z",
       "gauntlet": {
         "challengerId": "nailmaster",
         "teamIds": [
@@ -134,18 +134,18 @@
         "cleared": true,
         "decidedInRound": 3,
         "hpByRound": [
-          669,
-          416,
+          585,
+          214,
           1
         ]
       },
       "coldOpen": {
-        "startFrame": 604,
-        "endFrame": 634,
+        "startFrame": 548,
+        "endFrame": 578,
         "reason": "damage_burst",
-        "damage": 329,
+        "damage": 258,
         "leadChanges": 0,
-        "why": "biggest damage burst: 329 at 20.1s"
+        "why": "biggest damage burst: 258 at 18.3s"
       }
     }
   ]

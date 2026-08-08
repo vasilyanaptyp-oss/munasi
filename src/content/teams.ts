@@ -59,6 +59,12 @@ export const GAUNTLET_RULES = {
    * same head start, so it costs the race nothing.
    */
   openingCooldown: 0.22,
+  /**
+   * Three swings for a third of the damage each. Damage per second is
+   * unchanged by construction; what changes is the picture, which now takes a
+   * hit almost every frame instead of a big one every second and a half.
+   */
+  attackRate: 3,
 } as const;
 
 function scaled(fighter: Fighter, damageMultiplier: number): Fighter {

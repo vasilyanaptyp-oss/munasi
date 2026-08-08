@@ -37,6 +37,7 @@ synthesised into `assets/audio/` the first time you export.
 | `pnpm diagnose` | drama distribution, side-bias check (`--comeback` for the prototype) |
 | `pnpm calibrate:gauntlet` | gauntlet balance table (`--solve`, `--variance`) |
 | `pnpm test` / `pnpm typecheck` | tests and types |
+| `pnpm motion out/samples/*.mp4` | how much a finished video actually moves |
 
 `generate` skips pairs already in the manifest, so running it again continues
 where the last batch left off. `--redo` starts from the top, `--seeds N`
@@ -73,7 +74,16 @@ is what lets frames be split across worker processes.
 highest on closeness, lead changes, comebacks, pacing and how late the outcome
 stayed in doubt.
 
-**Nothing stands still.** `src/sim/tempo.ts` measures the longest stretch of a
+**Nothing stands still — measured on the mp4, not on the layout.** Fighters
+carry positions in the simulation and move: close, strike, fall back, slide
+sideways. The camera pans after the midpoint between them and zooms to their
+spread. `src/export/motion.ts` decodes a six-second window of the delivered file
+and counts how many pixels change per frame; `motion.test.ts` fails under 8%, or
+over 5% of frames static. The reference channel measures 12.7% and 0%; before
+fighters had positions this project managed 3.0-4.9% with 9-27% of frames
+frozen, and no geometry rule could see it.
+
+**Nothing stands still in the event stream either.** `src/sim/tempo.ts` measures the longest stretch of a
 finished video with no visible event, and `tempo.test.ts` fails the build over
 1.2 seconds. Every breach turned out to sit at a round change rather than inside
 a round, so the fix was to compress the pause — rounds now open on a short first

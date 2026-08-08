@@ -100,6 +100,15 @@ export interface MatchRules {
   /** Overrides `DAMAGE_VARIANCE` for this match. */
   damageVariance?: number;
   /**
+   * Trades damage per hit for hits per second: `attackSpeed` is multiplied by
+   * this and `attack` divided by it, so damage per second is unchanged.
+   *
+   * The reference channel lands small numbers almost every frame; ours landed
+   * rare big ones with dead air between. Defaults to 1, so the duel is
+   * untouched.
+   */
+  attackRate?: number;
+  /**
    * Multiplier on both fighters' first attack cooldown, 0..1.
    *
    * The gauntlet uses it to shorten the dead air at a round change: after a
@@ -117,6 +126,12 @@ export type Side = "a" | "b";
 
 export interface FighterSnapshot {
   id: string;
+  /**
+   * Position in the arena's unit square: `x` left to right, `y` far to near.
+   * See `movement.ts` — the renderer maps these onto its two ground lines.
+   */
+  x: number;
+  y: number;
   hp: number;
   maxHp: number;
   /** Effective attack including active buffs. */

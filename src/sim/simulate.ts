@@ -1,3 +1,4 @@
+import { initialMovement, stepMovement, type MovementState } from "./movement.js";
 import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
@@ -145,7 +146,15 @@ export function simulate(
   seed: number,
   rules: MatchRules = {},
 ): MatchResult {
-  const fighters = { a: cloneFighter(config.a), b: cloneFighter(config.b) };
+  // More hits for less each, at identical damage per second. Applied to the
+  // fighters up front so every downstream read — stat lines, minions derived
+  // from ability power, the snapshot's `attack` — sees one consistent roster.
+  const attackRate = rules.attackRate ?? 1;
+  const paced = (f: Fighter): Fighter =>
+    attackRate === 1
+      ? f
+      : { ...f, attack: f.attack / attackRate, attackSpeed: f.attackSpeed * attackRate };
+  const fighters = { a: cloneFighter(paced(config.a)), b: cloneFighter(paced(config.b)) };
 
   // Two independent streams derived from the one seed, so the match stays
   // reproducible while neither side's rolls disturb the other's.
@@ -179,6 +188,17 @@ export function simulate(
   };
   const opponentOf = (s: FighterState): FighterState =>
     s.side === "a" ? sides.b : sides.a;
+
+  // Streams 4 and 5: added after the fact, so they cannot disturb the draws
+  // that decide the fight (1 and 2) or the pickups (3).
+  const movement: Record<Side, MovementState> = {
+    a: initialMovement("a"),
+    b: initialMovement("b"),
+  };
+  const movementRng: Record<Side, Rng> = {
+    a: mulberry32(deriveSeed(4)),
+    b: mulberry32(deriveSeed(5)),
+  };
 
   const events: MatchEvent[] = [];
   const snapshots: Snapshot[] = [];
@@ -424,6 +444,19 @@ export function simulate(
       }
     }
 
+    // The dance. Position never gates damage — see movement.ts — so this runs
+    // beside the fight rather than inside it.
+    for (const side of [sides.a, sides.b]) {
+      stepMovement(movement[side.side], {
+        side: side.side,
+        attackCooldown: side.attackCooldown,
+        attackInterval: ticksPerAttack(effectiveAttackSpeed(side)),
+        opponentX: movement[opponentOf(side).side].x,
+        tick,
+        rng: movementRng[side.side],
+      });
+    }
+
     // Basic attacks.
     for (const side of [sides.a, sides.b]) {
       const enemy = opponentOf(side);
@@ -533,6 +566,8 @@ export function simulate(
       frame,
       a: {
         id: sides.a.base.id,
+        x: movement.a.x,
+        y: movement.a.y,
         hp: Math.max(0, sides.a.hp),
         maxHp: sides.a.base.maxHp,
         attack: effectiveAttack(sides.a),
@@ -541,6 +576,8 @@ export function simulate(
       },
       b: {
         id: sides.b.base.id,
+        x: movement.b.x,
+        y: movement.b.y,
         hp: Math.max(0, sides.b.hp),
         maxHp: sides.b.base.maxHp,
         attack: effectiveAttack(sides.b),

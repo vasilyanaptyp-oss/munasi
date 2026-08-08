@@ -54,6 +54,8 @@ export interface GauntletRules {
   damageVariance?: number;
   /** Multiplier on the first attack cooldown of each round. */
   openingCooldown?: number;
+  /** Trades damage per hit for hits per second at constant DPS. */
+  attackRate?: number;
   /** Arena pickups. Omit for none. */
   pickups?: PickupRules;
 }
@@ -136,6 +138,7 @@ export function simulateGauntlet(
       maxFrames: frameCap,
       ...(rules.damageVariance === undefined ? {} : { damageVariance: rules.damageVariance }),
       ...(rules.openingCooldown === undefined ? {} : { openingCooldown: rules.openingCooldown }),
+      ...(rules.attackRate === undefined ? {} : { attackRate: rules.attackRate }),
       ...(rules.pickups === undefined ? {} : { pickups: rules.pickups }),
     });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, byFaction, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { findBestGauntlet } from "./gauntlet.js";
+import { LANES, MAX_STILL_FRAMES } from "./movement.js";
 import { MAX_QUIET_FRAMES, tempoReport } from "./tempo.js";
 import { FPS } from "./types.js";
 
@@ -80,4 +81,73 @@ describe("tempo", () => {
       expect(report.quietShare).toBeLessThan(0.5);
     }
   }, 60_000);
+});
+
+describe("movement", () => {
+  it("never leaves a fighter standing still for more than 10 frames", () => {
+    // The whole reason positions exist. A still fighter is invisible to every
+    // other gate: the layout is correct, the events keep landing, the picture
+    // just does not move.
+    const result = run("plumber", ["chairman", "silencer", "arbiter"]);
+    // The hold after a death repeats one snapshot on purpose, so the collapse
+    // has frames to play in. Nobody is standing there: they are falling over.
+    const holds = new Set<number>();
+    for (const round of result.rounds) {
+      const death = result.events
+        .filter((e) => e.type === "death" && e.frame >= round.startFrame && e.frame < round.endFrame)
+        .at(-1);
+      if (!death) continue;
+      for (let f = death.frame; f < round.endFrame; f += 1) holds.add(f);
+    }
+
+    const worst = { id: "", frames: 0 };
+    for (const side of ["challenger", "opponent"] as const) {
+      let still = 0;
+      let last: { x: number; y: number } | null = null;
+      for (const snap of result.snapshots) {
+        if (holds.has(snap.frame)) {
+          still = 0;
+          last = null;
+          continue;
+        }
+        const at = snap[side];
+        if (last && Math.abs(at.x - last.x) < 1e-6 && Math.abs(at.y - last.y) < 1e-6) {
+          still += 1;
+          if (still > worst.frames) worst.frames = still;
+          if (still > worst.frames - 1) worst.id = `${side} at frame ${snap.frame}`;
+        } else {
+          still = 0;
+        }
+        last = { x: at.x, y: at.y };
+      }
+    }
+    expect(worst.frames, `${worst.id} held still ${worst.frames} frames`).toBeLessThanOrEqual(
+      MAX_STILL_FRAMES,
+    );
+  });
+
+  it("keeps the two of them in their own depth lanes", () => {
+    const result = run("baker", ["silencer", "councillor", "inspector"]);
+    for (const snap of result.snapshots) {
+      expect(snap.challenger.y).toBeGreaterThanOrEqual(LANES.a.min - 1e-9);
+      expect(snap.challenger.y).toBeLessThanOrEqual(LANES.a.max + 1e-9);
+      expect(snap.opponent.y).toBeGreaterThanOrEqual(LANES.b.min - 1e-9);
+      expect(snap.opponent.y).toBeLessThanOrEqual(LANES.b.max + 1e-9);
+    }
+  });
+
+  it("actually travels — the pair closes and breaks apart", () => {
+    const result = run("courier", ["chairman", "arbiter", "viceroy"]);
+    const spreads = result.snapshots.map((s) => Math.abs(s.opponent.x - s.challenger.x));
+    const range = Math.max(...spreads) - Math.min(...spreads);
+    expect(range, "the gap between them never changes").toBeGreaterThan(0.1);
+  });
+
+  it("replays identically — movement is on the same seeded streams", () => {
+    const a = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const b = run("plumber", ["chairman", "silencer", "arbiter"]);
+    expect(a.snapshots.map((s) => [s.challenger.x, s.opponent.y])).toEqual(
+      b.snapshots.map((s) => [s.challenger.x, s.opponent.y]),
+    );
+  });
 });

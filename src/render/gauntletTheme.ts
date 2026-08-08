@@ -43,8 +43,8 @@ const F = {
    * stands higher up the arena and smaller. One shared line left the top third
    * of the square empty in every frame.
    */
-  groundNear: 0.9,
-  groundFar: 0.7,
+  groundNear: 0.84,
+  groundFar: 0.66,
   hpWidgetWidth: 0.13, // of frame width
   hpStemWidth: 0.036,
   hpBarWidth: 0.115,
