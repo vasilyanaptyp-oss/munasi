@@ -17,6 +17,7 @@ import {
   gauntletFrameLayout,
   hudLayout,
   numberText,
+  victoryCardLayout,
   type GauntletFrameLayout,
   type HudMetrics,
   type Rect,
@@ -112,20 +113,30 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
     size -= 1;
     ctx.font = font(size);
   }
-  // Dark digits on the light fill, light digits once the widget goes dark.
-  const onLight = share > HP_WIDGET.hurtBelow;
-  strokedText(
-    ctx,
-    label,
-    0,
-    barTop + barHeight / 2,
-    size,
-    onLight ? "#3c3d3d" : "#e8ecf2",
-    onLight ? 0 : 5,
-  );
+
+  // The digits get a plate of their own rather than taking their colour from
+  // how full the widget is. Switching between dark-on-light and light-on-dark
+  // works only if the fill is uniform behind the number, and it never is: the
+  // fill line crosses the crossbar somewhere around half HP, which put dark
+  // digits half on white and half on the empty grey.
+  ctx.fillStyle = C.hpPlate;
+  ctx.fillRect(-barWidth / 2, barTop, barWidth, barHeight);
+  strokedText(ctx, label, 0, barTop + barHeight / 2, size, C.hpDigits, Math.round(size * 0.14));
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.restore();
+}
+
+/** Renders one widget onto a blank canvas, for the contrast gate. */
+export function drawHpWidgetForTest(ctx: Ctx, share: number): void {
+  const rect: Rect = {
+    name: "test",
+    x: 40,
+    y: 40,
+    w: HP_WIDGET.width,
+    h: HP_WIDGET.height,
+  };
+  drawHpWidget(ctx, rect, Math.round(1400 * share), 1400);
 }
 
 const PICKUP_LABEL: Record<PickupType, string> = {
@@ -160,7 +171,16 @@ function drawPickup(ctx: Ctx, snap: GauntletSnapshot, layout: GauntletFrameLayou
   ctx.stroke();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  strokedText(ctx, PICKUP_LABEL[pickup.type], x, y + r + WIDTH * 0.04, Math.round(WIDTH * 0.032), PICKUP_COLOR[pickup.type], 6);
+  // Clamped inside the arena, so a long label never runs into the wall.
+  const label = PICKUP_LABEL[pickup.type];
+  const size = Math.round(WIDTH * 0.032);
+  ctx.font = font(size);
+  const half = ctx.measureText(label).width / 2 + 4;
+  const labelX = Math.max(
+    ARENA.inner.x + half,
+    Math.min(x, ARENA.inner.x + ARENA.inner.w - half),
+  );
+  strokedText(ctx, label, labelX, y + r + WIDTH * 0.04, size, PICKUP_COLOR[pickup.type], 6);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.restore();
@@ -184,7 +204,7 @@ function visualState(
   index: RenderIndex,
   frame: number,
   fighterId: string,
-): { flash: number; strike: number | null; death: number } {
+): { flash: number; hurt: number; strike: number | null; death: number } {
   let flash = 0;
   for (let back = 0; back <= FLASH_FRAMES; back += 1) {
     const f = frame - back;
@@ -200,7 +220,8 @@ function visualState(
   }
   const died = index.deathFrame.get(fighterId);
   const death = died === undefined || frame < died ? 0 : Math.min(1, (frame - died) / DEATH_FRAMES);
-  return { flash, strike: strikePhase(index, frame, fighterId), death };
+  // The flash curve peaks at 0.8; the recoil rides the same decay at full scale.
+  return { flash, hurt: flash / 0.8, strike: strikePhase(index, frame, fighterId), death };
 }
 
 /** Team panel, top right: heading, then members with the active one marked. */
@@ -334,29 +355,47 @@ function drawBadge(ctx: Ctx, text: string, accent: string): void {
 }
 
 function drawVictoryBanner(ctx: Ctx, result: GauntletResult): void {
-  ctx.fillStyle = "rgba(5,20,30,0.66)";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const card = victoryCardLayout(result);
+
+  // A plate, not a blackout. The old card dimmed the whole frame to 34%
+  // brightness, which hid the winner and both HP widgets at the exact moment
+  // the viewer wants to read them.
+  ctx.fillStyle = C.cardPlate;
+  ctx.fillRect(card.plate.x, card.plate.y, card.plate.w, card.plate.h);
+  ctx.lineWidth = Math.max(4, Math.round(WIDTH * 0.006));
+  ctx.strokeStyle = C.outline;
+  ctx.strokeRect(
+    card.plate.x + ctx.lineWidth / 2,
+    card.plate.y + ctx.lineWidth / 2,
+    card.plate.w - ctx.lineWidth,
+    card.plate.h - ctx.lineWidth,
+  );
+
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const won = result.challengerWon;
-  strokedText(
-    ctx,
-    won ? "ПРОШЁЛ ВСЕХ" : "НЕ СПРАВИЛСЯ",
-    WIDTH / 2,
-    HEIGHT / 2 - HEIGHT * 0.06,
-    Math.round(WIDTH * 0.075),
-    won ? C.hpHealthy : C.hpHurt,
-  );
-  strokedText(
-    ctx,
-    won ? result.challenger.name : (result.rounds.at(-1)?.opponentName ?? ""),
-    WIDTH / 2,
-    HEIGHT / 2 + HEIGHT * 0.02,
-    Math.round(WIDTH * 0.085),
-    C.ink,
-  );
+  for (const line of card.lines) {
+    strokedText(
+      ctx,
+      line.text,
+      line.rect.x + line.rect.w / 2,
+      line.rect.y + line.rect.h / 2,
+      line.size,
+      line.accent ? (result.challengerWon ? C.hpHealthy : C.hpHurt) : C.ink,
+      Math.round(line.size * 0.16),
+    );
+  }
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+}
+
+/** Ring drawn round the winner's HP widget, so the eye lands on the number. */
+function markWinner(ctx: Ctx, rect: Rect, won: boolean): void {
+  ctx.save();
+  ctx.strokeStyle = won ? C.hpHealthy : C.hpHurt;
+  ctx.lineWidth = Math.max(4, Math.round(WIDTH * 0.007));
+  const pad = Math.round(WIDTH * 0.012);
+  ctx.strokeRect(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2);
+  ctx.restore();
 }
 
 export interface GauntletFrameOptions {
@@ -412,8 +451,6 @@ export function renderGauntletFrame(
   ctx.lineTo(ARENA.inner.x + ARENA.inner.w, layout.groundY);
   ctx.stroke();
 
-  drawPickup(ctx, snap, layout);
-
   const sides = [
     {
       state: snap.challenger,
@@ -468,6 +505,7 @@ export function renderGauntletFrame(
       strike: vis.strike,
       death: vis.death,
       flash: vis.flash,
+      hurt: vis.hurt,
       buffed: state.buffed,
       lungeAxis: "x",
       outline: FIGHTER_OUTLINE,
@@ -478,6 +516,8 @@ export function renderGauntletFrame(
     drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
   }
 
+  // After the fighters: drawn under them, "+СКОР" lost its tail behind a body.
+  drawPickup(ctx, snap, layout);
   drawDamageNumbers(ctx, index, frame, layout);
 
   // Overlay is screen-fixed so long names stay readable.
@@ -514,7 +554,11 @@ export function renderGauntletFrame(
     ctx.fillStyle = `rgba(255,255,255,${Math.min(1, planned.flash).toFixed(3)})`;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
-  if (options.victoryOverlay || planned?.victoryOverlay) drawVictoryBanner(ctx, result);
+  if (options.victoryOverlay || planned?.victoryOverlay) {
+    const winner = result.challengerWon ? layout.challenger : layout.opponent;
+    markWinner(ctx, winner.hp, result.challengerWon);
+    drawVictoryBanner(ctx, result);
+  }
 
   return canvas.toBuffer("image/png");
 }

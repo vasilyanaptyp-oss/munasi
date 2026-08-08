@@ -52,13 +52,13 @@ export const silencer: FighterArt = {
    * courier's jitter this is the clearest contrast on the roster.
    */
   idle(frame) {
-    return { rot: Math.sin(frame * 0.03) * 0.012 };
+    return { rot: Math.sin(frame * 0.03) * 0.03, dy: Math.sin(frame * 0.06) * 0.016 };
   },
 
   /** A short sharp jab of the finger — no body movement to speak of. */
   strike(t) {
     if (t < 0) return { dy: -0.03 * -t };
-    return { lunge: 0.16 * (1 - t) * (1 - t) };
+    return { lunge: 0.24 * (1 - t) * (1 - t), dy: 0.03 * (1 - t) };
   },
 
   /** Folds quietly, without fuss. */

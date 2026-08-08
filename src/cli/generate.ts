@@ -9,6 +9,7 @@ import type { Fighter } from "../sim/types.js";
 import { exportVideo, FfmpegMissingError, checkFfmpeg, VICTORY_FREEZE_FRAMES } from "../export/video.js";
 import { defaultPlan, sourceFrames } from "../render/framePlan.js";
 import { coldOpenPlan } from "../render/framePlan.js";
+import { VICTORY_CARD_FRAMES } from "../render/gauntletLayout.js";
 import { defaultWorkerCount, renderFramesParallel } from "../render/parallel.js";
 import { describeColdOpen, findColdOpen, findGauntletColdOpen } from "../sim/coldOpen.js";
 import { findBestMatch } from "../sim/drama.js";
@@ -200,9 +201,10 @@ async function generateGauntlet(
   const result: GauntletResult = best.result;
 
   const window = options.coldOpen ? findGauntletColdOpen(result) : null;
+  // The gauntlet's closing card is a card, not a wall: held 1.13s, not 2s.
   const plan = window
-    ? coldOpenPlan(result, window, VICTORY_FREEZE_FRAMES)
-    : defaultPlan(result, VICTORY_FREEZE_FRAMES);
+    ? coldOpenPlan(result, window, VICTORY_CARD_FRAMES)
+    : defaultPlan(result, VICTORY_CARD_FRAMES);
   const totalFrames = plan.length;
 
   const framesDir = join(

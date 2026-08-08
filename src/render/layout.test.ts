@@ -1,3 +1,4 @@
+import { createCanvas } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
@@ -14,13 +15,18 @@ import {
   hudLayout,
   intersects,
   MIN_FIGHTER_HEIGHT_SHARE,
+  OVERLAP_CAP,
   roundPlacement,
-  RELAXED_FIGHTER_HEIGHT_SHARE,
+  TARGET_FIGHTER_HEIGHT_SHARE,
+  victoryCardLayout,
+  VICTORY_CARD_FRAMES,
   type Rect,
 } from "./gauntletLayout.js";
-import { ARENA } from "./gauntletTheme.js";
+import { drawHpWidgetForTest } from "./gauntletFrame.js";
+import { ARENA, GAUNTLET_COLORS } from "./gauntletTheme.js";
 import { meanLightness, spriteBounds } from "./silhouette.js";
 import { HEIGHT, WIDTH } from "./theme.js";
+import { FPS } from "../sim/types.js";
 
 /**
  * Composition gate.
@@ -287,7 +293,7 @@ describe("gauntlet composition", () => {
     // Placement is solved per round from the two fighters' measured extents,
     // so every pairing has to be checked, not the one this video happens to use.
     const failures: string[] = [];
-    const relaxedPairs: string[] = [];
+    const shortOfTarget: string[] = [];
     for (const worker of byFaction("workers", roster)) {
       for (const boss of byFaction("bosses", roster)) {
         const placement = roundPlacement(worker.spriteId, boss.spriteId);
@@ -296,19 +302,17 @@ describe("gauntlet composition", () => {
 
         const heightA = restA.height * placement.size;
         const heightB = restB.height * placement.size;
-        const share = placement.relaxed
-          ? RELAXED_FIGHTER_HEIGHT_SHARE
-          : MIN_FIGHTER_HEIGHT_SHARE;
-        const floor = HEIGHT * share;
-        if (placement.relaxed) {
-          relaxedPairs.push(
-            `${worker.id} × ${boss.id} (${(placement.overlap * 100).toFixed(0)}% overlap)`,
-          );
-        }
+        const floor = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
         if (heightA < floor || heightB < floor) {
           failures.push(
             `${worker.id} × ${boss.id}: heights ${heightA.toFixed(0)}/${heightB.toFixed(0)}px ` +
-              `below the ${floor.toFixed(0)}px floor`,
+              `below the ${floor.toFixed(0)}px hard floor`,
+          );
+        }
+        if (placement.limitedBy !== "target") {
+          shortOfTarget.push(
+            `${worker.id} × ${boss.id}: ${(placement.heightShare * 100).toFixed(1)}% ` +
+              `(limited by ${placement.limitedBy})`,
           );
         }
 
@@ -319,14 +323,23 @@ describe("gauntlet composition", () => {
             `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px, arena is ${ARENA_INNER.w}px`,
           );
         }
+        if (placement.overlap > OVERLAP_CAP + 1e-9) {
+          failures.push(
+            `${worker.id} × ${boss.id}: overlap ${placement.overlap.toFixed(3)} over the cap`,
+          );
+        }
       }
     }
     expect(failures).toEqual([]);
-    // Not an assertion — the exception list, printed so it cannot go unnoticed.
-    if (relaxedPairs.length > 0) {
-      console.warn(`height floor relaxed to 21% for: ${relaxedPairs.join(", ")}`);
+    // Not an assertion but the exception list, printed so it cannot go unnoticed:
+    // these pairs cannot reach the target without crossing the arena wall.
+    if (shortOfTarget.length > 0) {
+      console.warn(
+        `below the ${(TARGET_FIGHTER_HEIGHT_SHARE * 100).toFixed(0)}% target ` +
+          `(${shortOfTarget.length}/36):\n  ${shortOfTarget.join("\n  ")}`,
+      );
     }
-    expect(relaxedPairs.length).toBeLessThanOrEqual(2);
+    expect(shortOfTarget.length).toBeLessThanOrEqual(22);
   });
 
   it("works as a feed thumbnail on frame 0", () => {
@@ -385,4 +398,123 @@ describe("gauntlet composition", () => {
     const framesAfterDeath = firstRound.endFrame - deathFrame!.frame;
     expect(framesAfterDeath).toBeGreaterThan(DEATH_FRAMES);
   });
+});
+
+describe("victory card", () => {
+  /**
+   * The card the video ends on. It used to dim the whole frame to a third
+   * brightness, run the winner's name off both edges of the frame, hold for two
+   * seconds, and show two HP widgets that both read as zero — losing the one
+   * number that carries a gauntlet: what the winner had left.
+   */
+  function runFor(cleared: boolean): GauntletResult {
+    const teams: [string, string[]][] = [
+      ["plumber", ["chairman", "silencer", "arbiter"]],
+      ["baker", ["silencer", "councillor", "viceroy"]],
+      ["courier", ["chairman", "arbiter", "viceroy"]],
+      ["nailmaster", ["councillor", "viceroy", "inspector"]],
+    ];
+    for (const [challenger, team] of teams) {
+      const config = buildGauntlet(
+        getFighter(challenger, roster),
+        team.map((id) => getFighter(id, roster)),
+      );
+      const found = findBestGauntlet(config, { count: 120, rules: GAUNTLET_RULES }).result;
+      if (found.challengerWon === cleared) return found;
+    }
+    throw new Error(`no sample run where cleared=${cleared}`);
+  }
+
+  const contains = (outer: Rect, r: Rect): boolean =>
+    r.x >= outer.x &&
+    r.y >= outer.y &&
+    r.x + r.w <= outer.x + outer.w &&
+    r.y + r.h <= outer.y + outer.h;
+
+  for (const cleared of [true, false]) {
+    it(`keeps every line inside the arena when cleared=${cleared}`, () => {
+      const run = runFor(cleared);
+      const card = victoryCardLayout(run);
+      expect(contains(ARENA_INNER, card.plate), "plate leaves the arena").toBe(true);
+      for (const line of card.lines) {
+        expect(contains(ARENA_INNER, line.rect), `${line.name} "${line.text}" leaves the arena`)
+          .toBe(true);
+      }
+    }, 60_000);
+  }
+
+  it("shows the winner's remaining HP, not a zero", () => {
+    const run = runFor(true);
+    const card = victoryCardLayout(run);
+    expect(card.winner).toBe("challenger");
+    // The whole point: a challenger who cleared the run is alive on the card.
+    expect(card.hpLeft).toBeGreaterThan(0);
+    const index = buildRenderIndex(run);
+    const hud = hudLayout(run);
+    const layout = gauntletFrameLayout(run, run.durationFrames - 1, index, hud);
+    expect(layout.challenger.hp.w).toBeGreaterThan(0);
+    const last = run.snapshots[run.durationFrames - 1]!;
+    expect(Math.round(last.challenger.hp)).toBe(card.hpLeft);
+  }, 60_000);
+
+  it("never prints a zero as the winner's remaining HP", () => {
+    // A mutual kill really does leave the winner on zero. The card says so in
+    // words rather than showing a number that reads like a bug.
+    for (const cleared of [true, false]) {
+      const card = victoryCardLayout(runFor(cleared));
+      for (const line of card.lines) {
+        expect(line.text).not.toContain("ОСТАЛОСЬ 0");
+      }
+    }
+  }, 60_000);
+
+  it("is held for no more than 1.2 seconds", () => {
+    expect(VICTORY_CARD_FRAMES / FPS).toBeLessThanOrEqual(1.2);
+  });
+});
+
+describe("hp widget readability", () => {
+  /**
+   * The digits used to take their colour from how full the widget was, which
+   * only works if the fill is uniform behind them — and it never is, because
+   * the fill line crosses the crossbar somewhere around half HP. At ~50% the
+   * number was dark ink half on white and half on the empty grey.
+   */
+  const CANVAS = 400;
+
+  function renderWidget(share: number): Uint8ClampedArray {
+    const canvas = createCanvas(CANVAS, CANVAS);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = GAUNTLET_COLORS.background;
+    ctx.fillRect(0, 0, CANVAS, CANVAS);
+    drawHpWidgetForTest(ctx, share);
+    return ctx.getImageData(0, 0, CANVAS, CANVAS).data;
+  }
+
+  function luminance(r: number, g: number, b: number): number {
+    const f = (c: number): number => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+
+  for (const share of [0.25, 0.5, 0.75]) {
+    it(`keeps the digits at 4.5:1 or better at ${share * 100}% HP`, () => {
+      const pixels = renderWidget(share);
+      // Inside the bar, the digits are the light pixels and the plate is the
+      // dark ones. Measure what actually got drawn, not what the palette says.
+      const lums: number[] = [];
+      for (let i = 0; i < pixels.length; i += 4) {
+        lums.push(luminance(pixels[i]!, pixels[i + 1]!, pixels[i + 2]!));
+      }
+      const sorted = [...lums].sort((a, b) => a - b);
+      const ink = sorted[Math.floor(sorted.length * 0.995)]!;
+      // Modal dark value inside the widget: the plate the digits sit on.
+      const plate = sorted[Math.floor(sorted.length * 0.02)]!;
+      const contrast = (ink + 0.05) / (plate + 0.05);
+      expect(contrast, `contrast ${contrast.toFixed(2)}:1 at ${share * 100}% HP`)
+        .toBeGreaterThanOrEqual(4.5);
+    });
+  }
 });

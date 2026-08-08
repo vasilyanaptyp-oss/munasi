@@ -51,8 +51,10 @@ export const loader: FighterArt = {
    * next to a jittering courier is itself a character trait.
    */
   idle(frame) {
-    const strain = (Math.sin(frame * 0.045) + 1) / 2;
-    return { scaleY: 1 - strain * 0.018, dy: strain * 0.016 };
+    // Amplitude tripled: at 1.8% of body height the heave was invisible on
+    // video and the loader looked like a still image for the whole fight.
+    const strain = (Math.sin(frame * 0.075) + 1) / 2;
+    return { scaleY: 1 - strain * 0.055, dy: strain * 0.05, dx: strain * 0.018 };
   },
 
   /** Slow heave: loads up for a long time, then drops everything forward. */

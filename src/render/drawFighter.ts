@@ -87,6 +87,8 @@ export interface DrawFighterOptions {
   death?: number;
   /** 0..1 white damage flash. */
   flash?: number;
+  /** 0..1 recoil from being hit, decaying over a few frames. */
+  hurt?: number;
   /** True while an attack buff is up. */
   buffed?: boolean;
   /** Draw this fighter's summon rather than the fighter. */
@@ -113,8 +115,27 @@ function poseOf(options: DrawFighterOptions): Pose {
     frame: options.frame,
     strike: options.strike ?? null,
     death: options.death ?? 0,
+    hurt: options.hurt ?? 0,
     buffed: options.buffed ?? false,
     facing: options.facing,
+  };
+}
+
+/**
+ * Getting hit throws you backwards and squashes you.
+ *
+ * Applied by the renderer rather than by each fighter's art, so it lands on
+ * every fighter including the ones whose idle is deliberately still — a white
+ * flash alone left the market loader looking like a static sprite for a whole
+ * fight.
+ */
+function recoil(hurt: number): Partial<Transform> {
+  if (hurt <= 0) return {};
+  return {
+    lunge: -0.12 * hurt,
+    dy: -0.03 * hurt,
+    scaleX: 1 + 0.07 * hurt,
+    scaleY: 1 - 0.07 * hurt,
   };
 }
 
@@ -127,6 +148,7 @@ function transformFor(art: FighterArt | undefined, pose: Pose, still: boolean): 
     idle(pose.frame),
     pose.strike !== null ? strikeFn(pose.strike, pose.facing) : {},
     pose.death > 0 ? deathFn(pose.death) : {},
+    recoil(pose.hurt),
   );
 }
 

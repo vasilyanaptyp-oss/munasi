@@ -106,10 +106,15 @@ blue field or into the figure it overlaps. And the two sides of a round must
 differ in mean lightness by at least 60 of 255 — workers are light (174-212),
 bosses are dark (73-99), and `layout.test.ts` lists any pair that breaks it.
 
+Every fighter also recoils when hit — knocked back and squashed — applied by the
+renderer rather than by each fighter's art, so it lands even on the ones whose
+idle is deliberately still.
+
 The arena itself is a constant: a fixed square at a fixed place with a fixed
 border and a fixed ground line. Between frames only the camera moves, panning
-and zooming inside it, and the zoom is what keeps every fighter at least 22% of
-the frame tall.
+and zooming inside it, and the zoom aims each pair at 30% of frame height —
+16 of the 36 pairs reach it, the rest are held back by having to keep
+everything both fighters ever draw inside the arena walls.
 
 Nothing is loaded from disk — no third-party images, no real people, no
 borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into

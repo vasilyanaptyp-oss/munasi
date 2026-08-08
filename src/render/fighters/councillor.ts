@@ -63,13 +63,13 @@ export const councillor: FighterArt = {
 
   /** Body still; the paperwork does the moving. */
   idle(frame) {
-    return { dy: Math.sin(frame * 0.04) * 0.014 };
+    return { dy: Math.sin(frame * 0.055) * 0.032 };
   },
 
   /** Points, and something happens elsewhere. Minimal body motion. */
   strike(t) {
     if (t < 0) return { scaleY: 1 + 0.03 * -t };
-    return { lunge: 0.09 * (1 - t), scaleY: 1 - 0.04 * (1 - t) };
+    return { lunge: 0.2 * (1 - t), scaleY: 1 - 0.05 * (1 - t) };
   },
 
   /** Dissolves: the cloak empties out and the folders scatter. */

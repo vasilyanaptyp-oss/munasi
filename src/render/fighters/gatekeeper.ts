@@ -52,13 +52,13 @@ export const gatekeeper: FighterArt = {
 
   /** The barrier idles with a slow hydraulic bob; the man does not move. */
   idle(frame) {
-    return { dy: Math.sin(frame * 0.05) * 0.008 };
+    return { dy: Math.sin(frame * 0.07) * 0.028, rot: Math.sin(frame * 0.035) * 0.012 };
   },
 
   /** Loads the boom back, then pushes it through. */
   strike(t) {
     if (t < 0) return { lunge: -0.04 * -t };
-    return { lunge: 0.14 * (1 - t), dy: 0.04 * (1 - t) };
+    return { lunge: 0.22 * (1 - t), dy: 0.05 * (1 - t) };
   },
 
   /** The booth tips; the barrier has already dropped. */

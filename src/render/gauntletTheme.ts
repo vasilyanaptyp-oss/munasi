@@ -23,6 +23,11 @@ export const GAUNTLET_COLORS = {
   critText: "#ffe45c",
   ink: "#ffffff",
   vs: "#0f7fa8",
+  /** Victory card plate: lighter than the field, never a blackout. */
+  cardPlate: "#0d6f97",
+  /** Constant plate under the HP digits, and the digits themselves. */
+  hpPlate: "#23262b",
+  hpDigits: "#ffffff",
 } as const;
 
 /** Fractions measured off the reference. */

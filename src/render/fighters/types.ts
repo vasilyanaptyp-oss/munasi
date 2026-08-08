@@ -23,6 +23,8 @@ export interface Pose {
   strike: number | null;
   /** 0 while alive, then 0..1 across the death animation. */
   death: number;
+  /** 0..1, decaying, for the frames just after this fighter was hit. */
+  hurt: number;
   /** True while an attack buff is up. */
   buffed: boolean;
   /** +1 when the opponent is below, -1 when above. */

@@ -151,7 +151,7 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
   const cached = motionCache.get(key);
   if (cached) return cached;
 
-  const alive: { frame: number; strike?: number; death?: number }[] = [
+  const alive: { frame: number; strike?: number; death?: number; hurt?: number }[] = [
     { frame: 0 },
     { frame: 11 },
     { frame: 23 },
@@ -159,8 +159,11 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
     { frame: 0, strike: -0.5 },
     { frame: 0, strike: 0 },
     { frame: 0, strike: 0.5 },
+    // The recoil throws a fighter backwards, so it widens the envelope too.
+    { frame: 0, hurt: 1 },
+    { frame: 0, strike: 0, hurt: 1 },
   ];
-  const poses: { frame: number; strike?: number; death?: number }[] = includeDeath
+  const poses: { frame: number; strike?: number; death?: number; hurt?: number }[] = includeDeath
     ? [
       ...alive,
     { frame: 0, death: 0.25 },
@@ -187,6 +190,7 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
         frame: pose.frame,
         ...(pose.strike === undefined ? {} : { strike: pose.strike }),
         ...(pose.death === undefined ? {} : { death: pose.death }),
+        ...(pose.hurt === undefined ? {} : { hurt: pose.hurt }),
       });
       ctx.restore();
       const pixels = ctx.getImageData(0, 0, RENDER_SIZE, RENDER_SIZE).data;

@@ -12,11 +12,11 @@
       ],
       "seed": 33,
       "dramaScore": 99.7,
-      "durationSeconds": 35.5,
-      "frames": 1065,
+      "durationSeconds": 34.63,
+      "frames": 1039,
       "winnerId": "plumber",
-      "sizeBytes": 5100821,
-      "generatedAt": "2026-08-08T07:52:25.733Z",
+      "sizeBytes": 5463862,
+      "generatedAt": "2026-08-08T11:04:17.174Z",
       "gauntlet": {
         "challengerId": "plumber",
         "teamIds": [
@@ -45,11 +45,11 @@
       ],
       "seed": 390,
       "dramaScore": 100,
-      "durationSeconds": 30.97,
-      "frames": 929,
+      "durationSeconds": 30.1,
+      "frames": 903,
       "winnerId": "viceroy",
-      "sizeBytes": 4360426,
-      "generatedAt": "2026-08-08T07:53:32.523Z",
+      "sizeBytes": 4878919,
+      "generatedAt": "2026-08-08T11:05:11.419Z",
       "gauntlet": {
         "challengerId": "baker",
         "teamIds": [
@@ -78,11 +78,11 @@
       ],
       "seed": 93,
       "dramaScore": 100,
-      "durationSeconds": 36.53,
-      "frames": 1096,
+      "durationSeconds": 35.67,
+      "frames": 1070,
       "winnerId": "inspector",
-      "sizeBytes": 4852624,
-      "generatedAt": "2026-08-08T07:54:59.607Z",
+      "sizeBytes": 5331952,
+      "generatedAt": "2026-08-08T11:06:53.413Z",
       "gauntlet": {
         "challengerId": "loader",
         "teamIds": [
@@ -119,11 +119,11 @@
       ],
       "seed": 79,
       "dramaScore": 100,
-      "durationSeconds": 30.17,
-      "frames": 905,
+      "durationSeconds": 29.3,
+      "frames": 879,
       "winnerId": "nailmaster",
-      "sizeBytes": 4381715,
-      "generatedAt": "2026-08-08T07:56:10.435Z",
+      "sizeBytes": 4813994,
+      "generatedAt": "2026-08-08T11:07:55.585Z",
       "gauntlet": {
         "challengerId": "nailmaster",
         "teamIds": [

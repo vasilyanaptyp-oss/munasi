@@ -62,14 +62,17 @@ export const arbiter: FighterArt = {
    * The only fighter who does not move: the halo turns, the body does not.
    * Stillness is the character.
    */
-  idle() {
-    return {};
+  idle(frame) {
+    // Was literally nothing. "Stands absolutely still" is the character, but a
+    // sprite that does not move at all reads as a bug, not as composure — so
+    // the stillness is now slow rather than absent.
+    return { dy: Math.sin(frame * 0.032) * 0.022, scaleY: 1 + Math.sin(frame * 0.032) * 0.008 };
   },
 
   /** Settles, then drives the gavel forward. No tilt: it read as toppling. */
   strike(t) {
     if (t < 0) return { dy: -0.07 * -t, lunge: -0.06 * -t };
-    return { lunge: 0.2 * (1 - t), dy: 0.04 * (1 - t) };
+    return { lunge: 0.24 * (1 - t), dy: 0.05 * (1 - t) };
   },
 
   /** The robe deflates; the halo has already dropped. */

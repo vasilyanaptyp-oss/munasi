@@ -5,6 +5,7 @@ import { loadFighters } from "./index.js";
 import {
   buildGauntlet,
   gauntletMatchups,
+  GAUNTLET_RULES,
   GAUNTLET_TUNING,
   type GauntletTuning,
 } from "./teams.js";
@@ -178,7 +179,11 @@ function main(): void {
 
   console.log(`Gauntlet balance, ${runs} runs per configuration\n`);
   header();
-  report("shipped tuning", sampleGauntlets({ runs }));
+  // With GAUNTLET_RULES, not without. Passing no rules measured a gauntlet that
+  // is not shipped — 1v1 damage spread, no pickups, no opening cooldown — and
+  // reported 49.4% clears for a build that actually clears 59.4%.
+  report("shipped", sampleGauntlets({ runs, rules: GAUNTLET_RULES }));
+  report("no rules (was reported)", sampleGauntlets({ runs }));
 
   if (args.includes("--variance")) {
     // Does the format still need fat crits? The gauntlet manufactures a close
