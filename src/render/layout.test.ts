@@ -6,6 +6,7 @@ import { buildRenderIndex } from "./frame.js";
 import { defaultPlan } from "./framePlan.js";
 import { byFaction } from "../content/teams.js";
 import {
+  ARENA_RECT,
   gauntletFrameLayout,
   hudLayout,
   intersects,
@@ -13,7 +14,8 @@ import {
   roundPlacement,
   type Rect,
 } from "./gauntletLayout.js";
-import { spriteBounds } from "./silhouette.js";
+import { ARENA } from "./gauntletTheme.js";
+import { meanLightness, spriteBounds } from "./silhouette.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 
 /**
@@ -55,6 +57,11 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
 
   const inside = (r: Rect): boolean =>
     r.x >= 0 && r.y >= 0 && r.x + r.w <= WIDTH && r.y + r.h <= HEIGHT;
+  const contains = (outer: Rect, r: Rect): boolean =>
+    r.x >= outer.x &&
+    r.y >= outer.y &&
+    r.x + r.w <= outer.x + outer.w &&
+    r.y + r.h <= outer.y + outer.h;
 
   for (const frame of frames) {
     const layout = gauntletFrameLayout(result, frame, index, hud);
@@ -105,7 +112,7 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
       }
     }
 
-    // 4. Damage numbers stay off the HP widgets.
+    // 4. Damage numbers stay off the HP widgets, and inside the arena.
     for (const number of layout.damageNumbers) {
       for (const widget of [layout.challenger.hp, layout.opponent.hp]) {
         if (intersects(number, widget)) {
@@ -116,6 +123,36 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
           });
         }
       }
+      if (!contains(ARENA_RECT, number)) {
+        violations.push({
+          frame,
+          rule: "damage number outside the arena",
+          detail:
+            `${number.name} at x ${number.x.toFixed(0)}..${(number.x + number.w).toFixed(0)}, ` +
+            `y ${number.y.toFixed(0)}..${(number.y + number.h).toFixed(0)} ` +
+            `(arena x ${ARENA_RECT.x}..${ARENA_RECT.x + ARENA_RECT.w}, ` +
+            `y ${ARENA_RECT.y}..${ARENA_RECT.y + ARENA_RECT.h})`,
+        });
+      }
+    }
+
+    // 5. The arena is a constant. If it ever gets solved for again, this fires.
+    if (
+      layout.arena.x !== ARENA_RECT.x ||
+      layout.arena.y !== ARENA_RECT.y ||
+      layout.arena.w !== ARENA_RECT.w ||
+      layout.arena.h !== ARENA_RECT.h ||
+      layout.arena.w !== layout.arena.h ||
+      layout.groundY !== ARENA.groundY
+    ) {
+      violations.push({
+        frame,
+        rule: "arena moved",
+        detail:
+          `got ${layout.arena.x},${layout.arena.y} ${layout.arena.w}x${layout.arena.h} ` +
+          `ground ${layout.groundY}; expected ${ARENA_RECT.x},${ARENA_RECT.y} ` +
+          `${ARENA_RECT.w}x${ARENA_RECT.h} ground ${ARENA.groundY}`,
+      });
     }
   }
   return violations;
@@ -163,17 +200,57 @@ describe("gauntlet composition", () => {
     }
   });
 
-  it("stands fighters on the ground line rather than floating them", () => {
+  it("stands fighters on the arena's fixed ground line", () => {
     const index = buildRenderIndex(result);
     const hud = hudLayout(result);
     for (const frame of [0, 200, 500, result.durationFrames - 1]) {
       const layout = gauntletFrameLayout(result, frame, index, hud);
       for (const side of [layout.challenger, layout.opponent]) {
         const feet = side.sprite.y + side.sprite.h;
-        // Within a small drift of the 62% line.
-        expect(Math.abs(feet - HEIGHT * 0.62)).toBeLessThan(HEIGHT * 0.02);
+        // Only the camera's vertical pan may move them off it, and barely.
+        expect(Math.abs(feet - ARENA.groundY)).toBeLessThan(HEIGHT * 0.006);
       }
     }
+  });
+
+  it("keeps the arena a fixed square and moves the camera instead", () => {
+    const index = buildRenderIndex(result);
+    const hud = hudLayout(result);
+    expect(ARENA_RECT.w).toBe(ARENA_RECT.h);
+    expect(ARENA_RECT.w).toBe(Math.round(WIDTH * 0.92));
+    expect(ARENA_RECT.x).toBe(Math.round((WIDTH - ARENA_RECT.w) / 2));
+
+    const frames = [0, 120, 400, 700, result.durationFrames - 1];
+    const cameras = frames.map((f) => gauntletFrameLayout(result, f, index, hud).camera);
+    for (const f of frames) {
+      expect(gauntletFrameLayout(result, f, index, hud).arena).toEqual(ARENA_RECT);
+    }
+    // The camera is the moving part: it does not sit still across the run.
+    expect(new Set(cameras.map((c) => c.x.toFixed(3))).size).toBeGreaterThan(1);
+    // Zoom is what buys the height floor, so it is above 1 on this matchup.
+    for (const camera of cameras) expect(camera.zoom).toBeGreaterThan(1);
+  });
+
+  it("tells the two active fighters apart by lightness, not just by shape", () => {
+    // Two dark figures on the flat blue field read as one blob however
+    // different their outlines are. Only worker-versus-boss pairs ever share a
+    // round, so those are the pairs that have to be told apart.
+    const MIN_GAP = 60;
+    const failures: string[] = [];
+    for (const worker of byFaction("workers", roster)) {
+      for (const boss of byFaction("bosses", roster)) {
+        const light = meanLightness(worker.spriteId);
+        const dark = meanLightness(boss.spriteId);
+        const gap = Math.abs(light - dark);
+        if (gap < MIN_GAP) {
+          failures.push(
+            `${worker.id} (${light.toFixed(0)}) × ${boss.id} (${dark.toFixed(0)}): ` +
+              `gap ${gap.toFixed(0)} < ${MIN_GAP}`,
+          );
+        }
+      }
+    }
+    expect(failures.join("\n")).toBe("");
   });
 
   it("keeps the HUD fixed — it is chrome, not scene", () => {

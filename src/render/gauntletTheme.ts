@@ -19,15 +19,19 @@ export const GAUNTLET_COLORS = {
   memberDefeated: "#8b8b8b",
   buffText: "#00b05b",
   damageText: "#ffffff",
-  critText: "#ffd23f",
+  // Brighter than plain white damage, so a crit reads on colour alone.
+  critText: "#ffe45c",
   ink: "#ffffff",
   vs: "#0f7fa8",
 } as const;
 
 /** Fractions measured off the reference. */
 const F = {
-  arenaOuter: 1.064, // of frame width — deliberately wider than the frame
-  border: 0.042, // of frame width
+  arenaSide: 0.92, // square side, of frame width
+  arenaTop: 0.295, // of frame height
+  border: 0.032, // of frame width
+  /** Ground line, as a share of the arena's inner height. */
+  ground: 0.88,
   hpWidgetWidth: 0.13, // of frame width
   hpStemWidth: 0.036,
   hpBarWidth: 0.115,
@@ -35,12 +39,36 @@ const F = {
   captionCap: 0.033, // of frame height
 } as const;
 
+const side = Math.round(WIDTH * F.arenaSide);
+const border = Math.round(WIDTH * F.border);
+const originX = Math.round((WIDTH - side) / 2);
+const originY = Math.round(HEIGHT * F.arenaTop);
+const innerSide = side - border * 2;
+
+/**
+ * The arena is nailed down, not solved for.
+ *
+ * It was previously fitted around whoever happened to be fighting, which meant
+ * the backdrop moved when the fighters did — the one thing in the shot that
+ * should be still. Now it is a square of a fixed size at a fixed place, with a
+ * fixed border and a fixed ground line, and the only thing that moves between
+ * frames is the camera looking into it (see `gauntletLayout.ts`).
+ */
 export const ARENA = {
-  outer: Math.round(WIDTH * F.arenaOuter),
-  border: Math.round(WIDTH * F.border),
-  get inner(): number {
-    return this.outer - this.border * 2;
+  /** Outer square: side, and where its top-left corner sits on screen. */
+  side,
+  x: originX,
+  y: originY,
+  border,
+  inner: {
+    x: originX + border,
+    y: originY + border,
+    w: innerSide,
+    h: innerSide,
   },
+  centre: { x: originX + side / 2, y: originY + side / 2 },
+  /** Screen y the fighters stand on. Constant, inside the arena. */
+  groundY: originY + border + Math.round(innerSide * F.ground),
 } as const;
 
 export const HP_WIDGET = {
@@ -54,12 +82,21 @@ export const HP_WIDGET = {
   hurtBelow: 0.5,
 } as const;
 
+/**
+ * HP widgets are chrome pinned inside the arena's top band, not markers that
+ * ride above whoever is standing there. Fighters vary in height by a third, so
+ * a widget that tracks the head moves frame to frame and can leave the arena
+ * entirely on a tall fighter.
+ */
+export const HP_WIDGET_SLOTS = {
+  y: ARENA.inner.y + Math.round(HEIGHT * 0.004),
+  challengerX: ARENA.inner.x + Math.round(ARENA.inner.w * 0.17),
+  opponentX: ARENA.inner.x + Math.round(ARENA.inner.w * 0.83),
+} as const;
+
 export const GAUNTLET_LAYOUT = {
-  /** Scene-space centre of the arena. The camera moves relative to this. */
-  sceneCentre: { x: WIDTH / 2, y: HEIGHT * 0.52 },
-  /** How far apart the two fighters stand, as a share of arena inner width. */
-  fighterSpread: 0.26,
-  fighterSize: Math.round(WIDTH * 0.3),
+  /** Fighter size in arena world units. Screen size is this times camera zoom. */
+  fighterWorld: Math.round(ARENA.inner.w * 0.3),
   minionSize: Math.round(WIDTH * 0.11),
   /** Overlay stays screen-fixed; see the note in gauntletFrame.ts. */
   titleBaseline: Math.round(HEIGHT * 0.075),

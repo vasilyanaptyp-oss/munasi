@@ -68,10 +68,10 @@ export const baker: FighterArt = {
     return { dy: Math.abs(knead) * 0.05, scaleY: 1 - Math.abs(knead) * 0.02 };
   },
 
-  /** Cocks the tray back, then chops down. */
-  strike(t, facing) {
-    if (t < 0) return { rot: -facing * 0.28 * -t };
-    return { rot: facing * 0.45 * (1 - t), dy: facing * 0.06 * (1 - t) };
+  /** Cocks the tray back, then shoves it forward. */
+  strike(t) {
+    if (t < 0) return { lunge: -0.12 * -t, scaleY: 1 + 0.04 * -t };
+    return { lunge: 0.34 * (1 - t), dy: 0.05 * (1 - t) };
   },
 
   /** Sags straight down, hat already gone. */

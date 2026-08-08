@@ -1,11 +1,11 @@
 import { box, circle, ellipse, eyes, poly, roundedBox } from "../shapes.js";
 import type { FighterArt } from "./types.js";
 
-const SMOCK = "#e86a9b";
-const SMOCK_DARK = "#c14b7c";
-const HAIR = "#2a2230";
-const SKIN = "#f0d0b4";
-const FILE_BODY = "#f6e8ef";
+const SMOCK = "#f8b8d0";
+const SMOCK_DARK = "#d987a8";
+const HAIR = "#a294a8";
+const SKIN = "#f6ddc6";
+const FILE_BODY = "#fdf3f8";
 
 /**
  * МАСТЕР МАНИКЮРА — the tallest, thinnest silhouette, topped with a bun.
@@ -59,10 +59,10 @@ export const nailmaster: FighterArt = {
     };
   },
 
-  /** Barely moves: a flick of the wrist, all follow-through, no wind-up. */
-  strike(t, facing) {
-    if (t < 0) return { rot: -facing * 0.06 * -t };
-    return { rot: facing * 0.3 * (1 - t) * (1 - t), dx: 0.05 * (1 - t) };
+  /** A flick: almost no wind-up, all snap forward. */
+  strike(t) {
+    if (t < 0) return { lunge: -0.14 * -t };
+    return { lunge: 0.32 * (1 - t) * (1 - t) };
   },
 
   /** Swoons backwards, theatrically. */

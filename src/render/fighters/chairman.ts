@@ -51,10 +51,10 @@ export const chairman: FighterArt = {
     return { dx: Math.sin(frame * 0.13) * 0.014, rot: Math.sin(frame * 0.065) * 0.018 };
   },
 
-  /** Rears back, then bangs the podium. */
-  strike(t, facing) {
-    if (t < 0) return { dy: -0.06 * -t, rot: -facing * 0.1 * -t };
-    return { dy: facing * 0.12 * (1 - t), rot: facing * 0.18 * (1 - t) };
+  /** Sinks, then drives forward into the podium. */
+  strike(t) {
+    if (t < 0) return { dy: -0.06 * -t, lunge: -0.07 * -t };
+    return { lunge: 0.22 * (1 - t), dy: 0.05 * (1 - t) };
   },
 
   /** Goes down with the furniture on top of him. */

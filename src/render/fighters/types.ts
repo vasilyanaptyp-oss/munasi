@@ -29,22 +29,31 @@ export interface Pose {
   facing: 1 | -1;
 }
 
-/** Applied by the renderer around `draw`. Rotation is in radians. */
+/**
+ * Applied by the renderer around `draw`. Rotation is in radians.
+ *
+ * `lunge` is a step toward the opponent — positive forward, negative back —
+ * kept separate from `dx`/`dy` because which screen axis "forward" means
+ * depends on the format: the gauntlet stands the pair side by side, the duel
+ * stacks them. The renderer resolves it against `facing`.
+ */
 export interface Transform {
   dx: number;
   dy: number;
+  lunge: number;
   rot: number;
   scaleX: number;
   scaleY: number;
 }
 
-export const IDENTITY: Transform = { dx: 0, dy: 0, rot: 0, scaleX: 1, scaleY: 1 };
+export const IDENTITY: Transform = { dx: 0, dy: 0, lunge: 0, rot: 0, scaleX: 1, scaleY: 1 };
 
 export function compose(...transforms: Partial<Transform>[]): Transform {
   const out: Transform = { ...IDENTITY };
   for (const t of transforms) {
     out.dx += t.dx ?? 0;
     out.dy += t.dy ?? 0;
+    out.lunge += t.lunge ?? 0;
     out.rot += t.rot ?? 0;
     out.scaleX *= t.scaleX ?? 1;
     out.scaleY *= t.scaleY ?? 1;

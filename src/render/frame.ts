@@ -398,6 +398,7 @@ function drawMinions(
       facing,
       frame: snap.frame,
       asMinion: true,
+      lungeAxis: "y",
     });
     ctx.restore();
 
@@ -581,6 +582,7 @@ export function renderSingleFrame(
       size: LAYOUT.spriteSize,
       facing,
       frame,
+      lungeAxis: "y",
       strike: vis.strike,
       death: vis.death,
       flash: vis.flash,

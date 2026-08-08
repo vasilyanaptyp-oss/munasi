@@ -56,9 +56,9 @@ export const loader: FighterArt = {
   },
 
   /** Slow heave: loads up for a long time, then drops everything forward. */
-  strike(t, facing) {
+  strike(t) {
     if (t < 0) return { dy: -0.06 * -t, scaleY: 1 + 0.03 * -t };
-    return { dy: facing * 0.14 * (1 - t), scaleY: 1 - 0.05 * (1 - t) };
+    return { lunge: 0.28 * (1 - t), scaleY: 1 - 0.05 * (1 - t) };
   },
 
   /** Buckles straight down under the load. */

@@ -54,9 +54,9 @@ export const silencer: FighterArt = {
   },
 
   /** A short sharp jab of the finger — no body movement to speak of. */
-  strike(t, facing) {
+  strike(t) {
     if (t < 0) return { dy: -0.03 * -t };
-    return { dy: facing * 0.1 * (1 - t) * (1 - t), dx: 0.03 * (1 - t) };
+    return { lunge: 0.16 * (1 - t) * (1 - t) };
   },
 
   /** Folds quietly, without fuss. */

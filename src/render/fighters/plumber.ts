@@ -1,11 +1,11 @@
 import { box, circle, eyes, line, poly, roundedBox } from "../shapes.js";
 import type { FighterArt } from "./types.js";
 
-const OVERALL = "#2f6fb5";
-const OVERALL_DARK = "#22518a";
-const SHIRT = "#c8d3e2";
-const SKIN = "#e8c9a0";
-const STEEL = "#b9c4d4";
+const OVERALL = "#9dc8ef";
+const OVERALL_DARK = "#7aa8d4";
+const SHIRT = "#eef3fa";
+const SKIN = "#f0d5ae";
+const STEEL = "#d8e0ea";
 const TAPE = "#f2f6ff";
 
 /**
@@ -85,10 +85,10 @@ export const plumber: FighterArt = {
     return { rot: Math.sin(frame * 0.055) * 0.035, dy: Math.sin(frame * 0.11) * 0.012 };
   },
 
-  /** Winds the wrench back over the shoulder, then swings the whole body. */
-  strike(t, facing) {
-    if (t < 0) return { rot: -facing * 0.34 * -t, dy: -0.05 * -t };
-    return { rot: facing * 0.26 * (1 - t), dy: facing * 0.1 * (1 - t) };
+  /** Winds the wrench back, then throws the whole body forward. */
+  strike(t) {
+    if (t < 0) return { lunge: -0.16 * -t, dy: -0.05 * -t };
+    return { lunge: 0.3 * (1 - t), dy: 0.06 * (1 - t) };
   },
 
   /** Falls backwards stiff as a plank. */

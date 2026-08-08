@@ -2,34 +2,46 @@ import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
 import type { GauntletResult, GauntletSnapshot } from "../sim/gauntlet.js";
 import type { PickupType } from "../sim/types.js";
-import { FPS } from "../sim/types.js";
-import { DEATH_FRAMES, drawFighter, RECOVERY_FRAMES, WINDUP_FRAMES } from "./drawFighter.js";
+import {
+  DEATH_FRAMES,
+  drawFighter,
+  FIGHTER_OUTLINE,
+  RECOVERY_FRAMES,
+  WINDUP_FRAMES,
+} from "./drawFighter.js";
 import { buildRenderIndex, eventsAt, strokedText, type RenderIndex } from "./frame.js";
 import type { PlannedFrame } from "./framePlan.js";
 import {
+  ARENA_RECT,
+  DAMAGE_NUMBER_FRAMES,
   gauntletFrameLayout,
   hudLayout,
+  numberText,
   type GauntletFrameLayout,
   type HudMetrics,
   type Rect,
 } from "./gauntletLayout.js";
-import { GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
+import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
+import { spriteMotionBounds } from "./silhouette.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
 
-const DAMAGE_NUMBER_FRAMES = Math.round(FPS * 0.5);
 const FLASH_FRAMES = 4;
 
 /**
- * The gauntlet frame, following the reference's composition: a flat blue field,
- * a square arena wider than the frame, and a camera that pans over it.
+ * The gauntlet frame, following the reference's composition: a flat blue field
+ * and a square arena the fighters play inside.
  *
- * One deliberate departure: the reference moves its overlay text *with* the
- * camera, so the roster panel and captions slide off frame (two of the six
+ * The arena is a constant — fixed square, fixed border, fixed ground line — and
+ * the camera pans and zooms inside it. It used to be fitted around whoever was
+ * fighting, which meant the one element that should hold still moved whenever
+ * the pair did.
+ *
+ * One deliberate departure from the reference: it moves its overlay text *with*
+ * the camera, so the roster panel and captions slide off frame (two of the six
  * reference frames have the panel cut in half). Our fighter names are long
- * enough that losing half of one costs the joke, so the overlay is screen-fixed
- * and only the arena and its occupants move.
+ * enough that losing half of one costs the joke, so the overlay is screen-fixed.
  */
 
 /** Traces the plus-shaped HP widget, centred on the origin. */
@@ -259,25 +271,20 @@ function drawDamageNumbers(
     const f = frame - back;
     if (f < 0) break;
     for (const event of eventsAt(index, f)) {
-      let text: string;
       let colour: string;
       switch (event.type) {
+        // A crit is louder, not longer-flying: bigger cap height (the layout
+        // sets it) and the brightest colour on the frame.
         case "crit":
-          text = `-${event.value}!`;
           colour = C.critText;
           break;
         case "hit":
         case "minion_hit":
         case "aoe":
-          text = `-${event.value}`;
           colour = C.damageText;
           break;
         case "heal":
-          text = `+${event.value}`;
-          colour = C.buffText;
-          break;
         case "pickup_claim":
-          text = "+БАФ";
           colour = C.buffText;
           break;
         default:
@@ -291,12 +298,12 @@ function drawDamageNumbers(
       ctx.globalAlpha = 1 - age;
       strokedText(
         ctx,
-        text,
+        numberText(event.type, event.value),
         rect.x + rect.w / 2,
         rect.y + rect.h / 2,
         rect.h / 1.05,
         colour,
-        rect.h * 0.15,
+        rect.h * (event.type === "crit" ? 0.19 : 0.15),
       );
       ctx.globalAlpha = 1;
     }
@@ -367,15 +374,22 @@ export function renderGauntletFrame(
   const hud = options.hud ?? hudLayout(result);
   const layout = gauntletFrameLayout(result, frame, index, hud);
 
-  // The arena frames the pair rather than sitting behind them at a fixed size.
-  ctx.lineWidth = Math.round(WIDTH * 0.042);
+  // Fixed square, fixed border. Nothing here reads the fighters.
+  ctx.lineWidth = ARENA.border;
   ctx.strokeStyle = C.outline;
   ctx.strokeRect(
-    layout.arena.x + ctx.lineWidth / 2,
-    layout.arena.y + ctx.lineWidth / 2,
-    layout.arena.w - ctx.lineWidth,
-    layout.arena.h - ctx.lineWidth,
+    ARENA_RECT.x + ARENA.border / 2,
+    ARENA_RECT.y + ARENA.border / 2,
+    ARENA_RECT.w - ARENA.border,
+    ARENA_RECT.h - ARENA.border,
   );
+  // The floor the pair stands on, also fixed.
+  ctx.strokeStyle = "rgba(0,0,0,0.16)";
+  ctx.lineWidth = Math.max(2, Math.round(HEIGHT * 0.002));
+  ctx.beginPath();
+  ctx.moveTo(ARENA.inner.x, layout.groundY);
+  ctx.lineTo(ARENA.inner.x + ARENA.inner.w, layout.groundY);
+  ctx.stroke();
 
   drawPickup(ctx, snap, layout);
 
@@ -407,7 +421,14 @@ export function renderGauntletFrame(
         const my = layout.groundY - L.minionSize * 0.5;
         ctx.save();
         ctx.translate(mx, my);
-        drawFighter(ctx, fighter.spriteId, { size: L.minionSize, facing, frame, asMinion: true });
+        drawFighter(ctx, fighter.spriteId, {
+          size: L.minionSize,
+          facing,
+          frame,
+          asMinion: true,
+          lungeAxis: "x",
+          outline: Math.round(FIGHTER_OUTLINE * 0.7),
+        });
         ctx.restore();
         const w = L.minionSize * 0.7;
         const share = Math.max(0, Math.min(1, minion.hp / minion.maxHp));
@@ -427,6 +448,9 @@ export function renderGauntletFrame(
       death: vis.death,
       flash: vis.flash,
       buffed: state.buffed,
+      lungeAxis: "x",
+      outline: FIGHTER_OUTLINE,
+      outlineBounds: spriteMotionBounds(fighter.spriteId, true),
     });
     ctx.restore();
 

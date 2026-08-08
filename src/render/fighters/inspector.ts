@@ -65,10 +65,10 @@ export const inspector: FighterArt = {
     return { dy: tap * 0.02, rot: tap * -0.03 };
   },
 
-  /** Lifts the stamp high and brings it down like a verdict. */
-  strike(t, facing) {
+  /** Lifts the stamp, then punches it forward like a verdict. */
+  strike(t) {
     if (t < 0) return { dy: -0.09 * -t };
-    return { dy: facing * 0.16 * (1 - t) * (1 - t), rot: facing * 0.1 * (1 - t) };
+    return { lunge: 0.26 * (1 - t) * (1 - t), dy: 0.04 * (1 - t) };
   },
 
   /** Face down, flat, like a filed document. */

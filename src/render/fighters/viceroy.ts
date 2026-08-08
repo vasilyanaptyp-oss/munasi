@@ -68,10 +68,10 @@ export const viceroy: FighterArt = {
     return { rot: Math.sin(frame * 0.035) * 0.02 };
   },
 
-  /** Swings the banner pole in a wide arc. */
-  strike(t, facing) {
-    if (t < 0) return { rot: -facing * 0.3 * -t, dx: 0.04 * -t };
-    return { rot: facing * 0.34 * (1 - t), dx: -0.06 * (1 - t) };
+  /** Draws the banner pole back, then runs it forward. */
+  strike(t) {
+    if (t < 0) return { lunge: -0.13 * -t };
+    return { lunge: 0.26 * (1 - t) };
   },
 
   /** Goes down under his own banner. */

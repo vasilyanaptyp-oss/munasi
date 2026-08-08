@@ -20,21 +20,56 @@ export const RECOVERY_FRAMES = 8;
 /** Frames a death animation takes to play out. */
 export const DEATH_FRAMES = 24;
 
+/**
+ * Dark keyline traced around every fighter, in screen pixels.
+ *
+ * It is what makes the reference readable, and it solves two problems at once:
+ * a figure stops dissolving into the flat blue field, and the two figures stop
+ * dissolving into each other where they overlap.
+ */
+export const FIGHTER_OUTLINE = 4;
+const OUTLINE_COLOUR = "#0b1116";
+/**
+ * The keyline is four stamps of the figure's own alpha, offset up/down/left/
+ * right. A ring of twelve gives a rounder line and costs 685ms a frame; four
+ * costs a fifth of that and differs only on 45-degree edges, which come out
+ * 2.8px instead of 4px. Nobody sees that at 30fps; everybody notices a render
+ * that takes six times as long.
+ */
+const OUTLINE_OFFSETS: readonly (readonly [number, number])[] = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
+
 /** Motion used for fighters with no art of their own. */
 const DEFAULT_MOTION = {
   idle: (frame: number): Partial<Transform> => ({ dy: Math.sin(frame * 0.14) * 0.06 }),
-  strike: (t: number, facing: number): Partial<Transform> =>
-    t < 0 ? { dy: -facing * 0.06 * -t } : { dy: facing * 0.3 * (1 - t) },
+  strike: (t: number, facing: number): Partial<Transform> => {
+    void facing;
+    return t < 0 ? { lunge: -0.05 * -t } : { lunge: 0.24 * (1 - t) };
+  },
   death: (t: number): Partial<Transform> => ({ rot: t * 1.35, dy: t * 0.2 }),
 };
 
 const scratch = new Map<number, Canvas>();
+const outlineScratch = new Map<number, Canvas>();
 
 function scratchCanvas(size: number): Canvas {
   let canvas = scratch.get(size);
   if (!canvas) {
     canvas = createCanvas(size, size);
     scratch.set(size, canvas);
+  }
+  return canvas;
+}
+
+function outlineCanvas(size: number): Canvas {
+  let canvas = outlineScratch.get(size);
+  if (!canvas) {
+    canvas = createCanvas(size, size);
+    outlineScratch.set(size, canvas);
   }
   return canvas;
 }
@@ -58,6 +93,19 @@ export interface DrawFighterOptions {
   asMinion?: boolean;
   /** Skip motion and colour — used by the silhouette test. */
   silhouette?: boolean;
+  /**
+   * Which screen axis a lunge travels along. The gauntlet stands the pair side
+   * by side ("x"); the duel stacks them ("y").
+   */
+  lungeAxis?: "x" | "y";
+  /** Keyline width in pixels. 0 disables it. */
+  outline?: number;
+  /**
+   * Everything this sprite ever draws, in unit space, so the keyline only
+   * stamps the part of the layer the figure can occupy instead of the whole
+   * 1.9x box. Halves the cost. Omit and the whole box is stamped.
+   */
+  outlineBounds?: { left: number; top: number; right: number; bottom: number };
 }
 
 function poseOf(options: DrawFighterOptions): Pose {
@@ -125,7 +173,12 @@ export function drawFighter(ctx: Ctx, spriteId: string, options: DrawFighterOpti
   lc.lineJoin = "round";
 
   const t = transformFor(artFor(spriteId), pose, options.silhouette === true);
-  lc.translate(t.dx, t.dy);
+  // "Forward" is whichever axis the format stands the fighters on.
+  const axis = options.lungeAxis ?? "x";
+  lc.translate(
+    t.dx + (axis === "x" ? t.lunge * options.facing : 0),
+    t.dy + (axis === "y" ? t.lunge * options.facing : 0),
+  );
   lc.rotate(t.rot);
   lc.scale(t.scaleX, t.scaleY);
   paint(lc, spriteId, pose, options);
@@ -147,12 +200,51 @@ export function drawFighter(ctx: Ctx, spriteId: string, options: DrawFighterOpti
   }
 
   ctx.save();
-  if (!options.silhouette) {
-    if (options.buffed) {
-      ctx.shadowColor = "#ffd23f";
-      ctx.shadowBlur = 34;
+  const keyline = options.silhouette ? 0 : (options.outline ?? 0);
+  if (!options.silhouette && pose.death > 0) ctx.globalAlpha = 1 - pose.death * 0.45;
+
+  if (keyline > 0) {
+    // The keyline is the figure's own alpha, flooded dark and stamped around a
+    // circle. Stroking paths instead would need every fighter's art to know
+    // about it; this needs nothing from them.
+    const mask = outlineCanvas(boxSize);
+    const mc = mask.getContext("2d");
+    mc.clearRect(0, 0, boxSize, boxSize);
+    mc.drawImage(layer, 0, 0);
+    mc.save();
+    mc.globalCompositeOperation = "source-in";
+    mc.fillStyle = OUTLINE_COLOUR;
+    mc.fillRect(0, 0, boxSize, boxSize);
+    mc.restore();
+
+    // Only the slice of the layer the figure can reach, padded for the offset.
+    const half = boxSize / 2;
+    const unit = size / 2;
+    const b = options.outlineBounds;
+    const pad = keyline + 2;
+    const sx = b ? Math.max(0, Math.floor(half + b.left * unit - pad)) : 0;
+    const sy = b ? Math.max(0, Math.floor(half + b.top * unit - pad)) : 0;
+    const sw = b ? Math.min(boxSize - sx, Math.ceil((b.right - b.left) * unit + pad * 2)) : boxSize;
+    const sh = b ? Math.min(boxSize - sy, Math.ceil((b.bottom - b.top) * unit + pad * 2)) : boxSize;
+
+    for (const [ox, oy] of OUTLINE_OFFSETS) {
+      ctx.drawImage(
+        mask,
+        sx,
+        sy,
+        sw,
+        sh,
+        sx - half + ox * keyline,
+        sy - half + oy * keyline,
+        sw,
+        sh,
+      );
     }
-    if (pose.death > 0) ctx.globalAlpha = 1 - pose.death * 0.45;
+  }
+
+  if (!options.silhouette && options.buffed) {
+    ctx.shadowColor = "#ffd23f";
+    ctx.shadowBlur = 34;
   }
   ctx.drawImage(layer, -boxSize / 2, -boxSize / 2);
   ctx.restore();

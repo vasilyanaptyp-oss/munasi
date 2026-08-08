@@ -91,6 +91,17 @@ lands in the title before the fight starts.
 is rendered as a solid mask at a common height and every pair must score under
 0.70 intersection-over-union. The shipped roster's worst pair is 0.663.
 
+Shape is not enough on a phone, so two more rules back it up. Every fighter is
+traced with a 4px dark keyline, which stops a figure dissolving into the flat
+blue field or into the figure it overlaps. And the two sides of a round must
+differ in mean lightness by at least 60 of 255 — workers are light (174-212),
+bosses are dark (73-99), and `layout.test.ts` lists any pair that breaks it.
+
+The arena itself is a constant: a fixed square at a fixed place with a fixed
+border and a fixed ground line. Between frames only the camera moves, panning
+and zooming inside it, and the zoom is what keeps every fighter at least 22% of
+the frame tall.
+
 Nothing is loaded from disk — no third-party images, no real people, no
 borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into
 `assets/audio/` under the names listed there; existing files are never

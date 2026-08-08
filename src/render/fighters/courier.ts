@@ -1,11 +1,11 @@
 import { box, circle, eyes, poly, roundedBox } from "../shapes.js";
 import type { FighterArt } from "./types.js";
 
-const BAG = "#3fbf6a";
-const BAG_DARK = "#2b8f4e";
-const JACKET = "#2b3446";
-const SKIN = "#e8c9a0";
-const SCREEN = "#8fe3ff";
+const BAG = "#6fe39a";
+const BAG_DARK = "#46b874";
+const JACKET = "#cfd8e4";
+const SKIN = "#f0d5ae";
+const SCREEN = "#ccf2ff";
 
 /**
  * КУРЬЕР НА СМЕНЕ — a person carrying a cube. The thermal backpack is bigger
@@ -69,9 +69,9 @@ export const courier: FighterArt = {
   },
 
   /** Short, quick jab — barely winds up, he has no time. */
-  strike(t, facing) {
-    if (t < 0) return { dx: 0.06 * -t, rot: -facing * 0.1 * -t };
-    return { dx: -0.14 * (1 - t), dy: facing * 0.16 * (1 - t) };
+  strike(t) {
+    if (t < 0) return { lunge: -0.1 * -t };
+    return { lunge: 0.3 * (1 - t) };
   },
 
   /** Trips forward; the bag has already gone over his head. */

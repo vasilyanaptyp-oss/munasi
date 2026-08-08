@@ -216,6 +216,43 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
   return bounds;
 }
 
+const lightnessCache = new Map<string, number>();
+
+/**
+ * Mean perceived lightness of a fighter's own pixels, 0..255.
+ *
+ * Shape is not the only thing that keeps two fighters apart on a phone screen:
+ * two dark figures on the blue field read as one blob however different their
+ * outlines are. This measures the figure only — background pixels are excluded
+ * — so the roster can be held to a minimum contrast between the two fighters
+ * that share a round.
+ */
+export function meanLightness(spriteId: string): number {
+  const cached = lightnessCache.get(spriteId);
+  if (cached !== undefined) return cached;
+
+  const render = createCanvas(RENDER_SIZE, RENDER_SIZE);
+  const ctx = render.getContext("2d");
+  ctx.save();
+  ctx.translate(RENDER_SIZE / 2, RENDER_SIZE / 2);
+  drawFighter(ctx, spriteId, { size: SPRITE_SIZE, facing: 1, frame: 0 });
+  ctx.restore();
+
+  const pixels = ctx.getImageData(0, 0, RENDER_SIZE, RENDER_SIZE).data;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3]! < 128) continue;
+    // Rec. 601 luma: matches how a viewer weighs the channels.
+    sum += 0.299 * pixels[i]! + 0.587 * pixels[i + 1]! + 0.114 * pixels[i + 2]!;
+    count += 1;
+  }
+  if (count === 0) throw new Error(`meanLightness: ${spriteId} drew nothing`);
+  const value = sum / count;
+  lightnessCache.set(spriteId, value);
+  return value;
+}
+
 /** Intersection over union of two masks of the same size. */
 export function iou(a: Mask, b: Mask): number {
   if (a.width !== b.width || a.height !== b.height) {

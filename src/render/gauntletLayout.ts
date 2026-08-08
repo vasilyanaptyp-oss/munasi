@@ -1,6 +1,12 @@
 import type { GauntletResult } from "../sim/gauntlet.js";
+import { FIGHTER_OUTLINE } from "./drawFighter.js";
 import { eventsAt, type RenderIndex } from "./frame.js";
-import { ARENA, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
+import {
+  ARENA,
+  GAUNTLET_LAYOUT as L,
+  HP_WIDGET,
+  HP_WIDGET_SLOTS,
+} from "./gauntletTheme.js";
 import { spriteBounds, spriteMotionBounds } from "./silhouette.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
 import type { Canvas } from "@napi-rs/canvas";
@@ -12,6 +18,12 @@ import { createCanvas } from "@napi-rs/canvas";
  * The renderer draws from this and `layout.test.ts` asserts on it, so
  * composition rules — nothing overlapping, nobody clipped, fighters big enough
  * to read — are checked directly rather than inferred from pixels.
+ *
+ * The arena is not part of that solve. It is a constant (`ARENA`): a fixed
+ * square at a fixed place with a fixed border and a fixed ground line. The only
+ * thing that changes between frames is the camera looking into it — a pan and a
+ * zoom in the arena's own world coordinates. The 22% height floor is met by
+ * zooming the camera in, never by growing the arena or moving its walls.
  */
 
 export interface Rect {
@@ -22,12 +34,27 @@ export interface Rect {
   h: number;
 }
 
+/**
+ * Camera over arena world space.
+ *
+ * World origin is the arena's centre on the x axis and the ground line on the
+ * y axis, so a fighter stands at world y 0. One world unit is one screen pixel
+ * at zoom 1.
+ */
+export interface Camera {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 export interface GauntletFrameLayout {
-  /** Pixels per unit of `drawFighter`'s `size`. */
+  /** Pixels per unit of `drawFighter`'s `size` — world size times zoom. */
   fighterSize: number;
   /** Screen y the fighters stand on. */
   groundY: number;
+  /** Always the `ARENA` constant; the gate checks that it stays that way. */
   arena: Rect;
+  camera: Camera;
   /** `sprite` is the resting box; `reach` includes room for motion. */
   challenger: { sprite: Rect; reach: Rect; centre: { x: number; y: number }; hp: Rect };
   opponent: { sprite: Rect; reach: Rect; centre: { x: number; y: number }; hp: Rect };
@@ -41,12 +68,18 @@ export function intersects(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
+/** The arena as a rect, for gate comparisons. */
+export const ARENA_RECT: Rect = {
+  name: "arena",
+  x: ARENA.x,
+  y: ARENA.y,
+  w: ARENA.side,
+  h: ARENA.side,
+};
+
 /** Frames a damage number stays up, matching the renderer. */
 export const DAMAGE_NUMBER_FRAMES = 15;
 
-/** Margins the composition keeps clear of the frame edge. */
-const SAFE_X = Math.round(WIDTH * 0.03);
-const GROUND_SHARE = 0.62;
 /** Hard floor: a fighter is never shorter than this share of the frame. */
 export const MIN_FIGHTER_HEIGHT_SHARE = 0.22;
 /** Gap kept between the two fighters' boxes. */
@@ -55,13 +88,21 @@ const FIGHTER_GAP = Math.round(WIDTH * 0.03);
  * How far the two resting boxes may overlap, as a share of fighter size.
  *
  * Standing the pair a little closer is what buys the room to keep everyone
- * inside the frame at the height floor. With the councillor's death scatter
- * narrowed (1.30 -> 0.85 of its box), all 36 worker-versus-boss pairs fit with
- * room to spare — the tightest, baker against chairman, has 84px left over.
+ * inside the frame at the height floor.
  */
 const MAX_OVERLAP = 0.16;
-/** Keep this clear of the frame edge. */
+/** Keep this clear of the frame edge. Nothing a fighter draws may cross it. */
 const EDGE = Math.round(WIDTH * 0.012);
+/** Breathing room inside the arena walls, where the pair sits when it fits. */
+const ARENA_PAD = Math.round(WIDTH * 0.01);
+/** Headroom between a fighter's crown and the arena's inner top. */
+const HEAD_PAD = Math.round(HEIGHT * 0.005);
+
+/**
+ * Floor of the band damage numbers may occupy: under the HP widgets, inside the
+ * arena. Numbers are clamped into this band, crits included.
+ */
+export const NUMBER_CEILING = HP_WIDGET_SLOTS.y + HP_WIDGET.height + Math.round(HEIGHT * 0.008);
 
 let measure: Canvas | null = null;
 function textWidth(text: string, size: number): number {
@@ -103,14 +144,14 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   const left: Rect[] = [
     {
       name: "challengerName",
-      x: SAFE_X,
+      x: Math.round(WIDTH * 0.03),
       y: nameY - nameSize,
       w: textWidth(result.challenger.name, nameSize),
       h: nameSize * 1.15,
     },
     {
       name: "vs",
-      x: SAFE_X,
+      x: Math.round(WIDTH * 0.03),
       y: nameY + vsSize * 1.15 - vsSize,
       w: textWidth("VS", vsSize),
       h: vsSize * 1.15,
@@ -147,9 +188,14 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
 }
 
 /**
- * Fighter scale for a round: large enough that the shorter of the two clears
- * the height floor, small enough that both fit side by side inside the safe
- * area. The floor wins if they ever disagree.
+ * On-screen fighter scale for a round: large enough that the shorter of the two
+ * clears the height floor, small enough that the pair sits inside the arena and
+ * that nothing either fighter ever draws crosses the frame edge.
+ *
+ * Order of authority, tightest last: the arena is where the pair *prefers* to
+ * sit, the 22% floor overrides it, and the frame edge overrides everything —
+ * that last one is the strict guarantee and `layout.test.ts` proves every pair
+ * satisfies it.
  */
 export function fighterSizeFor(challengerSprite: string, opponentSprite: string): number {
   const restA = spriteBounds(challengerSprite);
@@ -163,19 +209,27 @@ export function fighterSizeFor(challengerSprite: string, opponentSprite: string)
   // sitting on the boundary, where rounding can push it under.
   const floor = (HEIGHT * MIN_FIGHTER_HEIGHT_SHARE * 1.01) / Math.min(restA.height, restB.height);
 
-  // Largest scale at which everything both fighters ever draw still fits the
-  // frame, with the pair as close as the overlap budget allows. Every term
-  // scales with size, so this solves directly.
+  // Largest scale at which everything both fighters ever draw still fits, with
+  // the pair as close as the overlap budget allows. Every term scales with
+  // size, so this solves directly.
   const span =
     restA.right - restB.left - MAX_OVERLAP +
     Math.max(deadB.right, liveB.right) -
     Math.min(deadA.left, liveA.left);
-  const widest = (WIDTH - EDGE * 2) / span;
+  const widestFrame = (WIDTH - EDGE * 2) / span;
 
-  const roomy = (WIDTH - SAFE_X * 2 - FIGHTER_GAP) / (restA.width + restB.width);
-  // The floor is a floor; a pair with room to spare may go a little larger,
-  // but never past what keeps both fighters whole inside the frame.
-  return Math.min(widest, Math.max(floor, Math.min(roomy, floor * 1.3)));
+  // Nobody's crown pokes out of the arena's roof.
+  const tallest =
+    (ARENA.groundY - ARENA.inner.y - HEAD_PAD) / Math.max(restA.height, restB.height);
+  // Standing side by side, the pair fits between the arena walls. This is the
+  // resting extent on purpose: a death scatter may cross the wall for a few
+  // frames, and sizing everyone down to keep debris inside the square shrank
+  // the fighters to a third of the arena.
+  const roomy = (ARENA.inner.w - ARENA_PAD * 2 - FIGHTER_GAP) / (restA.width + restB.width);
+
+  // `tallest` and `roomy` are preferences the floor is allowed to beat; only
+  // `widestFrame` is absolute.
+  return Math.min(widestFrame, Math.max(floor, Math.min(roomy, tallest)));
 }
 
 /**
@@ -211,9 +265,25 @@ export function roundPlacement(
   return { size, separation, reachLeft, reachRight };
 }
 
+/** The camera settings a round is fought at. Zoom is what meets the 22% floor. */
+export function roundCamera(
+  challengerSprite: string,
+  opponentSprite: string,
+): { zoom: number; worldSeparation: number; reachLeft: number; reachRight: number } {
+  const placement = roundPlacement(challengerSprite, opponentSprite);
+  const zoom = placement.size / L.fighterWorld;
+  return {
+    zoom,
+    worldSeparation: placement.separation / zoom,
+    reachLeft: placement.reachLeft,
+    reachRight: placement.reachRight,
+  };
+}
+
 /**
- * Camera drift. Small, bounded and derived only from the event list, so the
- * shot breathes without any risk of pushing a fighter off frame.
+ * Camera drift, in screen pixels. Small, bounded and derived only from the
+ * event list, so the shot breathes without any risk of pushing a fighter off
+ * frame — the caller clamps it besides.
  */
 function drift(index: RenderIndex, frame: number): { x: number; y: number } {
   let x = Math.sin(frame * 0.013) * (WIDTH * 0.012);
@@ -240,25 +310,32 @@ export function gauntletFrameLayout(
 ): GauntletFrameLayout {
   const snap = result.snapshots[frame]!;
   const opponent = result.team.members[snap.round] ?? result.team.members[0]!;
-  const placement = roundPlacement(result.challenger.spriteId, opponent.spriteId);
-  const size = placement.size;
+  const camera = roundCamera(result.challenger.spriteId, opponent.spriteId);
+  const zoom = camera.zoom;
+  const size = L.fighterWorld * zoom;
   const boundsA = spriteBounds(result.challenger.spriteId);
   const boundsB = spriteBounds(opponent.spriteId);
 
-  const groundY = Math.round(HEIGHT * GROUND_SHARE);
+  const groundY = ARENA.groundY;
+  const separation = camera.worldSeparation * zoom;
   const wobble = drift(index, frame);
 
-  // Centre the pair on the reach they actually occupy, nudge, then clamp so
-  // nothing can leave the frame however the drift lands.
-  const reachWidth = placement.reachRight - placement.reachLeft;
-  let originAx = (WIDTH - reachWidth) / 2 - placement.reachLeft + wobble.x;
-  const lowest = EDGE - placement.reachLeft;
-  const highest = WIDTH - EDGE - placement.separation - placement.reachRight;
-  originAx = Math.max(lowest, Math.min(originAx, Math.max(lowest, highest)));
-  const originBx = originAx + placement.separation;
+  // Centre the pair on the bodies, not on the reach. Centring on the reach
+  // shoves the pair off to one side whenever one fighter's death throws debris
+  // much further than the other's — which is most rounds, and it reads as a
+  // composition mistake for the whole fight to pay for two seconds of dying.
+  const restLeft = boundsA.left * size;
+  const restRight = separation + boundsB.right * size;
+  const centred = (WIDTH - (restRight - restLeft)) / 2 - restLeft;
+  const lowest = EDGE - camera.reachLeft;
+  const highest = WIDTH - EDGE - separation - camera.reachRight;
+  const originAx = Math.max(lowest, Math.min(centred + wobble.x, Math.max(lowest, highest)));
+  const originBx = originAx + separation;
 
-  const originAy = groundY - boundsA.bottom * size + wobble.y;
-  const originBy = groundY - boundsB.bottom * size + wobble.y;
+  // Vertical pan is bounded to a hair so the fixed ground line stays fixed.
+  const panY = Math.max(-HEAD_PAD, Math.min(wobble.y, HEAD_PAD));
+  const originAy = groundY - boundsA.bottom * size + panY;
+  const originBy = groundY - boundsB.bottom * size + panY;
 
   const spriteA: Rect = {
     name: "challengerSprite",
@@ -275,52 +352,59 @@ export function gauntletFrameLayout(
     h: boundsB.height * size,
   };
 
-  const hpFor = (name: string, originX: number, spriteTop: number): Rect => ({
+  // HP widgets are pinned to the arena, not to the fighters' heads.
+  const hpFor = (name: string, centreX: number): Rect => ({
     name,
-    x: originX - HP_WIDGET.width / 2,
-    y: spriteTop - HP_WIDGET.height - Math.round(HEIGHT * 0.012),
+    x: centreX - HP_WIDGET.width / 2,
+    y: HP_WIDGET_SLOTS.y,
     w: HP_WIDGET.width,
     h: HP_WIDGET.height,
   });
-  const hpA = hpFor("challengerHp", originAx, spriteA.y);
-  const hpB = hpFor("opponentHp", originBx, spriteB.y);
+  const hpA = hpFor("challengerHp", HP_WIDGET_SLOTS.challengerX);
+  const hpB = hpFor("opponentHp", HP_WIDGET_SLOTS.opponentX);
 
   // Reach boxes use the true measured envelope, per side.
   const reachOf = (name: string, spriteId: string, originX: number, originY: number): Rect => {
     // The full measured envelope, uncapped: if any part of a fighter would
     // leave the frame, the gate must see it.
+    // Grown by the keyline, because the keyline is drawn pixels too.
     const dead = spriteMotionBounds(spriteId, true);
     return {
       name: `${name}Reach`,
-      x: originX + dead.left * size,
-      y: originY + dead.top * size,
-      w: dead.width * size,
-      h: dead.height * size,
+      x: originX + dead.left * size - FIGHTER_OUTLINE,
+      y: originY + dead.top * size - FIGHTER_OUTLINE,
+      w: dead.width * size + FIGHTER_OUTLINE * 2,
+      h: dead.height * size + FIGHTER_OUTLINE * 2,
     };
   };
 
-  const marginX = Math.round(WIDTH * 0.02);
-  const arenaLeft = Math.min(spriteA.x, spriteB.x) - marginX;
-  const arenaRight = Math.max(spriteA.x + spriteA.w, spriteB.x + spriteB.w) + marginX;
-  const arenaTop = Math.min(hpA.y, hpB.y) - Math.round(HEIGHT * 0.03);
-  const arenaBottom = groundY + Math.round(HEIGHT * 0.16);
-  const arena: Rect = {
-    name: "arena",
-    x: arenaLeft,
-    y: arenaTop,
-    w: arenaRight - arenaLeft,
-    h: arenaBottom - arenaTop,
-  };
-
   const damageNumbers = damageNumberRects(result, frame, index, {
-    challenger: { origin: originAx, top: spriteA.y },
-    opponent: { origin: originBx, top: spriteB.y },
+    challenger: {
+      origin: originAx,
+      top: spriteA.y,
+      height: spriteA.h,
+      width: spriteA.w,
+      outward: -1,
+    },
+    opponent: {
+      origin: originBx,
+      top: spriteB.y,
+      height: spriteB.h,
+      width: spriteB.w,
+      outward: 1,
+    },
   });
 
   return {
     fighterSize: size,
     groundY,
-    arena,
+    arena: { ...ARENA_RECT },
+    camera: {
+      // Screen pan expressed back in world units, which is what it means.
+      x: (centred - originAx) / zoom,
+      y: -panY / zoom,
+      zoom,
+    },
     challenger: {
       sprite: spriteA,
       reach: reachOf("challengerSprite", result.challenger.spriteId, originAx, originAy),
@@ -339,11 +423,48 @@ export function gauntletFrameLayout(
 }
 
 export interface DamageNumberAnchors {
-  challenger: { origin: number; top: number };
-  opponent: { origin: number; top: number };
+  /** `outward` points away from the opponent, so numbers clear the faces. */
+  challenger: { origin: number; top: number; height: number; width: number; outward: -1 };
+  opponent: { origin: number; top: number; height: number; width: number; outward: 1 };
 }
 
-/** Rects for the numbers floating this frame, matching what the renderer draws. */
+/** Font size per event type. A crit's weight is carried here, not by travel. */
+function numberStyle(type: string): { size: number; heavy: boolean } | null {
+  switch (type) {
+    // Nearly twice the cap height of an ordinary hit — that is the whole tell.
+    case "crit":
+      return { size: Math.round(WIDTH * 0.1), heavy: true };
+    case "hit":
+      return { size: Math.round(WIDTH * 0.055), heavy: false };
+    case "minion_hit":
+    case "aoe":
+      return { size: Math.round(WIDTH * 0.043), heavy: false };
+    case "heal":
+      return { size: Math.round(WIDTH * 0.052), heavy: false };
+    case "pickup_claim":
+      return { size: Math.round(WIDTH * 0.048), heavy: false };
+    default:
+      return null;
+  }
+}
+
+/** Text per event type, shared by the layout and the renderer. */
+export function numberText(type: string, value: number | undefined): string {
+  if (type === "pickup_claim") return "+БАФ";
+  if (type === "heal") return `+${value}`;
+  if (type === "crit") return `-${value}!`;
+  return `-${value}`;
+}
+
+/**
+ * Rects for the numbers floating this frame, matching what the renderer draws.
+ *
+ * A number stays where the blow landed: it lifts by a few percent of the frame
+ * and no more, and the whole rect is clamped into the band between the HP
+ * widgets and the arena floor. A crit reads as a crit because it is far bigger
+ * and brighter, not because it flies further — travelling further used to walk
+ * it up over the arena wall and into the HUD.
+ */
 export function damageNumberRects(
   result: GauntletResult,
   frame: number,
@@ -351,55 +472,41 @@ export function damageNumberRects(
   anchors: DamageNumberAnchors,
 ): Rect[] {
   const out: Rect[] = [];
+  const left = ARENA.inner.x;
+  const right = ARENA.inner.x + ARENA.inner.w;
+  const bottom = ARENA.inner.y + ARENA.inner.h;
+
   for (let back = 0; back <= DAMAGE_NUMBER_FRAMES; back += 1) {
     const f = frame - back;
     if (f < 0) break;
     for (const event of eventsAt(index, f)) {
-      let text: string;
-      let size: number;
-      switch (event.type) {
-        case "crit":
-          text = `-${event.value}!`;
-          size = Math.round(WIDTH * 0.085);
-          break;
-        case "hit":
-          text = `-${event.value}`;
-          size = Math.round(WIDTH * 0.058);
-          break;
-        case "minion_hit":
-        case "aoe":
-          text = `-${event.value}`;
-          size = Math.round(WIDTH * 0.045);
-          break;
-        case "heal":
-          text = `+${event.value}`;
-          size = Math.round(WIDTH * 0.055);
-          break;
-        case "pickup_claim":
-          text = "+БАФ";
-          size = Math.round(WIDTH * 0.05);
-          break;
-        default:
-          continue;
-      }
+      const style = numberStyle(event.type);
+      if (!style) continue;
+      const text = numberText(event.type, event.value);
+
       const onChallenger =
         event.type === "pickup_claim" || event.type === "heal"
           ? event.actorId === result.challenger.id
           : event.targetId === result.challenger.id;
       const anchor = onChallenger ? anchors.challenger : anchors.opponent;
       const age = back / DAMAGE_NUMBER_FRAMES;
-      const scale = 1 + 0.12 * (1 - age);
-      const w = textWidth(text, size * scale);
-      const x = anchor.origin + numberJitter(`${event.frame}:${event.actorId}:${event.type}`, WIDTH * 0.06);
-      // Numbers rise from just above the HP widget, never across it.
-      const y = anchor.top - HP_WIDGET.height - Math.round(HEIGHT * 0.05) - age * (HEIGHT * 0.07);
-      out.push({
-        name: `damage:${event.type}@${event.frame}`,
-        x: x - w / 2,
-        y: y - size * scale * 0.62,
-        w,
-        h: size * scale * 1.05,
-      });
+      // Crits pop on the first frames and settle; ordinary hits barely move.
+      const scale = 1 + (style.heavy ? 0.22 : 0.1) * (1 - age);
+      const w = textWidth(text, style.size * scale);
+      const h = style.size * scale * 1.05;
+
+      const jitter = numberJitter(`${event.frame}:${event.actorId}:${event.type}`, WIDTH * 0.04);
+      // Anchored on the upper body, where the blow landed. The lift is short.
+      const rise = age * (HEIGHT * 0.022);
+      // Shoulder height, pushed to the fighter's outer side: the number sits
+      // on the blow without covering the face it landed on.
+      let x = anchor.origin + anchor.outward * anchor.width * 0.34 + jitter - w / 2;
+      let y = anchor.top + anchor.height * 0.16 - h / 2 - rise;
+
+      x = Math.max(left, Math.min(x, right - w));
+      y = Math.max(NUMBER_CEILING, Math.min(y, bottom - h));
+
+      out.push({ name: `damage:${event.type}@${event.frame}`, x, y, w, h });
     }
   }
   return out;

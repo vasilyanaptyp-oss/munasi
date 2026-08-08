@@ -1,10 +1,10 @@
 import { box, circle, eyes, poly } from "../shapes.js";
 import type { FighterArt } from "./types.js";
 
-const ROBE = "#ece7dc";
-const ROBE_SHADE = "#c9c0ad";
-const GOLD = "#f0c04a";
-const SKIN = "#e8c9a0";
+const ROBE = "#2b2f3a";
+const ROBE_SHADE = "#1b1e26";
+const GOLD = "#b8912f";
+const SKIN = "#a98d6c";
 
 /**
  * ВЕРХОВНЫЙ АРБИТР — a tall pale triangle under a floating ring. Stands
@@ -66,10 +66,10 @@ export const arbiter: FighterArt = {
     return {};
   },
 
-  /** Raises the gavel to full height, then brings it straight down. */
-  strike(t, facing) {
-    if (t < 0) return { dy: -0.07 * -t, rot: -facing * 0.08 * -t };
-    return { dy: facing * 0.1 * (1 - t), rot: facing * 0.16 * (1 - t) };
+  /** Settles, then drives the gavel forward. No tilt: it read as toppling. */
+  strike(t) {
+    if (t < 0) return { dy: -0.07 * -t, lunge: -0.06 * -t };
+    return { lunge: 0.2 * (1 - t), dy: 0.04 * (1 - t) };
   },
 
   /** The robe deflates; the halo has already dropped. */

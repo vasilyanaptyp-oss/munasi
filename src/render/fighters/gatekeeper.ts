@@ -1,12 +1,12 @@
 import { box, circle, ellipse, eyes, poly, roundedBox } from "../shapes.js";
 import type { FighterArt } from "./types.js";
 
-const BOOTH = "#8b9099";
-const BOOTH_DARK = "#666b74";
-const BARRIER = "#e04b3a";
+const BOOTH = "#c9ced6";
+const BOOTH_DARK = "#a3a9b3";
+const BARRIER = "#ef8a70";
 const BARRIER_LIGHT = "#f4f6fa";
-const SKIN = "#e0b78e";
-const VEST = "#3c4553";
+const SKIN = "#f0cfa8";
+const VEST = "#d8dee8";
 
 /**
  * СТАРШИЙ ПО ШЛАГБАУМУ — a head in a booth window with a striped boom barrier
@@ -55,10 +55,10 @@ export const gatekeeper: FighterArt = {
     return { dy: Math.sin(frame * 0.05) * 0.008 };
   },
 
-  /** Raises the boom, then slams it down. */
-  strike(t, facing) {
-    if (t < 0) return { rot: -facing * 0.05 * -t };
-    return { rot: facing * 0.12 * (1 - t), dy: facing * 0.05 * (1 - t) };
+  /** Loads the boom back, then pushes it through. */
+  strike(t) {
+    if (t < 0) return { lunge: -0.04 * -t };
+    return { lunge: 0.14 * (1 - t), dy: 0.04 * (1 - t) };
   },
 
   /** The booth tips; the barrier has already dropped. */
