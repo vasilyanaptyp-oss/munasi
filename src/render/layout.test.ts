@@ -1,8 +1,8 @@
 import { createCanvas } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
-import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
-import { findBestGauntlet, type GauntletResult } from "../sim/gauntlet.js";
+import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
+import { findBestGauntlet, simulateGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import { DEATH_FRAMES } from "./drawFighter.js";
 import { buildRenderIndex } from "./frame.js";
 import { coldOpenPlan, defaultPlan } from "./framePlan.js";
@@ -432,6 +432,43 @@ describe("gauntlet composition", () => {
   });
 });
 
+describe("reach", () => {
+  it("lands its blows in reach, not across the arena", () => {
+    // The lunge is locked to the fighter's own cooldown, so the gap bottoms
+    // out on the frame the blow lands. Before that it was a free-running wave
+    // and each side drifted on its own anchor: 8.9% of damage events fired
+    // with the pair more than 1.4 mean widths apart.
+    const damage = new Set(["hit", "crit"]);
+    let total = 0;
+    let far = 0;
+    let widest = 0;
+    for (const matchup of gauntletMatchups(roster).filter((_, i) => i % 14 === 0)) {
+      for (let seed = 0; seed < 2; seed += 1) {
+        const result = simulateGauntlet(buildGauntlet(matchup.challenger, matchup.members), seed, GAUNTLET_RULES);
+        const index = buildRenderIndex(result);
+        const hud = hudLayout(result);
+        for (const event of result.events) {
+          if (!damage.has(event.type) || event.frame >= result.durationFrames) continue;
+          const layout = gauntletFrameLayout(result, event.frame, index, hud);
+          const a = layout.challenger.sprite;
+          const b = layout.opponent.sprite;
+          const ratio =
+            Math.abs(b.x + b.w / 2 - (a.x + a.w / 2)) / ((a.w + b.w) / 2);
+          total += 1;
+          if (ratio > 1.4) far += 1;
+          widest = Math.max(widest, ratio);
+        }
+      }
+    }
+    expect(total).toBeGreaterThan(500);
+    expect(
+      far / total,
+      `${far} of ${total} events beyond 1.4x mean width, widest ${widest.toFixed(2)}x`,
+    ).toBeLessThan(0.01);
+  }, 120_000);
+
+});
+
 describe("victory card", () => {
   it("never covers the arena", () => {
     const run = findBestGauntlet(
@@ -458,21 +495,18 @@ describe("victory card", () => {
    * number that carries a gauntlet: what the winner had left.
    */
   function runFor(cleared: boolean): GauntletResult {
-    const teams: [string, string[]][] = [
-      ["plumber", ["chairman", "silencer", "arbiter"]],
-      ["baker", ["silencer", "councillor", "viceroy"]],
-      ["courier", ["chairman", "arbiter", "viceroy"]],
-      ["nailmaster", ["councillor", "viceroy", "inspector"]],
-    ];
-    for (const [challenger, team] of teams) {
-      const config = buildGauntlet(
-        getFighter(challenger, roster),
-        team.map((id) => getFighter(id, roster)),
-      );
-      const found = findBestGauntlet(config, { count: 120, rules: GAUNTLET_RULES }).result;
-      if (found.challengerWon === cleared) return found;
-    }
-    throw new Error(`no sample run where cleared=${cleared}`);
+    // Asked for outright rather than searched for: the drama score now aims at
+    // a 2-12% finishing margin, and for several matchups the best run of a
+    // block is a loss, so hunting for a clear by luck no longer works.
+    const config = buildGauntlet(
+      getFighter("plumber", roster),
+      ["chairman", "silencer", "arbiter"].map((id) => getFighter(id, roster)),
+    );
+    return findBestGauntlet(config, {
+      count: 200,
+      rules: GAUNTLET_RULES,
+      outcome: cleared ? "cleared" : "stopped",
+    }).result;
   }
 
   const FRAME: Rect = { name: "frame", x: 0, y: 0, w: WIDTH, h: HEIGHT };

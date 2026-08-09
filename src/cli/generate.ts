@@ -185,19 +185,31 @@ async function generateOne(
 }
 
 /** One gauntlet: pick the most dramatic seed, render it, encode it. */
+/**
+ * Which way the i-th video of a batch should end.
+ *
+ * Every third one is asked to be a loss. The search falls back to its best
+ * result when a matchup cannot produce the asked-for ending, so the ratio is a
+ * target rather than a quota.
+ */
+export function wantedOutcome(index: number): "cleared" | "stopped" {
+  return index % 3 === 2 ? "stopped" : "cleared";
+}
+
 async function generateGauntlet(
   challenger: Fighter,
   members: Fighter[],
   options: GenerateOptions,
   bar: ProgressBar,
   position: string,
+  outcome: "cleared" | "stopped",
 ): Promise<ManifestEntry> {
   const label = `${challenger.name} vs ${members.map((m) => m.name).join(", ")}`;
   bar.setLabel(`${position} ${label}  drama`);
   bar.update(0, 1);
 
   const config = buildGauntlet(challenger, members);
-  const best = findBestGauntlet(config, { count: options.seeds, rules: GAUNTLET_RULES });
+  const best = findBestGauntlet(config, { count: options.seeds, rules: GAUNTLET_RULES, outcome });
   const result: GauntletResult = best.result;
 
   const window = options.coldOpen ? findGauntletColdOpen(result) : null;
@@ -294,14 +306,29 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
       }));
   } else {
     const done = renderedGauntlets(manifest);
+    // Counted across the whole manifest, not this invocation: a batch is often
+    // built up over several runs, and an index that restarts at 0 each time
+    // never reaches the third slot, so the loss was never asked for.
+    const already = manifest.entries.filter((entry) => entry.gauntlet !== undefined).length;
     const all = gauntletMatchups(roster);
     const chosen = options.pick ? options.pick.map((i) => all[i]).filter((m) => m !== undefined) : all;
     queue = chosen
       .filter((m) => !done.has(gauntletKey(m.challenger.id, m.members.map((x) => x.id))))
       .slice(0, options.count)
-      .map((m) => ({
+      .map((m, i) => ({
         label: `${m.challenger.name} vs ${m.members.map((x) => x.name).join(", ")}`,
-        run: (bar, position) => generateGauntlet(m.challenger, m.members, options, bar, position),
+        // Roughly one video in three ends with the team stopping the worker.
+        // Left to itself the search picks whatever scores highest, and a feed
+        // of nothing but clears stops reading as a contest.
+        run: (bar, position) =>
+          generateGauntlet(
+            m.challenger,
+            m.members,
+            options,
+            bar,
+            position,
+            wantedOutcome(already + i),
+          ),
       }));
   }
 

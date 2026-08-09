@@ -234,7 +234,27 @@ const WEIGHTS = { closeness: 30, depth: 30, pacing: 20, finalRound: 20 } as cons
 const PACING_IDEAL: [number, number] = [25, 35];
 const PACING_ZERO: [number, number] = [12, 50];
 
+/**
+ * Where the winner's remaining HP should land, as a share of their own pool.
+ *
+ * The old score was `1 - share`, monotone, so searching 400 seeds drove every
+ * shipped video to a 1 HP finish: median 0.1% of pool, every single one under
+ * 5%. That is not a close fight, that is a scoreboard bug — a viewer stops
+ * believing it. Below 2% the reward now falls away instead of peaking.
+ */
+const MARGIN_IDEAL: [number, number] = [0.02, 0.12];
+/** Above this share the finish reads as comfortable and scores nothing. */
+const MARGIN_ZERO_HI = 0.45;
+
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** Band score for a finishing margin: peaks inside the band, zero outside. */
+export function marginScore(share: number): number {
+  const [lo, hi] = MARGIN_IDEAL;
+  if (share < lo) return clamp01(share / lo);
+  if (share <= hi) return 1;
+  return clamp01((MARGIN_ZERO_HI - share) / (MARGIN_ZERO_HI - hi));
+}
 
 function pacingScore(seconds: number): number {
   const [lo, hi] = PACING_IDEAL;
@@ -250,19 +270,23 @@ export function scoreGauntletDramaDetailed(result: GauntletResult): GauntletDram
   const finalSnap = result.snapshots.at(-1);
   if (!last || !finalSnap) return { closeness: 0, depth: 0, pacing: 0, finalRound: 0, total: 0 };
 
-  const closeness = result.challengerWon
-    ? clamp01(1 - last.challengerHpEnd / result.challenger.maxHp)
-    : clamp01(1 - last.opponentHpEnd / (finalSnap.opponent.maxHp || 1));
+  // The winner's remaining share of their own pool, scored against the band.
+  const winnerShare = result.challengerWon
+    ? last.challengerHpEnd / result.challenger.maxHp
+    : last.opponentHpEnd / (finalSnap.opponent.maxHp || 1);
+  const closeness = marginScore(winnerShare);
 
   // Reaching the last member is most of what makes the format work.
   const depth = clamp01((result.rounds.length - 1) / Math.max(1, result.team.members.length - 1));
   const pacing = pacingScore(result.durationFrames / FPS);
 
-  // How close the deciding round itself was, by HP share at its end.
-  const loserShare = result.challengerWon
-    ? last.challengerHpEnd / result.challenger.maxHp
-    : last.opponentHpEnd / (finalSnap.opponent.maxHp || 1);
-  const finalRound = clamp01(1 - loserShare);
+  // How hard the deciding round was on the winner: what share of their pool it
+  // cost them. Distinct from `closeness`, which is what they had left — a run
+  // can end on 8% after an easy last round or after a brutal one.
+  const cost = result.challengerWon
+    ? (last.challengerHpStart - last.challengerHpEnd) / result.challenger.maxHp
+    : (finalSnap.opponent.maxHp - last.opponentHpEnd) / (finalSnap.opponent.maxHp || 1);
+  const finalRound = clamp01(cost);
 
   const total =
     closeness * WEIGHTS.closeness +
@@ -283,21 +307,41 @@ export interface BestGauntlet {
   score: number;
 }
 
+/** Which way the run should end, when the batch is short of one kind. */
+export type WantedOutcome = "cleared" | "stopped";
+
+export interface FindGauntletOptions {
+  start?: number;
+  count?: number;
+  rules?: GauntletRules;
+  /**
+   * Restrict the search to runs that end this way, falling back to the overall
+   * best if this matchup never produces one. Used to keep a batch of videos
+   * from being all of the same shape — see `src/cli/generate.ts`.
+   */
+  outcome?: WantedOutcome;
+}
+
 /** Best of a block of seeds, ties broken toward the lower seed. */
 export function findBestGauntlet(
   config: GauntletConfig,
-  options: { start?: number; count?: number; rules?: GauntletRules } = {},
+  options: FindGauntletOptions = {},
 ): BestGauntlet {
   const start = options.start ?? 0;
   const count = options.count ?? 500;
   if (count <= 0) throw new Error("findBestGauntlet: seed count must be positive");
 
   let best: BestGauntlet | null = null;
+  let wanted: BestGauntlet | null = null;
   for (let i = 0; i < count; i += 1) {
     const seed = start + i;
     const result = simulateGauntlet(config, seed, options.rules ?? {});
     const score = scoreGauntletDrama(result);
     if (best === null || score > best.score) best = { seed, result, score };
+    if (options.outcome !== undefined) {
+      const matches = options.outcome === "cleared" ? result.challengerWon : !result.challengerWon;
+      if (matches && (wanted === null || score > wanted.score)) wanted = { seed, result, score };
+    }
   }
-  return best!;
+  return wanted ?? best!;
 }

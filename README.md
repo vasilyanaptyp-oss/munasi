@@ -69,6 +69,14 @@ mulberry32 stream, so a `(matchup, seed)` pair always replays the same fight,
 and a frame renders the same bytes no matter what was rendered before it — which
 is what lets frames be split across worker processes.
 
+**The gauntlet is selected to a band, not to a maximum.** Scoring a run by how
+little the winner had left is monotone, and searching 400 seeds under it drove
+every shipped video to a 1 HP finish — median 0.1% of pool, every one of them
+under 5%. The score now peaks on a 2-12% margin and falls away outside it;
+shipped runs measure a 6.6% median with all twelve inside the band. The batch
+also asks every third video to end with the team winning, so a feed is not all
+of one shape.
+
 **Drama is selected, not authored.** A random fight is almost always boring, so
 `findBestMatch` simulates 500 seeds (~350ms) and keeps the one that scores
 highest on closeness, lead changes, comebacks, pacing and how late the outcome

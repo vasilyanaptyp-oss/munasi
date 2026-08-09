@@ -213,10 +213,17 @@ describe("simulate", () => {
   });
 
   it("runs 500 matches in well under a second", () => {
+    // Fastest of three, not the first: the suite runs its files in parallel, so
+    // a single wall-clock reading measures how busy the machine is as much as
+    // how costly the simulation is. The floor still moves the moment the
+    // simulation itself gets slower.
     const config = abilityMatch();
-    const start = performance.now();
-    for (let seed = 0; seed < 500; seed += 1) simulate(config, seed);
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(1000);
+    let best = Number.POSITIVE_INFINITY;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const start = performance.now();
+      for (let seed = 0; seed < 500; seed += 1) simulate(config, seed);
+      best = Math.min(best, performance.now() - start);
+    }
+    expect(best).toBeLessThan(1000);
   });
 });
