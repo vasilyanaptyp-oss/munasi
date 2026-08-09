@@ -219,13 +219,17 @@ export function simulateGauntlet(
  * challenger nearly dead is the one worth posting.
  */
 export interface GauntletDrama {
-  /** How little the winner had left. */
+  /**
+   * How well the winner's remaining HP lands in the 2-12% band. Not "how little
+   * they had left" — that was the monotone version, and it drove every search
+   * to a 1 HP finish. See `marginScore`.
+   */
   closeness: number;
   /** How deep into the team the run went. */
   depth: number;
   /** Length against the 25-35 second window. */
   pacing: number;
-  /** How close the final round was. */
+  /** What share of their own pool the deciding round cost the winner. */
   finalRound: number;
   total: number;
 }

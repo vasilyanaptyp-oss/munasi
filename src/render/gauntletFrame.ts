@@ -128,8 +128,17 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   ctx.restore();
 }
 
-/** Renders one widget onto a blank canvas, for the contrast gate. */
-export function drawHpWidgetForTest(ctx: Ctx, share: number): void {
+/**
+ * Renders one widget onto a blank canvas and returns the plate the digits sit
+ * on, for the contrast gate.
+ *
+ * The plate rect is the point of the return value. Measuring contrast over the
+ * whole canvas reads the brightest pixel anywhere against the darkest pixel
+ * anywhere — and above half HP the widget's own fill is white, so the reading
+ * came back at 15:1 no matter what colour the digits were. The gate has to look
+ * inside this rectangle and nowhere else.
+ */
+export function drawHpWidgetForTest(ctx: Ctx, share: number): Rect {
   const rect: Rect = {
     name: "test",
     x: 40,
@@ -138,6 +147,14 @@ export function drawHpWidgetForTest(ctx: Ctx, share: number): void {
     h: HP_WIDGET.height,
   };
   drawHpWidget(ctx, rect, Math.round(1400 * share), 1400);
+  // Mirrors the plate `drawHpWidget` fills, in canvas coordinates.
+  return {
+    name: "hpDigitPlate",
+    x: rect.x + rect.w / 2 - HP_WIDGET.barWidth / 2,
+    y: rect.y + rect.h * 0.24,
+    w: HP_WIDGET.barWidth,
+    h: HP_WIDGET.barHeight,
+  };
 }
 
 const PICKUP_LABEL: Record<PickupType, string> = {

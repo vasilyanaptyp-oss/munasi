@@ -25,6 +25,7 @@ import {
   type ManifestEntry,
 } from "./manifest.js";
 import { ProgressBar } from "./progress.js";
+import { provenance } from "./provenance.js";
 
 /**
  * Batch generator:
@@ -166,6 +167,7 @@ async function generateOne(
       winnerId: best.result.winnerId,
       sizeBytes: exported.sizeBytes,
       generatedAt: new Date().toISOString(),
+      provenance: provenance({ seedsSearched: options.seeds }),
       ...(window
         ? {
             coldOpen: {
@@ -254,6 +256,7 @@ async function generateGauntlet(
       winnerId: result.challengerWon ? challenger.id : (result.rounds.at(-1)?.opponentId ?? null),
       sizeBytes: exported.sizeBytes,
       generatedAt: new Date().toISOString(),
+      provenance: provenance({ seedsSearched: options.seeds, wantedOutcome: outcome }),
       gauntlet: {
         challengerId: challenger.id,
         teamIds: members.map((m) => m.id),

@@ -113,7 +113,16 @@ export function measureMotion(path: string, options: MotionOptions = {}): Motion
   return { meanChanged, staticShare, perFrame, framesMeasured: perFrame.length };
 }
 
-/** Thresholds the gate holds videos to. */
+/**
+ * Thresholds the gate holds videos to — **in the middle window only.**
+ *
+ * Worth knowing before trusting a passing run: measured on the shipped samples,
+ * the closing six seconds run 6.7-7.7% changed with 22-30% of frames static, so
+ * they would fail both numbers. Most of that is on purpose (26 frames of death
+ * hold at the end of the last round, then 34 frames of the winner card), but the
+ * gate cannot tell deliberate stillness from a regression there, because it
+ * never looks. `pnpm motion` prints all three windows for that reason.
+ */
 export const MOTION_TARGET = {
   /** Reference measures 12.7%. */
   meanChanged: 0.08,

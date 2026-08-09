@@ -24,9 +24,10 @@ export function byFaction(faction: Faction, roster = loadFighters()): Fighter[] 
 /**
  * How the two sides are scaled for the gauntlet.
  *
- * Both sides carry 1000-ish HP as in the reference, so the challenger's edge
- * has to be damage. `pnpm calibrate --gauntlet` solves for both numbers; see
- * CLAUDE.md for the targets they are solved against.
+ * Both sides carry their own roster HP — 1000 to 1400, and workers and bosses
+ * are drawn from the same range — so the challenger's edge has to be damage.
+ * `pnpm calibrate:gauntlet --solve` solves for both numbers; see CLAUDE.md for
+ * the targets they are solved against.
  */
 export interface GauntletTuning {
   /** Multiplies everyone's damage. Sets how long a round takes. */

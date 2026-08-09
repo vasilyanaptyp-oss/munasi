@@ -21,10 +21,17 @@ import { createCanvas } from "@napi-rs/canvas";
  * to read — are checked directly rather than inferred from pixels.
  *
  * The arena is not part of that solve. It is a constant (`ARENA`): a fixed
- * square at a fixed place with a fixed border and a fixed ground line. The only
- * thing that changes between frames is the camera looking into it — a pan and a
- * zoom in the arena's own world coordinates. The 22% height floor is met by
- * zooming the camera in, never by growing the arena or moving its walls.
+ * square at a fixed place with a fixed border and two fixed ground lines. The
+ * only thing that changes between frames is the camera looking into it — a pan
+ * and a zoom in the arena's own world coordinates. The height floor
+ * (`MIN_FIGHTER_HEIGHT_SHARE`, 19%) is met by zooming the camera in, never by
+ * growing the arena or moving its walls.
+ *
+ * `gauntletFrameLayout` reads the camera track from `gauntletCamera.ts`.
+ * `roundPlacement` below solves the same geometry a different way and **nothing
+ * in the render path calls it** — it survives as the all-pairs feasibility check
+ * in `layout.test.ts`, and the numbers it reports describe that solver, not the
+ * frames that ship.
  */
 
 export interface Rect {
@@ -282,9 +289,16 @@ export interface RoundPlacement {
  * challenger stands on the higher line, smaller. A single ground line left the
  * top third of the arena empty in every frame.
  *
- * **The two resting boxes never touch.** There is no overlap budget any more:
- * with the pair at two depths the old trick of sliding them into each other is
- * both unnecessary to read and, at these sizes, ugly.
+ * **Not used by the renderer.** `gauntletFrameLayout` sizes the pair from the
+ * camera track instead (`gauntletCamera.ts`), which solves against the run's own
+ * positions rather than against a static worst case. This is kept as the
+ * all-pairs feasibility check: it answers "could every one of the 36 pairings be
+ * staged at all", which the camera track cannot, because it needs a simulated
+ * run to look at. Read its numbers as that, not as what ships.
+ *
+ * **The overlap is an emergency valve, not a default.** It stays zero unless
+ * standing clear would push a fighter under the height floor, and then the pair
+ * slides together by exactly the shortfall.
  *
  * **The guarantee is still the arena wall.** Everything either fighter ever
  * draws — body, prop, the debris of its death — stays inside the arena's inner

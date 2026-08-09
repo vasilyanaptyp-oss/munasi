@@ -53,25 +53,48 @@ const DEFAULT_MOTION = {
   death: (t: number): Partial<Transform> => ({ rot: t * 1.35, dy: t * 0.2 }),
 };
 
+/**
+ * Scratch canvases, one per box size, and **bounded**.
+ *
+ * The bound is the whole point. These were plain unbounded maps, which reads
+ * like a cache and behaved like a leak: the gauntlet's camera zooms
+ * continuously, so the box size lands on a different integer nearly every frame,
+ * and an entry was almost never hit twice. Measured on a 30-video batch, each
+ * render worker climbed to 3-4 GB and the machine ran out of memory partway
+ * through the first video.
+ *
+ * Keyed on the exact size and not a rounded one, because the canvas has to be
+ * exactly `boxSize` across: everything downstream blits the whole thing, and an
+ * oversized scratch with a source rectangle does not produce the same pixels —
+ * measured, the mp4 came out different. So the fix is the eviction, not the key.
+ * A handful of entries covers the sizes a round actually cycles through; the
+ * rest were only ever paid for.
+ */
+const SCRATCH_LIMIT = 8;
 const scratch = new Map<number, Canvas>();
 const outlineScratch = new Map<number, Canvas>();
 
-function scratchCanvas(size: number): Canvas {
-  let canvas = scratch.get(size);
-  if (!canvas) {
-    canvas = createCanvas(size, size);
-    scratch.set(size, canvas);
+function fromPool(pool: Map<number, Canvas>, size: number): Canvas {
+  const existing = pool.get(size);
+  if (existing) return existing;
+  const canvas = createCanvas(size, size);
+  pool.set(size, canvas);
+  // Insertion order: the oldest size goes first.
+  if (pool.size > SCRATCH_LIMIT) {
+    for (const key of pool.keys()) {
+      pool.delete(key);
+      break;
+    }
   }
   return canvas;
 }
 
+function scratchCanvas(size: number): Canvas {
+  return fromPool(scratch, size);
+}
+
 function outlineCanvas(size: number): Canvas {
-  let canvas = outlineScratch.get(size);
-  if (!canvas) {
-    canvas = createCanvas(size, size);
-    outlineScratch.set(size, canvas);
-  }
-  return canvas;
+  return fromPool(outlineScratch, size);
 }
 
 export interface DrawFighterOptions {

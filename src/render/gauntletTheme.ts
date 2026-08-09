@@ -1,10 +1,18 @@
 import { HEIGHT, WIDTH } from "./theme.js";
 
 /**
- * Layout for the gauntlet, derived from the reference frames by measurement
- * (see `refs/README.md`). Everything is expressed as a fraction of frame width
+ * Layout for the gauntlet. Everything is expressed as a fraction of frame width
  * or height, then scaled here — the reference is 576x1024 and we render
  * 1080x1920, so nothing is copied in raw pixels.
+ *
+ * **Not all of these fractions come from the reference**, and it matters which
+ * do. Measured off it (`refs/README.md`) and used as measured: the palette, the
+ * HP widget's total width and stem, the caption's cap height. Chosen here
+ * instead: the arena's side (0.92 against the reference's 1.064, which runs the
+ * square off both edges of the frame and leaves one wall permanently off
+ * screen), its border (0.032 against 0.042), its top edge, the HP crossbar
+ * (0.115 against 0.090, so four digits fit), and both ground lines — the
+ * reference has no fixed arena position at all, it pans.
  */
 
 /** Flat fill, no gradient. Measured across four frames at 69-76% of pixels. */
@@ -30,7 +38,7 @@ export const GAUNTLET_COLORS = {
   hpDigits: "#ffffff",
 } as const;
 
-/** Fractions measured off the reference. */
+/** Fractions of frame width or height. See the note above on which are measured. */
 const F = {
   arenaSide: 0.92, // square side, of frame width
   arenaTop: 0.295, // of frame height

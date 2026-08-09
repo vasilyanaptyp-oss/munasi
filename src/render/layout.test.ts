@@ -5,7 +5,7 @@ import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/team
 import { findBestGauntlet, simulateGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import { DEATH_FRAMES } from "./drawFighter.js";
 import { buildRenderIndex } from "./frame.js";
-import { coldOpenPlan, defaultPlan } from "./framePlan.js";
+import { coldOpenPlan, defaultPlan, type FramePlan } from "./framePlan.js";
 import { COLD_OPEN_FRAMES, findGauntletColdOpen } from "../sim/coldOpen.js";
 import { byFaction } from "../content/teams.js";
 import {
@@ -58,11 +58,23 @@ interface Violation {
   detail: string;
 }
 
-function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
+/**
+ * Walks the *output* frames, not the simulation's.
+ *
+ * These are not the same list. A shipped video is a `FramePlan`: the cold open
+ * replays a stretch of the fight before it starts, and the closing card is
+ * `VICTORY_CARD_FRAMES` output frames all pointing at the last simulation frame
+ * and carrying `victoryOverlay`. Auditing `plan.map(p => p.source)` threw those
+ * flags away, so every rule below was only ever checked on a plain frame — and
+ * the closing card is exactly where the last round of defects lived.
+ */
+function auditFrames(result: GauntletResult, plan: FramePlan): Violation[] {
   const index = buildRenderIndex(result);
   const hud = hudLayout(result);
   const violations: Violation[] = [];
   const minHeight = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
+  const card = victoryCardLayout(result);
+  const FRAME_RECT: Rect = { name: "frame", x: 0, y: 0, w: WIDTH, h: HEIGHT };
 
   /**
    * Frames where somebody is mid-collapse.
@@ -88,8 +100,37 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
     r.x + r.w <= outer.x + outer.w &&
     r.y + r.h <= outer.y + outer.h;
 
-  for (const frame of frames) {
+  for (const [output, planned] of plan.entries()) {
+    const frame = planned.source;
     const layout = gauntletFrameLayout(result, frame, index, hud);
+
+    // The closing card is drawn on these frames and on no others, so this is
+    // the only place its rules can be checked against what is on screen.
+    if (planned.victoryOverlay === true) {
+      if (!contains(FRAME_RECT, card.plate)) {
+        violations.push({
+          frame: output,
+          rule: "victory card leaves the frame",
+          detail: `plate x ${card.plate.x}..${card.plate.x + card.plate.w}, y ${card.plate.y}..${card.plate.y + card.plate.h}`,
+        });
+      }
+      if (intersects(card.plate, ARENA_RECT)) {
+        violations.push({
+          frame: output,
+          rule: "victory card covers the arena",
+          detail: `plate y ${card.plate.y}..${card.plate.y + card.plate.h}, arena ends at ${ARENA_RECT.y + ARENA_RECT.h}`,
+        });
+      }
+      for (const line of card.lines) {
+        if (!contains(card.plate, line.rect)) {
+          violations.push({
+            frame: output,
+            rule: "victory card line leaves the plate",
+            detail: `${line.name} "${line.text}"`,
+          });
+        }
+      }
+    }
 
     // 1. HUD boxes never overlap each other.
     for (let i = 0; i < layout.hud.length; i += 1) {
@@ -169,15 +210,18 @@ function auditFrames(result: GauntletResult, frames: number[]): Violation[] {
           });
         }
       }
-      if (!contains(ARENA_RECT, number)) {
+      // Against the inner box, not the outer square: the outer one includes the
+      // 35px border, so the looser check passed numbers sitting on the wall —
+      // and "inside the arena" is the rule, the wall is not part of the inside.
+      if (!contains(ARENA_INNER, number)) {
         violations.push({
           frame,
           rule: "damage number outside the arena",
           detail:
             `${number.name} at x ${number.x.toFixed(0)}..${(number.x + number.w).toFixed(0)}, ` +
             `y ${number.y.toFixed(0)}..${(number.y + number.h).toFixed(0)} ` +
-            `(arena x ${ARENA_RECT.x}..${ARENA_RECT.x + ARENA_RECT.w}, ` +
-            `y ${ARENA_RECT.y}..${ARENA_RECT.y + ARENA_RECT.h})`,
+            `(arena x ${ARENA_INNER.x}..${ARENA_INNER.x + ARENA_INNER.w}, ` +
+            `y ${ARENA_INNER.y}..${ARENA_INNER.y + ARENA_INNER.h})`,
         });
       }
     }
@@ -216,8 +260,9 @@ function summarise(violations: Violation[]): string {
 
 describe("gauntlet composition", () => {
   const result = longRun();
-  const plan = defaultPlan(result, 0);
-  const allFrames = plan.map((p) => p.source);
+  // The plan `generate` builds, closing card and all — not a bare walk of the
+  // simulation. Those last 34 frames are output frames of the shipped video.
+  const plan = defaultPlan(result, VICTORY_CARD_FRAMES);
 
   it("reaches the last round, so every opponent is checked", () => {
     expect(result.rounds).toHaveLength(3);
@@ -225,7 +270,7 @@ describe("gauntlet composition", () => {
   });
 
   it("holds every frame of the video to the composition rules", () => {
-    const violations = auditFrames(result, allFrames);
+    const violations = auditFrames(result, plan);
     expect(summarise(violations)).toBe("");
     expect(violations).toHaveLength(0);
   }, 120_000);
@@ -411,11 +456,12 @@ describe("gauntlet composition", () => {
     // fight's own frame 0, so the thumbnail rules have to survive there.
     const window = findGauntletColdOpen(result);
     expect(window).not.toBeNull();
-    const plan = coldOpenPlan(result, window!, 0);
-    const violations = auditFrames(
-      result,
-      plan.slice(0, COLD_OPEN_FRAMES + 20).map((p) => p.source),
-    );
+    const opened = coldOpenPlan(result, window!, VICTORY_CARD_FRAMES);
+    // The opener and the cut, plus the closing card the same plan ends on.
+    const violations = auditFrames(result, [
+      ...opened.slice(0, COLD_OPEN_FRAMES + 20),
+      ...opened.slice(-VICTORY_CARD_FRAMES),
+    ]);
     expect(summarise(violations)).toBe("");
   });
 
@@ -567,13 +613,27 @@ describe("hp widget readability", () => {
    */
   const CANVAS = 400;
 
+  /**
+   * Pixels of the digit plate alone.
+   *
+   * Reading the whole canvas was the hole: the brightest pixel anywhere stood in
+   * for the digits, and above half HP that is the widget's own white fill.
+   * Measured by repainting `hpDigits` a mid grey (#6b6f76), whose true contrast
+   * against the plate is 3.01:1 — a clear failure. The old measurement returned
+   * 6.61 / 6.37 / 17.08 at 25 / 50 / 75% and passed all three.
+   */
   function renderWidget(share: number): Uint8ClampedArray {
     const canvas = createCanvas(CANVAS, CANVAS);
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = GAUNTLET_COLORS.background;
     ctx.fillRect(0, 0, CANVAS, CANVAS);
-    drawHpWidgetForTest(ctx, share);
-    return ctx.getImageData(0, 0, CANVAS, CANVAS).data;
+    const plate = drawHpWidgetForTest(ctx, share);
+    return ctx.getImageData(
+      Math.round(plate.x),
+      Math.round(plate.y),
+      Math.round(plate.w),
+      Math.round(plate.h),
+    ).data;
   }
 
   function luminance(r: number, g: number, b: number): number {
@@ -587,16 +647,32 @@ describe("hp widget readability", () => {
   for (const share of [0.25, 0.5, 0.75]) {
     it(`keeps the digits at 4.5:1 or better at ${share * 100}% HP`, () => {
       const pixels = renderWidget(share);
-      // Inside the bar, the digits are the light pixels and the plate is the
-      // dark ones. Measure what actually got drawn, not what the palette says.
+      // Inside the plate the digits are the light pixels; the plate itself is
+      // whatever colour most of the rectangle is. Measure what actually got
+      // drawn, not what the palette says.
       const lums: number[] = [];
+      const histogram = new Map<number, number>();
       for (let i = 0; i < pixels.length; i += 4) {
         lums.push(luminance(pixels[i]!, pixels[i + 1]!, pixels[i + 2]!));
+        const key = (pixels[i]! << 16) | (pixels[i + 1]! << 8) | pixels[i + 2]!;
+        histogram.set(key, (histogram.get(key) ?? 0) + 1);
       }
       const sorted = [...lums].sort((a, b) => a - b);
       const ink = sorted[Math.floor(sorted.length * 0.995)]!;
-      // Modal dark value inside the widget: the plate the digits sit on.
-      const plate = sorted[Math.floor(sorted.length * 0.02)]!;
+      // The modal colour, not the darkest: the darkest pixel is the black
+      // keyline around each digit, which flatters the reading by 5 points.
+      const [r, g, b] = (() => {
+        let bestKey = 0;
+        let bestCount = -1;
+        for (const [key, count] of histogram) {
+          if (count > bestCount) {
+            bestCount = count;
+            bestKey = key;
+          }
+        }
+        return [(bestKey >> 16) & 0xff, (bestKey >> 8) & 0xff, bestKey & 0xff];
+      })();
+      const plate = luminance(r!, g!, b!);
       const contrast = (ink + 0.05) / (plate + 0.05);
       expect(contrast, `contrast ${contrast.toFixed(2)}:1 at ${share * 100}% HP`)
         .toBeGreaterThanOrEqual(4.5);

@@ -67,7 +67,17 @@ src/cli/       generate, frame preview, progress, manifest
 **Determinism is the contract.** All randomness flows through a seeded
 mulberry32 stream, so a `(matchup, seed)` pair always replays the same fight,
 and a frame renders the same bytes no matter what was rendered before it — which
-is what lets frames be split across worker processes.
+is what lets frames be split across worker processes. Checked end to end rather
+than assumed: a shipped sample regenerated from its manifest row came back
+byte-identical, container and all.
+
+**A manifest row records the constants, not just the seed.** A seed and a
+matchup replay a different fight the moment a tuning number moves, and nothing
+in the row used to say which numbers were in force. Every row now carries a
+`provenance` block: the commit, a hash of `fighters.json`, the seed budget and
+the ending the search was asked for, and a snapshot of every constant the bytes
+depend on. `dirty: true` means the tree had uncommitted changes and the commit
+is a hint rather than a key.
 
 **The gauntlet is selected to a band, not to a maximum.** Scoring a run by how
 little the winner had left is monotone, and searching 400 seeds under it drove
@@ -90,6 +100,12 @@ and counts how many pixels change per frame; `motion.test.ts` fails under 8%, or
 over 5% of frames static. The reference channel measures 12.7% and 0%; before
 fighters had positions this project managed 3.0-4.9% with 9-27% of frames
 frozen, and no geometry rule could see it.
+
+The gated window is the middle of the file, and the ends do not behave like it:
+shipped videos measure 9.9-13.2% changed at the opening and 6.7-7.7% with
+22-30% static at the close, where the last round's death hold and the winner
+card sit. Both holds are deliberate, but the gate cannot tell a deliberate hold
+from a regression there, so `pnpm motion` prints all three windows.
 
 **Nothing stands still in the event stream either.** `src/sim/tempo.ts` measures the longest stretch of a
 finished video with no visible event, and `tempo.test.ts` fails the build over
@@ -135,10 +151,12 @@ up and smaller.
 
 Width, not the floor, is what limits how big they get: a fighter 30% of frame
 height is 430-590px wide, and two of those do not fit clear of each other in a
-924px arena. Measured with no overlap at all, 32 of 36 pairs miss the 30% target
-and 14 miss even the 22% floor. So the pair slides together by exactly the
-shortfall and no more — 22 of 36 stand fully clear, and `layout.test.ts` names
-the rest.
+924px arena. Measured over 12,067 frames of the shipped render path, the far
+fighter runs 20.2-31.8% of frame height and the near one 23.0-37.3%, averaging
+29.5%; the hard floor is 19% and no frame goes under it. The pair's boxes do
+cross — in every one of the 36 pairings at some point — because they close and
+break apart, and on the approach the silhouettes have to overlap. Depth and the
+4px keyline are what keep them readable, not separation.
 
 Nothing is loaded from disk — no third-party images, no real people, no
 borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into

@@ -55,6 +55,20 @@ export async function renderFramesParallel(
   }
 
   let done = 0;
+  /**
+   * Every worker of this render, so one failing takes the rest down with it.
+   *
+   * `Promise.all` rejects on the first failure but leaves the other promises
+   * running, and each of those is a forked process holding a core. In a batch
+   * that is the expensive kind of survivable: the failed video is caught and the
+   * run continues, on fewer cores than it thinks it has, for the rest of the
+   * night. There is nothing to salvage from a half-rendered frame directory.
+   */
+  const children: ReturnType<typeof fork>[] = [];
+  const killAll = (): void => {
+    for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill();
+  };
+
   await Promise.all(
     jobs.map(
       (job) =>
@@ -63,13 +77,16 @@ export async function renderFramesParallel(
             stdio: ["ignore", "inherit", "inherit", "ipc"],
             execArgv: WORKER_EXEC_ARGV,
           });
+          children.push(child);
           let settled = false;
           const finish = (error?: Error): void => {
             if (settled) return;
             settled = true;
             child.kill();
-            if (error) reject(error);
-            else resolve();
+            if (error) {
+              killAll();
+              reject(error);
+            } else resolve();
           };
 
           child.on("message", (message: WorkerMessage) => {

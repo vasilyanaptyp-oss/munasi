@@ -263,6 +263,54 @@ describe("generate", () => {
     expect(existsSync(join(outDir, ".frames", `quick_a-vs-quick_b-${entry.seed}`))).toBe(false);
   }, 300_000);
 
+  it("keeps going after one video fails, and records the ones that worked", async () => {
+    // A 30-video batch runs unattended for two hours; one bad matchup must cost
+    // one video, not the night. Broken for real rather than by a stub: the
+    // frames directory the first matchup is about to create is occupied by a
+    // file, so `mkdir` throws inside `generateOne` exactly as a full disk would.
+    const roster = [
+      ...quickRoster,
+      makeFighter({
+        id: "quick_c",
+        name: "QUICK C",
+        spriteId: "rogue:90",
+        maxHp: 120,
+        hp: 120,
+        attack: 20,
+        attackSpeed: 1.2,
+      }),
+    ];
+    const outDir = tempDir("munasi-generate-");
+    const { generateMatchups } = await import("../content/generateMatchups.js");
+    const { findBestMatch } = await import("../sim/drama.js");
+    const first = generateMatchups({ roster, sample: 4 })[0]!;
+    const best = findBestMatch({ a: first.a, b: first.b }, { count: 8 });
+
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(outDir, ".frames"), { recursive: true });
+    writeFileSync(join(outDir, ".frames", `${first.a.id}-vs-${first.b.id}-${best.seed}`), "in the way");
+
+    const summary = await generate({
+      count: 2,
+      seeds: 8,
+      outDir,
+      workers: 2,
+      matchupSample: 4,
+      keepFrames: false,
+      redo: false,
+      coldOpen: false,
+      duel: true,
+      roster,
+    });
+
+    expect(summary.failures).toHaveLength(1);
+    expect(summary.failures[0]!.matchup).toBe(`${first.a.name} vs ${first.b.name}`);
+    // The second one still ran, landed on disk, and made it into the manifest.
+    expect(summary.produced).toHaveLength(1);
+    expect(existsSync(join(outDir, summary.produced[0]!.file))).toBe(true);
+    expect(readManifest(outDir).entries).toHaveLength(1);
+  }, 300_000);
+
   it("skips matchups already in the manifest", async () => {
     const outDir = tempDir("munasi-generate-");
     writeManifest(outDir, {

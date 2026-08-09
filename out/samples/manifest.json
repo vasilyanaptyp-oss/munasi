@@ -31,6 +31,30 @@
           647,
           122
         ]
+      },
+      "provenance": {
+        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
+        "dirty": false,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
       }
     },
     {
@@ -64,6 +88,30 @@
           525,
           67
         ]
+      },
+      "provenance": {
+        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
+        "dirty": false,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
       }
     },
     {
@@ -105,6 +153,30 @@
         "damage": 291,
         "leadChanges": 0,
         "why": "biggest damage burst: 291 at 25.5s"
+      },
+      "provenance": {
+        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
+        "dirty": false,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
       }
     },
     {
@@ -146,6 +218,30 @@
         "damage": 238,
         "leadChanges": 0,
         "why": "biggest damage burst: 238 at 16.0s"
+      },
+      "provenance": {
+        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
+        "dirty": false,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
       }
     }
   ]

@@ -17,10 +17,14 @@ import {
  *   - the run is decided in the last round at least 70% of the time
  *   - the whole thing lasts 25-35 seconds
  *
- * Both sides carry the same ~1000 HP (as measured in the reference), so the
- * challenger's edge is damage. Two knobs, and they are close to orthogonal:
- * `tempo` scales *both* sides, moving length without touching the win rate;
- * `challengerPower` scales only the challenger, moving the win rate.
+ * Both sides carry their own roster HP — 1000 to 1400, workers and bosses drawn
+ * from the same range — so the challenger's edge has to be damage. Two knobs,
+ * and they are close to orthogonal: `tempo` scales *both* sides, moving length
+ * without touching the win rate; `challengerPower` scales only the challenger,
+ * moving the win rate.
+ *
+ * Every measurement here runs under `GAUNTLET_RULES` unless a caller asks for
+ * something else — see `sampleGauntlets`.
  */
 
 export interface GauntletStats {
@@ -48,9 +52,20 @@ export interface GauntletSampleOptions {
   limit?: number;
 }
 
+/**
+ * Measures a configuration over `runs` gauntlets.
+ *
+ * `rules` defaults to `GAUNTLET_RULES` — the shipped ones — and that default is
+ * load-bearing. It used to be `{}`, so every caller that forgot the argument
+ * silently measured a gauntlet nobody ships: 1v1 damage spread, no pickups, no
+ * opening cooldown, one swing per beat. That is where the 49.4% clear rate in
+ * the old reports came from. Measuring something else is still possible, it just
+ * has to be asked for.
+ */
 export function sampleGauntlets(options: GauntletSampleOptions = {}): GauntletStats {
   const runs = options.runs ?? 500;
   const tuning = options.tuning ?? GAUNTLET_TUNING;
+  const rules: GauntletRules = options.rules ?? GAUNTLET_RULES;
   const roster = loadFighters();
   const matchups = gauntletMatchups(roster);
   const limit = Math.min(options.limit ?? matchups.length, matchups.length);
@@ -69,7 +84,7 @@ export function sampleGauntlets(options: GauntletSampleOptions = {}): GauntletSt
     // whole roster rather than one pairing measured many times.
     const matchup = matchups[i % limit]!;
     const config = buildGauntlet(matchup.challenger, matchup.members, tuning);
-    const result = simulateGauntlet(config, i, options.rules ?? {});
+    const result = simulateGauntlet(config, i, rules);
 
     const drama = scoreGauntletDrama(result);
     dramaTotal += drama;
@@ -80,7 +95,7 @@ export function sampleGauntlets(options: GauntletSampleOptions = {}): GauntletSt
     frames += result.durationFrames;
 
     const lastRound = result.rounds.at(-1)!;
-    const capped = lastRound.endFrame - lastRound.startFrame >= (options.rules?.roundFrameCap ?? 20 * FPS) - 2;
+    const capped = lastRound.endFrame - lastRound.startFrame >= (rules.roundFrameCap ?? 20 * FPS) - 2;
     if (capped) timeouts += 1;
   }
 
@@ -181,16 +196,22 @@ function main(): void {
   header();
   // With GAUNTLET_RULES, not without. Passing no rules measured a gauntlet that
   // is not shipped — 1v1 damage spread, no pickups, no opening cooldown — and
-  // reported 49.4% clears for a build that actually clears 59.4%.
+  // reported 49.4% clears for a build that actually clears far more. The empty
+  // rules are still printed, but as a labelled comparison rather than by default.
   report("shipped", sampleGauntlets({ runs, rules: GAUNTLET_RULES }));
-  report("no rules (was reported)", sampleGauntlets({ runs }));
+  report("no rules (was reported)", sampleGauntlets({ runs, rules: {} }));
 
   if (args.includes("--variance")) {
     // Does the format still need fat crits? The gauntlet manufactures a close
     // finish on its own, so the wide damage spread may be doing nothing.
+    // Everything but the spread stays at the shipped rules, or the row measures
+    // three changes at once and blames them all on the variance.
     console.log();
     for (const variance of [0.35, 0.25, 0.15]) {
-      report(`variance +/-${(variance * 100).toFixed(0)}%`, sampleGauntlets({ runs, rules: { damageVariance: variance } }));
+      report(
+        `variance +/-${(variance * 100).toFixed(0)}%`,
+        sampleGauntlets({ runs, rules: { ...GAUNTLET_RULES, damageVariance: variance } }),
+      );
     }
   }
   console.log();

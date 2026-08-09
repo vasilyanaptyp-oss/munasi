@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Provenance } from "./provenance.js";
 
 export interface ManifestColdOpen {
   startFrame: number;
@@ -25,6 +26,14 @@ export interface ManifestEntry {
   winnerId: string | null;
   sizeBytes: number;
   generatedAt: string;
+  /**
+   * Commit and constants the row was cut at.
+   *
+   * Optional only so rows written before it existed still parse; everything
+   * `generate` writes from now on carries it. Without it a row is a seed and a
+   * matchup, and the fight those replay into changes every time a constant does.
+   */
+  provenance?: Provenance;
   /** Present when the video opens on an earlier moment of the fight. */
   coldOpen?: ManifestColdOpen;
   /** Present for gauntlet runs. */
