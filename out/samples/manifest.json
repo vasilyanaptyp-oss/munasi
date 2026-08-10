@@ -16,25 +16,10 @@
       "frames": 1085,
       "winnerId": "plumber",
       "sizeBytes": 10027483,
-      "generatedAt": "2026-08-09T08:24:29.335Z",
-      "gauntlet": {
-        "challengerId": "plumber",
-        "teamIds": [
-          "chairman",
-          "silencer",
-          "arbiter"
-        ],
-        "cleared": true,
-        "decidedInRound": 3,
-        "hpByRound": [
-          1078,
-          647,
-          122
-        ]
-      },
+      "generatedAt": "2026-08-10T17:27:49.977Z",
       "provenance": {
-        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
-        "dirty": false,
+        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
+        "dirty": true,
         "rosterHash": "9315f51160a31d56",
         "seedsSearched": 400,
         "wantedOutcome": "cleared",
@@ -55,6 +40,21 @@
           "victoryCardFrames": 34,
           "victoryFreezeFrames": 60
         }
+      },
+      "gauntlet": {
+        "challengerId": "plumber",
+        "teamIds": [
+          "chairman",
+          "silencer",
+          "arbiter"
+        ],
+        "cleared": true,
+        "decidedInRound": 3,
+        "hpByRound": [
+          1078,
+          647,
+          122
+        ]
       }
     },
     {
@@ -73,25 +73,10 @@
       "frames": 882,
       "winnerId": "baker",
       "sizeBytes": 7812217,
-      "generatedAt": "2026-08-09T08:26:48.201Z",
-      "gauntlet": {
-        "challengerId": "baker",
-        "teamIds": [
-          "silencer",
-          "councillor",
-          "viceroy"
-        ],
-        "cleared": true,
-        "decidedInRound": 3,
-        "hpByRound": [
-          789,
-          525,
-          67
-        ]
-      },
+      "generatedAt": "2026-08-10T17:29:29.201Z",
       "provenance": {
-        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
-        "dirty": false,
+        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
+        "dirty": true,
         "rosterHash": "9315f51160a31d56",
         "seedsSearched": 400,
         "wantedOutcome": "cleared",
@@ -112,6 +97,21 @@
           "victoryCardFrames": 34,
           "victoryFreezeFrames": 60
         }
+      },
+      "gauntlet": {
+        "challengerId": "baker",
+        "teamIds": [
+          "silencer",
+          "councillor",
+          "viceroy"
+        ],
+        "cleared": true,
+        "decidedInRound": 3,
+        "hpByRound": [
+          789,
+          525,
+          67
+        ]
       }
     },
     {
@@ -130,7 +130,31 @@
       "frames": 1103,
       "winnerId": "inspector",
       "sizeBytes": 9455378,
-      "generatedAt": "2026-08-09T08:29:54.015Z",
+      "generatedAt": "2026-08-10T17:31:16.095Z",
+      "provenance": {
+        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
+        "dirty": true,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
       "gauntlet": {
         "challengerId": "loader",
         "teamIds": [
@@ -153,30 +177,6 @@
         "damage": 291,
         "leadChanges": 0,
         "why": "biggest damage burst: 291 at 25.5s"
-      },
-      "provenance": {
-        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
-        "dirty": false,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
-        "wantedOutcome": "stopped",
-        "constants": {
-          "tuning": {
-            "tempo": 1.03,
-            "challengerPower": 2.74
-          },
-          "rules": {
-            "damageVariance": 0.15,
-            "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
-          },
-          "duelDamageVariance": 0.35,
-          "roundHoldFrames": 26,
-          "roundFrameCap": 600,
-          "victoryCardFrames": 34,
-          "victoryFreezeFrames": 60
-        }
       }
     },
     {
@@ -195,7 +195,31 @@
       "frames": 866,
       "winnerId": "nailmaster",
       "sizeBytes": 8578402,
-      "generatedAt": "2026-08-09T08:32:26.260Z",
+      "generatedAt": "2026-08-10T17:32:27.554Z",
+      "provenance": {
+        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
+        "dirty": true,
+        "rosterHash": "9315f51160a31d56",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 2.74
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 3,
+            "pickups": {}
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 600,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
       "gauntlet": {
         "challengerId": "nailmaster",
         "teamIds": [
@@ -218,30 +242,6 @@
         "damage": 238,
         "leadChanges": 0,
         "why": "biggest damage burst: 238 at 16.0s"
-      },
-      "provenance": {
-        "commit": "a73fa1261a8ebff9b64b9c4a7b3c1294a3c8cd90",
-        "dirty": false,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
-        "wantedOutcome": "cleared",
-        "constants": {
-          "tuning": {
-            "tempo": 1.03,
-            "challengerPower": 2.74
-          },
-          "rules": {
-            "damageVariance": 0.15,
-            "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
-          },
-          "duelDamageVariance": 0.35,
-          "roundHoldFrames": 26,
-          "roundFrameCap": 600,
-          "victoryCardFrames": 34,
-          "victoryFreezeFrames": 60
-        }
       }
     }
   ]
