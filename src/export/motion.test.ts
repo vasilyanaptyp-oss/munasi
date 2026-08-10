@@ -2,15 +2,14 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
 import { findBestGauntlet } from "../sim/gauntlet.js";
-import { defaultPlan } from "../render/framePlan.js";
+import { defaultPlan, VICTORY_CARD_FRAMES } from "../render/framePlan.js";
 import { renderFrames } from "../render/index.js";
-import { VICTORY_CARD_FRAMES } from "../render/gauntletLayout.js";
 import { exportVideo } from "./video.js";
-import { describeMotion, measureMotion, MOTION_TARGET } from "./motion.js";
+import { describeMotion, judgeMotion, STATIC_TAIL_ALLOWANCE } from "./motion.js";
 
 /**
  * Motion gate — the one that catches what the geometry gates cannot.
@@ -23,10 +22,18 @@ import { describeMotion, measureMotion, MOTION_TARGET } from "./motion.js";
  * Reference channel, same method: 12.7% of pixels changing per frame and not a
  * single static frame. Before fighters had positions ours managed 3.0-4.9%
  * with 9-27% of frames static.
+ *
+ * **The whole file is measured, not a window.** It used to be six seconds from
+ * the middle, and the middle is the kindest part: the closing stretch of shipped
+ * videos ran 6.7-7.7% changed with 22-30% of frames static — failing numbers, on
+ * files that passed. The end really is allowed to hold still, so the allowance
+ * is named and bounded instead of being hidden by where the gate happened to
+ * look.
  */
 
 const roster = loadFighters();
 let workdir: string | null = null;
+let video: string | null = null;
 
 afterAll(() => {
   if (workdir) rmSync(workdir, { recursive: true, force: true });
@@ -43,7 +50,7 @@ function hasFfmpeg(): boolean {
 }
 
 describe.runIf(hasFfmpeg())("motion", () => {
-  it("moves as much as the reference does", async () => {
+  beforeAll(async () => {
     workdir = mkdtempSync(join(tmpdir(), "munasi-motion-"));
     const config = buildGauntlet(
       getFighter("plumber", roster),
@@ -58,11 +65,43 @@ describe.runIf(hasFfmpeg())("motion", () => {
       outDir: workdir,
       silent: true,
     });
-
-    const report = measureMotion(exported.path);
-    expect(report.meanChanged, describeMotion(report)).toBeGreaterThanOrEqual(
-      MOTION_TARGET.meanChanged,
-    );
-    expect(report.staticShare, describeMotion(report)).toBeLessThan(MOTION_TARGET.staticShare);
+    video = exported.path;
   }, 600_000);
+
+  it("moves as much as the reference does, over the whole file", () => {
+    const verdict = judgeMotion(video!);
+    const summary =
+      `whole file: ${describeMotion(verdict.whole)}; ` +
+      `body: ${describeMotion(verdict.body)}; ` +
+      `${verdict.staticFrames} static frames against an allowance of ${STATIC_TAIL_ALLOWANCE}`;
+    expect(verdict.failures.join("\n"), summary).toBe("");
+  }, 120_000);
+
+  it("fails when the stillness runs past the closing card", () => {
+    // The allowance has to bite, or it is only a wider window with extra steps.
+    // A second of frozen frames welded onto the same video must fail.
+    const frozen = join(workdir!, "frozen.mp4");
+    execFileSync("ffmpeg", [
+      "-y",
+      "-v",
+      "error",
+      "-i",
+      video!,
+      "-vf",
+      "tpad=stop_mode=clone:stop_duration=1.5",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-an",
+      frozen,
+    ]);
+    const verdict = judgeMotion(frozen);
+    expect(verdict.staticBeyondAllowance).toBeGreaterThan(0);
+    expect(verdict.failures.join("\n")).toMatch(/static frames in the file/);
+  }, 120_000);
 });

@@ -7,7 +7,7 @@ import { ROUND_FRAME_CAP, ROUND_HOLD_FRAMES } from "../sim/gauntlet.js";
 import { DAMAGE_VARIANCE } from "../sim/simulate.js";
 import type { PickupRules } from "../sim/types.js";
 import { VICTORY_FREEZE_FRAMES } from "../export/video.js";
-import { VICTORY_CARD_FRAMES } from "../render/gauntletLayout.js";
+import { VICTORY_CARD_FRAMES } from "../render/framePlan.js";
 
 /**
  * What a manifest row needs to be worth anything in a month.

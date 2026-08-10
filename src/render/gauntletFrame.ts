@@ -16,6 +16,7 @@ import {
   DAMAGE_NUMBER_FRAMES,
   gauntletFrameLayout,
   hudLayout,
+  MINION_OUTLINE,
   numberText,
   victoryCardLayout,
   type GauntletFrameLayout,
@@ -539,31 +540,29 @@ export function renderGauntletFrame(
   for (const { state, fighter, place, size, facing } of sides) {
     const vis = visualState(index, frame, state.id);
 
-    // Minions cluster behind their owner, on the ground line.
-    snap.minions
-      .filter((m) => m.ownerId === state.id)
-      .forEach((minion, i) => {
-        const side = i % 2 === 0 ? -1 : 1;
-        const mx = place.centre.x + side * (place.sprite.w * 0.6 + Math.floor(i / 2) * L.minionSize);
-        const my = layout.groundY - L.minionSize * 0.5;
-        ctx.save();
-        ctx.translate(mx, my);
-        drawFighter(ctx, fighter.spriteId, {
-          size: L.minionSize,
-          facing,
-          frame,
-          asMinion: true,
-          lungeAxis: "x",
-          outline: Math.round(FIGHTER_OUTLINE * 0.7),
-        });
-        ctx.restore();
-        const w = L.minionSize * 0.7;
-        const share = Math.max(0, Math.min(1, minion.hp / minion.maxHp));
-        ctx.fillStyle = "rgba(0,0,0,0.55)";
-        ctx.fillRect(mx - w / 2, my + L.minionSize * 0.6, w, 7);
-        ctx.fillStyle = C.buffText;
-        ctx.fillRect(mx - w / 2, my + L.minionSize * 0.6, w * share, 7);
+    // Minions cluster behind their owner, on the ground line. Where exactly is
+    // the layout's business, not this function's: placing them inline meant
+    // nothing held them inside the arena wall and no gate could see that they
+    // were not.
+    for (const minion of layout.minions) {
+      if (minion.ownerId !== state.id) continue;
+      ctx.save();
+      ctx.translate(minion.origin.x, minion.origin.y);
+      drawFighter(ctx, fighter.spriteId, {
+        size: L.minionSize,
+        facing,
+        frame,
+        asMinion: true,
+        lungeAxis: "x",
+        outline: MINION_OUTLINE,
       });
+      ctx.restore();
+      const share = Math.max(0, Math.min(1, minion.hp / minion.maxHp));
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(minion.bar.x, minion.bar.y, minion.bar.w, minion.bar.h);
+      ctx.fillStyle = C.buffText;
+      ctx.fillRect(minion.bar.x, minion.bar.y, minion.bar.w * share, minion.bar.h);
+    }
 
     ctx.save();
     ctx.translate(place.centre.x, place.centre.y);

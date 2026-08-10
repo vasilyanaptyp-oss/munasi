@@ -38,6 +38,7 @@ synthesised into `assets/audio/` the first time you export.
 | `pnpm calibrate:gauntlet` | gauntlet balance table (`--solve`, `--variance`) |
 | `pnpm test` / `pnpm typecheck` | tests and types |
 | `pnpm motion out/samples/*.mp4` | how much a finished video actually moves |
+| `pnpm smoke` | one video end to end on the shipped path, then rebuilt from its manifest row |
 
 `generate` skips pairs already in the manifest, so running it again continues
 where the last batch left off. `--redo` starts from the top, `--seeds N`
@@ -61,7 +62,7 @@ src/sim/       simulation and drama scoring — pure, no rendering, no I/O
 src/render/    snapshots -> PNG frames (@napi-rs/canvas), single or multi-process
 src/export/    frames + synthesised audio -> mp4 (ffmpeg)
 src/content/   the roster, its calibration, and balance tooling
-src/cli/       generate, frame preview, progress, manifest
+src/cli/       generate, frame preview, motion, smoke, progress, manifest, provenance
 ```
 
 **Determinism is the contract.** All randomness flows through a seeded
@@ -95,17 +96,19 @@ stayed in doubt.
 **Nothing stands still — measured on the mp4, not on the layout.** Fighters
 carry positions in the simulation and move: close, strike, fall back, slide
 sideways. The camera pans after the midpoint between them and zooms to their
-spread. `src/export/motion.ts` decodes a six-second window of the delivered file
-and counts how many pixels change per frame; `motion.test.ts` fails under 8%, or
-over 5% of frames static. The reference channel measures 12.7% and 0%; before
+spread. `src/export/motion.ts` decodes the delivered file and counts how many
+pixels change per frame; `motion.test.ts` fails under 8%, or over 5% of frames
+static. The reference channel measures 12.7% and 0%; before
 fighters had positions this project managed 3.0-4.9% with 9-27% of frames
 frozen, and no geometry rule could see it.
 
-The gated window is the middle of the file, and the ends do not behave like it:
-shipped videos measure 9.9-13.2% changed at the opening and 6.7-7.7% with
-22-30% static at the close, where the last round's death hold and the winner
-card sit. Both holds are deliberate, but the gate cannot tell a deliberate hold
-from a regression there, so `pnpm motion` prints all three windows.
+The gate reads the whole file, not a window. The body has to clear those
+thresholds; the file as a whole may hold no more still frames than the closing
+death hold and winner card account for — 60, and the sixty-first fails the
+build. That allowance is what makes a deliberate pause distinguishable from a
+regression, and it replaced a six-second window from the middle that could not
+see the closing stretch at all: shipped videos measure 6.7-7.7% changed with
+22-30% static there, numbers that fail the gate, on files that passed it.
 
 **Nothing stands still in the event stream either.** `src/sim/tempo.ts` measures the longest stretch of a
 finished video with no visible event, and `tempo.test.ts` fails the build over

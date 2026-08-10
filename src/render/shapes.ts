@@ -48,23 +48,6 @@ export function box(ctx: Ctx, x: number, y: number, w: number, h: number, fill: 
   ctx.fillRect(x - w / 2, y - h / 2, w, h);
 }
 
-/** Box rotated about its own centre — for props held at an angle. */
-export function tiltedBox(
-  ctx: Ctx,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  angle: number,
-  fill: string,
-): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  box(ctx, 0, 0, w, h, fill);
-  ctx.restore();
-}
-
 export function roundedBox(
   ctx: Ctx,
   x: number,
@@ -123,5 +106,4 @@ export function blink(frame: number, period: number, offset = 0): number {
   return phase < 3 ? phase / 3 : 1;
 }
 
-export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 export const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);

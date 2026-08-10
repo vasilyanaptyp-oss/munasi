@@ -39,7 +39,3 @@ const BY_ID = new Map(FIGHTER_ART.map((art) => [art.id, art]));
 export function artFor(spriteId: string): FighterArt | undefined {
   return BY_ID.get(spriteId);
 }
-
-export function hasArt(spriteId: string): boolean {
-  return BY_ID.has(spriteId);
-}

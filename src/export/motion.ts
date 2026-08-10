@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { ROUND_HOLD_FRAMES } from "../sim/gauntlet.js";
 import { FPS } from "../sim/types.js";
+import { VICTORY_CARD_FRAMES } from "../render/framePlan.js";
 
 /**
  * How much the picture actually moves, measured on the encoded mp4.
@@ -41,6 +43,21 @@ export interface MotionOptions {
   startShare?: number;
 }
 
+/**
+ * Frames at the end of a gauntlet that are *meant* to hold still.
+ *
+ * The last round's death hold plus the closing card. This is the whole reason
+ * the gate can look at the entire file instead of one comfortable window: a
+ * still frame is either inside this allowance or it is a regression, and the
+ * two used to be indistinguishable because the gate only ever measured the
+ * middle six seconds. Measured on shipped videos, the closing stretch ran
+ * 6.7-7.7% changed with 22-30% of frames static — numbers that fail the gate's
+ * own thresholds, on files that passed.
+ *
+ * Derived, not written down: both halves are the constants the pipeline uses.
+ */
+export const STATIC_TAIL_ALLOWANCE = ROUND_HOLD_FRAMES + VICTORY_CARD_FRAMES;
+
 /** Duration of an encoded file, in seconds. */
 export function videoDuration(path: string): number {
   const out = execFileSync(
@@ -70,16 +87,21 @@ export function measureMotion(path: string, options: MotionOptions = {}): Motion
   const startShare = options.startShare ?? 0.5;
   const duration = videoDuration(path);
   const start = Math.max(0, duration * startShare - windowSeconds / 2);
+  return report(decode(path, ["-ss", start.toFixed(3), "-t", windowSeconds.toFixed(3)]));
+}
 
+/** Every frame of the file, in order. */
+export function measureWholeVideo(path: string): MotionReport {
+  return report(decode(path, []));
+}
+
+function decode(path: string, seek: string[]): number[] {
   const raw = execFileSync(
     "ffmpeg",
     [
       "-v",
       "error",
-      "-ss",
-      start.toFixed(3),
-      "-t",
-      windowSeconds.toFixed(3),
+      ...seek,
       "-i",
       path,
       "-vf",
@@ -107,21 +129,74 @@ export function measureMotion(path: string, options: MotionOptions = {}): Motion
     }
     perFrame.push(changed / pixels);
   }
+  return perFrame;
+}
 
+function report(perFrame: number[]): MotionReport {
   const meanChanged = perFrame.reduce((a, b) => a + b, 0) / perFrame.length;
-  const staticShare = perFrame.filter((share) => share < 0.01).length / perFrame.length;
+  const staticShare = perFrame.filter((share) => share < STATIC_BELOW).length / perFrame.length;
   return { meanChanged, staticShare, perFrame, framesMeasured: perFrame.length };
 }
 
+/** A frame that changed less than this is standing still. */
+const STATIC_BELOW = 0.01;
+
+export interface WholeVideoVerdict {
+  /** Every frame of the file. */
+  whole: MotionReport;
+  /** The file minus the frames the closing hold and card are allowed. */
+  body: MotionReport;
+  /** Static frames anywhere in the file. */
+  staticFrames: number;
+  /** Static frames outside the tail allowance — these are the ones that count. */
+  staticBeyondAllowance: number;
+  failures: string[];
+}
+
 /**
- * Thresholds the gate holds videos to — **in the middle window only.**
+ * The gate, over the whole file rather than one window.
  *
- * Worth knowing before trusting a passing run: measured on the shipped samples,
- * the closing six seconds run 6.7-7.7% changed with 22-30% of frames static, so
- * they would fail both numbers. Most of that is on purpose (26 frames of death
- * hold at the end of the last round, then 34 frames of the winner card), but the
- * gate cannot tell deliberate stillness from a regression there, because it
- * never looks. `pnpm motion` prints all three windows for that reason.
+ * Two rules. The body — everything before the tail allowance — has to move like
+ * the reference and hold still almost never. And the file as a whole may not
+ * contain more still frames than the closing hold and card explain, which is
+ * what makes a deliberate pause distinguishable from a regression: if the end
+ * grows or the middle starts freezing, the count goes over and this fails.
+ */
+export function judgeMotion(path: string): WholeVideoVerdict {
+  const perFrame = decode(path, []);
+  const whole = report(perFrame);
+  const bodyFrames = perFrame.slice(0, Math.max(1, perFrame.length - STATIC_TAIL_ALLOWANCE));
+  const body = report(bodyFrames);
+
+  const staticFrames = perFrame.filter((s) => s < STATIC_BELOW).length;
+  const staticBeyondAllowance = Math.max(0, staticFrames - STATIC_TAIL_ALLOWANCE);
+
+  const failures: string[] = [];
+  if (body.meanChanged < MOTION_TARGET.meanChanged) {
+    failures.push(
+      `body moves ${(body.meanChanged * 100).toFixed(1)}% per frame, under the ` +
+        `${(MOTION_TARGET.meanChanged * 100).toFixed(0)}% floor`,
+    );
+  }
+  if (body.staticShare >= MOTION_TARGET.staticShare) {
+    failures.push(
+      `${(body.staticShare * 100).toFixed(1)}% of body frames are static, over the ` +
+        `${(MOTION_TARGET.staticShare * 100).toFixed(0)}% limit`,
+    );
+  }
+  if (staticBeyondAllowance > 0) {
+    failures.push(
+      `${staticFrames} static frames in the file, ${staticBeyondAllowance} more than the ` +
+        `${STATIC_TAIL_ALLOWANCE} the death hold and closing card account for`,
+    );
+  }
+  return { whole, body, staticFrames, staticBeyondAllowance, failures };
+}
+
+/**
+ * Thresholds the gate holds videos to, applied to the body of the file — see
+ * `judgeMotion`, which measures every frame and lets the closing hold and card
+ * have `STATIC_TAIL_ALLOWANCE` still frames and not one more.
  */
 export const MOTION_TARGET = {
   /** Reference measures 12.7%. */

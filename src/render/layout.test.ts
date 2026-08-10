@@ -5,7 +5,7 @@ import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/team
 import { findBestGauntlet, simulateGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import { DEATH_FRAMES } from "./drawFighter.js";
 import { buildRenderIndex } from "./frame.js";
-import { coldOpenPlan, defaultPlan, type FramePlan } from "./framePlan.js";
+import { coldOpenPlan, defaultPlan, VICTORY_CARD_FRAMES, type FramePlan } from "./framePlan.js";
 import { COLD_OPEN_FRAMES, findGauntletColdOpen } from "../sim/coldOpen.js";
 import { byFaction } from "../content/teams.js";
 import {
@@ -14,15 +14,11 @@ import {
   gauntletFrameLayout,
   hudLayout,
   intersects,
-  MIN_FIGHTER_HEIGHT_SHARE,
-  roundPlacement,
-  TARGET_FIGHTER_HEIGHT_SHARE,
   victoryCardLayout,
-  VICTORY_CARD_FRAMES,
   type Rect,
 } from "./gauntletLayout.js";
 import { drawHpWidgetForTest } from "./gauntletFrame.js";
-import { ARENA, GAUNTLET_COLORS } from "./gauntletTheme.js";
+import { ARENA, GAUNTLET_COLORS, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
 import { meanLightness } from "./silhouette.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 import { FPS } from "../sim/types.js";
@@ -181,6 +177,27 @@ function auditFrames(result: GauntletResult, plan: FramePlan): Violation[] {
         });
       }
     }
+    // 2b. Summons are held to the same wall guarantee as bodies.
+    for (const minion of layout.minions) {
+      if (!contains(ARENA_INNER, minion.reach)) {
+        violations.push({
+          frame,
+          rule: "minion crosses the arena wall",
+          detail:
+            `${minion.reach.name} x ${minion.reach.x.toFixed(0)}..` +
+            `${(minion.reach.x + minion.reach.w).toFixed(0)} ` +
+            `(arena x ${ARENA_INNER.x}..${ARENA_INNER.x + ARENA_INNER.w})`,
+        });
+      }
+      if (!contains(minion.reach, minion.bar)) {
+        violations.push({
+          frame,
+          rule: "minion health bar outside its own box",
+          detail: minion.bar.name,
+        });
+      }
+    }
+
     // The pair may cross now that both of them move — they are staged at two
     // depths and the near one is drawn over the far one, which is how the
     // reference reads it. What must hold is the depth, checked below.
@@ -366,58 +383,24 @@ describe("gauntlet composition", () => {
     expect(layout.challenger.hp.w).toBeGreaterThan(WIDTH * 0.1);
   });
 
-  it("holds the rules for every worker-versus-boss pair, not just this one", () => {
-    // Placement is solved per round from the two fighters' measured extents,
-    // so every pairing has to be checked, not the one this video happens to use.
+  it("holds the composition rules for every worker-versus-boss pair", () => {
+    // Feasibility used to be argued by a separate solver that the renderer did
+    // not call, against a static worst case. It is argued here instead: every
+    // one of the 36 pairings is simulated and walked through the same layout the
+    // renderer draws from, on a spread of frames per pairing.
     const failures: string[] = [];
-    const shortOfTarget: string[] = [];
-    const overlapping: string[] = [];
     for (const worker of byFaction("workers", roster)) {
       for (const boss of byFaction("bosses", roster)) {
-        const p = roundPlacement(worker.spriteId, boss.spriteId);
-        const floor = MIN_FIGHTER_HEIGHT_SHARE;
-        if (p.shareFar < floor || p.shareNear < floor) {
-          failures.push(
-            `${worker.id} × ${boss.id}: ${(p.shareFar * 100).toFixed(1)}% / ` +
-              `${(p.shareNear * 100).toFixed(1)}% below the ${(floor * 100).toFixed(0)}% floor`,
-          );
-        }
-        if (p.overlap > 1e-6) {
-          overlapping.push(`${worker.id} × ${boss.id} (${(p.overlap * 100).toFixed(0)}%)`);
-        }
-        if (p.limitedBy !== "target") {
-          shortOfTarget.push(
-            `${worker.id} × ${boss.id}: near ${(p.shareNear * 100).toFixed(1)}% ` +
-              `(limited by ${p.limitedBy})`,
-          );
-        }
-        // Everything either fighter ever draws has to fit inside the arena.
-        const span = p.separation + (p.reachRight - p.reachLeft);
-        if (span > ARENA_INNER.w) {
-          failures.push(
-            `${worker.id} × ${boss.id}: needs ${span.toFixed(0)}px, arena is ${ARENA_INNER.w}px`,
-          );
-        }
-        // The far fighter is drawn smaller than the near one, always.
-        if (p.sizeFar >= p.sizeNear) {
-          failures.push(`${worker.id} × ${boss.id}: far fighter is not smaller than the near one`);
+        const run = simulateGauntlet(buildGauntlet(worker, [boss]), 3, GAUNTLET_RULES);
+        const plan = defaultPlan(run, VICTORY_CARD_FRAMES).filter((_, i) => i % 7 === 0);
+        const violations = auditFrames(run, plan);
+        if (violations.length > 0) {
+          failures.push(`${worker.id} × ${boss.id}: ${summarise(violations)}`);
         }
       }
     }
-    expect(failures).toEqual([]);
-    if (overlapping.length > 0) {
-      console.warn(
-        `pairs too wide to stand clear inside the arena (${overlapping.length}/36): ` +
-          overlapping.join(", "),
-      );
-    }
-    if (shortOfTarget.length > 0) {
-      console.warn(
-        `below the ${(TARGET_FIGHTER_HEIGHT_SHARE * 100).toFixed(0)}% target ` +
-          `(${shortOfTarget.length}/36):\n  ${shortOfTarget.join("\n  ")}`,
-      );
-    }
-  });
+    expect(failures.join("\n")).toBe("");
+  }, 300_000);
 
   it("works as a feed thumbnail on frame 0", () => {
     // Frame 0 is the still image the feed shows before anyone presses play, so

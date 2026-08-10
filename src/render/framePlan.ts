@@ -39,6 +39,17 @@ export function defaultPlan(result: Timeline, victoryFrames = 0): FramePlan {
   return plan;
 }
 
+/**
+ * Frames the gauntlet's closing card is held. Capped so the video does not end
+ * on a wall of static — 34 frames is 1.13s.
+ *
+ * Lives here rather than in the layout because it is a property of the plan, and
+ * because `src/export/motion.ts` needs the number to know how much stillness the
+ * end of a video is allowed to have. Importing it from the layout dragged the
+ * canvas and the font loader into a module that only wanted an integer.
+ */
+export const VICTORY_CARD_FRAMES = 34;
+
 /** Frames of white flash on the cut back to the start. */
 const CUT_FLASH_FRAMES = 4;
 /** Frames the "start" badge stays up after the cut. */

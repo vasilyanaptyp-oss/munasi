@@ -147,7 +147,24 @@ const motionCache = new Map<string, SpriteBounds>();
  * smaller than it needs to be).
  */
 export function spriteMotionBounds(spriteId: string, includeDeath = true): SpriteBounds {
-  const key = includeDeath ? spriteId : `${spriteId}:alive`;
+  return sampleMotion(spriteId, includeDeath, false);
+}
+
+/**
+ * The same measurement for a fighter's summon.
+ *
+ * A minion is `drawFighter` with `asMinion`, which is a different shape at a
+ * different size, so it needs its own envelope rather than a share of the box it
+ * is drawn in. The difference is not small: a councillor's summon draws 77px
+ * across inside a 119px box, and guessing at the box instead of measuring the
+ * figure is how this project has got its geometry wrong every previous time.
+ */
+export function minionMotionBounds(spriteId: string): SpriteBounds {
+  return sampleMotion(spriteId, false, true);
+}
+
+function sampleMotion(spriteId: string, includeDeath: boolean, asMinion: boolean): SpriteBounds {
+  const key = `${spriteId}${asMinion ? ":minion" : ""}${includeDeath ? "" : ":alive"}`;
   const cached = motionCache.get(key);
   if (cached) return cached;
 
@@ -191,6 +208,7 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
         ...(pose.strike === undefined ? {} : { strike: pose.strike }),
         ...(pose.death === undefined ? {} : { death: pose.death }),
         ...(pose.hurt === undefined ? {} : { hurt: pose.hurt }),
+        ...(asMinion ? { asMinion: true } : {}),
       });
       ctx.restore();
       const pixels = ctx.getImageData(0, 0, RENDER_SIZE, RENDER_SIZE).data;
@@ -205,7 +223,7 @@ export function spriteMotionBounds(spriteId: string, includeDeath = true): Sprit
       }
     }
   }
-  if (maxX === Number.NEGATIVE_INFINITY) throw new Error(`spriteMotionBounds: ${spriteId} drew nothing`);
+  if (maxX === Number.NEGATIVE_INFINITY) throw new Error(`sampleMotion: ${spriteId} drew nothing`);
 
   const centre = RENDER_SIZE / 2;
   const bounds: SpriteBounds = {

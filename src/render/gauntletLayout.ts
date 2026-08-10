@@ -8,7 +8,7 @@ import {
   HP_WIDGET_SLOTS,
 } from "./gauntletTheme.js";
 import { cameraTrack, depthScale, groundAt, worldToScreen } from "./gauntletCamera.js";
-import { spriteBounds, spriteMotionBounds } from "./silhouette.js";
+import { minionMotionBounds, spriteBounds, spriteMotionBounds } from "./silhouette.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
 import type { Canvas } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
@@ -27,11 +27,12 @@ import { createCanvas } from "@napi-rs/canvas";
  * (`MIN_FIGHTER_HEIGHT_SHARE`, 19%) is met by zooming the camera in, never by
  * growing the arena or moving its walls.
  *
- * `gauntletFrameLayout` reads the camera track from `gauntletCamera.ts`.
- * `roundPlacement` below solves the same geometry a different way and **nothing
- * in the render path calls it** — it survives as the all-pairs feasibility check
- * in `layout.test.ts`, and the numbers it reports describe that solver, not the
- * frames that ship.
+ * `gauntletFrameLayout` reads the camera track from `gauntletCamera.ts`. There
+ * used to be a second solver here, `roundPlacement`, left from the version
+ * without movement; it answered the same questions from a static worst case and
+ * nothing in the render path called it. It is gone, along with the gate that
+ * measured it. Feasibility is now proved where it is felt: the per-frame gate
+ * walks real rendered frames of all 36 pairings.
  */
 
 export interface Rect {
@@ -74,6 +75,21 @@ export interface GauntletFrameLayout {
   hud: Rect[];
   /** Floating damage numbers currently on screen. */
   damageNumbers: Rect[];
+  /** Summons on screen this frame, placed and held inside the arena wall. */
+  minions: MinionPlacement[];
+}
+
+export interface MinionPlacement {
+  /** Which fighter summoned it, so the renderer picks the right sprite. */
+  ownerId: string;
+  /** Where `drawFighter` is centred. Read this rather than recomputing it. */
+  origin: { x: number; y: number };
+  /** Everything this summon draws, keyline and health bar included. */
+  reach: Rect;
+  /** The little health bar under it. */
+  bar: Rect;
+  hp: number;
+  maxHp: number;
 }
 
 export function intersects(a: Rect, b: Rect): boolean {
@@ -101,40 +117,10 @@ export const ARENA_INNER: Rect = {
 /** Frames a damage number stays up, matching the renderer. */
 export const DAMAGE_NUMBER_FRAMES = 15;
 
-/**
- * Height the near fighter is aimed at, as a share of the frame. The far one
- * follows at 1 / `ARENA.nearScale` of it, which is what depth means.
- */
-export const TARGET_FIGHTER_HEIGHT_SHARE = 0.3;
-/**
- * Hard floor, lowered from 22% when the fighters were given positions.
- *
- * Four requirements meet here and the last one has to give: the arena is a
- * fixed 924px square, nothing either fighter draws may cross its wall, the pair
- * travels back and forth, and fighters must stay readable. At the widest
- * moments of a round the camera has to pull back to keep the wall guarantee,
- * and everything on screen shrinks with it. Measured: 20.4% at the worst
- * moment of a run against 24-30% for most of it.
- *
- * The levers that would buy the 2 points back are the arena's own size and the
- * travel distance, both of which cost more than they return.
- */
-export const MIN_FIGHTER_HEIGHT_SHARE = 0.19;
-/** Clear space kept between the two fighters' resting boxes. */
-const BODY_GAP = Math.round(WIDTH * 0.016);
 /** Breathing room inside the arena walls, where the pair has to stay. */
 const ARENA_PAD = Math.round(WIDTH * 0.01);
-/** Width the pair, and everything it ever draws, must fit into. */
-const ARENA_BUDGET = ARENA.inner.w - ARENA_PAD * 2;
 /** Gap kept between the two HP widgets. */
 const HP_WIDGET_GAP = Math.round(WIDTH * 0.02);
-/** Clearance kept under the arena's roof. */
-const HEAD_PAD = Math.round(HEIGHT * 0.006);
-/**
- * Vertical clearance the size solve reserves: the camera's vertical pan plus
- * the keyline, both of which move drawn pixels after the size is chosen.
- */
-const VERTICAL_PAD = HEAD_PAD + FIGHTER_OUTLINE + 2;
 
 /**
  * Floor of the band damage numbers may occupy: under the HP widgets, inside the
@@ -259,151 +245,6 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   };
 }
 
-export interface RoundPlacement {
-  /** Scale of the far fighter (the challenger) and the near one (the boss). */
-  sizeFar: number;
-  sizeNear: number;
-  /** Distance between the two origins, far to near. */
-  separation: number;
-  /** Leftmost and rightmost pixel the pair ever draws, relative to the far origin. */
-  reachLeft: number;
-  reachRight: number;
-  /** Height each fighter ends up at, as a share of the frame. */
-  shareFar: number;
-  shareNear: number;
-  /**
-   * Resting-box overlap in fighter-size units, 0 for most pairs. Non-zero only
-   * where standing clear would push a fighter under the height floor.
-   */
-  overlap: number;
-  /** Which constraint decided the size. "target" means the pair got what it asked for. */
-  limitedBy: "target" | "width" | "roof";
-}
-
-/**
- * Stable per-round geometry: two scales, two ground lines, one separation.
- *
- * **The pair is staged in depth, not on a shared floor.** The near fighter — the
- * team's, always, so the challenger reads as the one facing something bigger —
- * stands on the lower line and is drawn `ARENA.nearScale` larger and on top; the
- * challenger stands on the higher line, smaller. A single ground line left the
- * top third of the arena empty in every frame.
- *
- * **Not used by the renderer.** `gauntletFrameLayout` sizes the pair from the
- * camera track instead (`gauntletCamera.ts`), which solves against the run's own
- * positions rather than against a static worst case. This is kept as the
- * all-pairs feasibility check: it answers "could every one of the 36 pairings be
- * staged at all", which the camera track cannot, because it needs a simulated
- * run to look at. Read its numbers as that, not as what ships.
- *
- * **The overlap is an emergency valve, not a default.** It stays zero unless
- * standing clear would push a fighter under the height floor, and then the pair
- * slides together by exactly the shortfall.
- *
- * **The guarantee is still the arena wall.** Everything either fighter ever
- * draws — body, prop, the debris of its death — stays inside the arena's inner
- * box, and that is what caps the size for most pairs: a fighter 30% of the frame
- * tall is 430-590px wide, and two of those plus a gap do not fit in a 924px
- * arena. `TARGET_FIGHTER_HEIGHT_SHARE` is an aim, and the gate prints every pair
- * that falls short of it with the reason.
- */
-export function roundPlacement(
-  challengerSprite: string,
-  opponentSprite: string,
-): RoundPlacement {
-  const restFar = spriteBounds(challengerSprite);
-  const restNear = spriteBounds(opponentSprite);
-  const motionFar = spriteMotionBounds(challengerSprite, true);
-  const motionNear = spriteMotionBounds(opponentSprite, true);
-
-  // Aim a whisker over the target: solving for exactly 30% leaves the result
-  // sitting on the boundary, where rounding can push it under.
-  // Anchored on whichever of the two ends up shorter on screen, not on the near
-  // one: the near fighter is 12% bigger by construction, so aiming at it left
-  // the far fighter under the floor whenever it was the stubbier of the pair.
-  const shorter = Math.min(restFar.height / ARENA.nearScale, restNear.height);
-  const aim = (HEIGHT * TARGET_FIGHTER_HEIGHT_SHARE * 1.01) / shorter;
-
-  // Vertical room each fighter has above its own line, and below the near one
-  // for the collapse. Measured from the motion envelope: an idle bob or the
-  // recoil lifts the crown above where the fighter stands.
-  const roomNear = ARENA.groundY - ARENA.inner.y - VERTICAL_PAD;
-  const roomFar = ARENA.groundFarY - ARENA.inner.y - VERTICAL_PAD;
-  const underNear = ARENA.inner.y + ARENA.inner.h - ARENA.groundY - VERTICAL_PAD;
-  const underFar = ARENA.inner.y + ARENA.inner.h - ARENA.groundFarY - VERTICAL_PAD;
-
-  const crownNear = restNear.bottom - motionNear.top;
-  const crownFar = restFar.bottom - motionFar.top;
-  const slumpNear = Math.max(0, motionNear.bottom - restNear.bottom);
-  const slumpFar = Math.max(0, motionFar.bottom - restFar.bottom);
-
-  // Everything scales with the near size, so every limit solves directly.
-  const scale = ARENA.nearScale;
-  const widthUnits =
-    (restFar.right / scale - restNear.left) +
-    (motionNear.right - motionFar.left / scale);
-
-  const vertical = Math.min(
-    roomNear / crownNear,
-    (roomFar / crownFar) * scale,
-    slumpNear > 0 ? underNear / slumpNear : Number.POSITIVE_INFINITY,
-    slumpFar > 0 ? (underFar / slumpFar) * scale : Number.POSITIVE_INFINITY,
-  );
-  const byWidth = (ARENA_BUDGET - BODY_GAP) / widthUnits;
-
-  // Preferred: the pair apart, nothing touching.
-  let sizeNear = Math.min(aim, vertical, byWidth);
-  let overlap = 0;
-  // The floor wins over "apart". Two fighters at 22% of frame height are
-  // 320-450px wide each and 14 of the 36 pairs cannot stand clear of each
-  // other inside a 924px arena — the worst is 260px short. Those pairs slide
-  // together by exactly the shortfall and no more.
-  const floorSize = (HEIGHT * MIN_FIGHTER_HEIGHT_SHARE * 1.01) / shorter;
-  if (sizeNear < floorSize) {
-    sizeNear = Math.min(floorSize, vertical);
-    overlap = Math.max(0, widthUnits - (ARENA_BUDGET - BODY_GAP) / sizeNear);
-  }
-  const sizeFar = sizeNear / scale;
-
-  const reachLeft = (motionFar.left / scale) * sizeNear;
-  const reachRight = motionNear.right * sizeNear;
-  const separation =
-    (restFar.right / scale - restNear.left - overlap) * sizeNear + BODY_GAP;
-
-  return {
-    sizeFar,
-    sizeNear,
-    separation,
-    reachLeft,
-    reachRight,
-    shareFar: (restFar.height * sizeFar) / HEIGHT,
-    shareNear: (restNear.height * sizeNear) / HEIGHT,
-    overlap,
-    limitedBy:
-      sizeNear >= aim - 1e-6 ? "target" : byWidth <= vertical ? "width" : "roof",
-  };
-}
-
-/** On-screen scale of the near fighter for a round. */
-export function fighterSizeFor(challengerSprite: string, opponentSprite: string): number {
-  return roundPlacement(challengerSprite, opponentSprite).sizeNear;
-}
-
-/** The camera settings a round is fought at. Zoom is what sizes the pair. */
-export function roundCamera(
-  challengerSprite: string,
-  opponentSprite: string,
-): { zoom: number; worldSeparation: number; reachLeft: number; reachRight: number } {
-  const placement = roundPlacement(challengerSprite, opponentSprite);
-  const zoom = placement.sizeNear / L.fighterWorld;
-  return {
-    zoom,
-    worldSeparation: placement.separation / zoom,
-    reachLeft: placement.reachLeft,
-    reachRight: placement.reachRight,
-  };
-}
-
 /** Full layout for one frame. Pure in `(result, frame)`. */
 export function gauntletFrameLayout(
   result: GauntletResult,
@@ -504,6 +345,12 @@ export function gauntletFrameLayout(
     },
   });
 
+  const minions = minionPlacements(snap, {
+    challenger: { id: snap.challenger.id, spriteId: result.challenger.spriteId, sprite: spriteA, originX: originAx },
+    opponent: { id: snap.opponent.id, spriteId: opponent.spriteId, sprite: spriteB, originX: originBx },
+    groundY: groundAt(snap.opponent.y),
+  });
+
   return {
     fighterSize: sizeNear,
     sizeFar,
@@ -526,11 +373,96 @@ export function gauntletFrameLayout(
     },
     hud: hud.rects,
     damageNumbers,
+    minions,
   };
 }
 
-/** Frames the victory card is held. Capped so the video does not end on a wall. */
-export const VICTORY_CARD_FRAMES = 34;
+/** Height of a summon's health bar, and how far under it sits. */
+const MINION_BAR_HEIGHT = 7;
+const MINION_BAR_DROP = 0.6;
+const MINION_BAR_WIDTH = 0.7;
+/** Keyline a summon is drawn with — thinner than a fighter's. */
+export const MINION_OUTLINE = Math.round(FIGHTER_OUTLINE * 0.7);
+
+interface MinionSide {
+  id: string;
+  spriteId: string;
+  sprite: Rect;
+  originX: number;
+}
+
+/**
+ * Where the summons stand.
+ *
+ * They cluster behind their owner, alternating sides and stepping outward. The
+ * renderer used to work this out inline, which meant a summon had no rectangle
+ * anywhere in the layout and no gate could see where it went. Checked against
+ * real pixels, it turns out it never actually crossed the wall — a councillor's
+ * summon draws 77px wide inside a 119px box, and the slack covered the formula.
+ * That is luck, not a guarantee, and it held only because nothing had changed
+ * the art or the spacing.
+ *
+ * So the placement lives here and is clamped against the same measured envelope
+ * the fighters use (`minionMotionBounds`), and the gate checks it every frame of
+ * every pairing. The clamp is currently slack on the shipped roster; it exists
+ * so that a wider summon, or a bigger step, cannot quietly walk out of the arena.
+ *
+ * Clamped rather than shrunk: a summon pushed in by a few pixels still reads as
+ * standing behind its owner, where a smaller one costs readability everywhere.
+ */
+export function minionPlacements(
+  snap: GauntletResult["snapshots"][number],
+  sides: { challenger: MinionSide; opponent: MinionSide; groundY: number },
+): MinionPlacement[] {
+  if (snap.minions.length === 0) return [];
+  const out: MinionPlacement[] = [];
+  const size = L.minionSize;
+  const left = ARENA.inner.x;
+  const right = ARENA.inner.x + ARENA.inner.w;
+
+  for (const side of [sides.challenger, sides.opponent]) {
+    const bounds = minionMotionBounds(side.spriteId);
+    const mine = snap.minions.filter((m) => m.ownerId === side.id);
+    mine.forEach((minion, i) => {
+      const away = i % 2 === 0 ? -1 : 1;
+      const wanted = side.originX + away * (side.sprite.w * 0.6 + Math.floor(i / 2) * size);
+
+      // Everything this summon draws, relative to its origin: the figure with
+      // its keyline, and the health bar, which is narrower but sits lower.
+      const drawLeft = Math.min(bounds.left * size - MINION_OUTLINE, (-MINION_BAR_WIDTH / 2) * size);
+      const drawRight = Math.max(bounds.right * size + MINION_OUTLINE, (MINION_BAR_WIDTH / 2) * size);
+      const originX = Math.max(left - drawLeft, Math.min(wanted, right - drawRight));
+      const originY = sides.groundY - size * 0.5;
+
+      const top = originY + bounds.top * size - MINION_OUTLINE;
+      const bottom = Math.max(
+        originY + bounds.bottom * size + MINION_OUTLINE,
+        originY + size * MINION_BAR_DROP + MINION_BAR_HEIGHT,
+      );
+      out.push({
+        ownerId: side.id,
+        origin: { x: originX, y: originY },
+        reach: {
+          name: `minion:${side.id}:${i}`,
+          x: originX + drawLeft,
+          y: top,
+          w: drawRight - drawLeft,
+          h: bottom - top,
+        },
+        bar: {
+          name: `minionBar:${side.id}:${i}`,
+          x: originX - (size * MINION_BAR_WIDTH) / 2,
+          y: originY + size * MINION_BAR_DROP,
+          w: size * MINION_BAR_WIDTH,
+          h: MINION_BAR_HEIGHT,
+        },
+        hp: minion.hp,
+        maxHp: minion.maxHp,
+      });
+    });
+  }
+  return out;
+}
 
 export interface VictoryCard {
   /** Plate behind the text. */

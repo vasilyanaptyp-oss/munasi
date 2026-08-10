@@ -1,5 +1,4 @@
 import type { Rng } from "./rng.js";
-import { TICKS_PER_SECOND } from "./types.js";
 
 /**
  * Where the fighters are, tick by tick.
@@ -144,5 +143,3 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
 
 /** Longest a fighter may hold still, in video frames. */
 export const MAX_STILL_FRAMES = 10;
-/** Same, in ticks. */
-export const MAX_STILL_TICKS = MAX_STILL_FRAMES * (TICKS_PER_SECOND / 30);

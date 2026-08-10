@@ -96,6 +96,25 @@ export const ARENA = {
   nearScale: 1.12,
 } as const;
 
+/**
+ * Hard floor on a fighter's height, as a share of the frame.
+ *
+ * **One rule, one constant.** It lives here, next to the arena it is in tension
+ * with, because two files need it and neither may own it: `gauntletCamera.ts`
+ * solves the zoom against it and `layout.test.ts` asserts it on every frame. It
+ * was written down twice — 0.19 in the gate, 0.20 in the camera — with nothing
+ * tying them together.
+ *
+ * Lowered from 22% when the fighters were given positions. Four requirements
+ * meet here and the last one has to give: the arena is a fixed 924px square,
+ * nothing either fighter draws may cross its wall, the pair travels back and
+ * forth, and fighters must stay readable. At the widest moments of a round the
+ * camera pulls back to keep the wall guarantee and everything shrinks with it.
+ * Measured over 12,067 frames of the shipped path: 20.2% at the worst moment,
+ * 29.5% on average, no frame under this floor.
+ */
+export const MIN_FIGHTER_HEIGHT_SHARE = 0.19;
+
 export const HP_WIDGET = {
   width: Math.round(WIDTH * F.hpWidgetWidth),
   stem: Math.round(WIDTH * F.hpStemWidth),
@@ -120,14 +139,10 @@ export const HP_WIDGET_SLOTS = {
 } as const;
 
 export const GAUNTLET_LAYOUT = {
-  /** Fighter size in arena world units. Screen size is this times camera zoom. */
-  fighterWorld: Math.round(ARENA.inner.w * 0.3),
   minionSize: Math.round(WIDTH * 0.11),
   /** Overlay stays screen-fixed; see the note in gauntletFrame.ts. */
-  titleBaseline: Math.round(HEIGHT * 0.075),
   panelRight: WIDTH - Math.round(WIDTH * 0.04),
   panelTop: Math.round(HEIGHT * 0.045),
-  panelLineHeight: Math.round(HEIGHT * 0.038),
   captionBaseline: HEIGHT - Math.round(HEIGHT * 0.055),
   captionSize: Math.round(HEIGHT * F.captionCap * 1.35),
   progressY: HEIGHT - Math.round(HEIGHT * 0.022),

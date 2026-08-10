@@ -98,10 +98,17 @@ describe("findBestMatch", () => {
   });
 
   it("searches 500 seeds in under a second", () => {
-    const start = performance.now();
-    findBestMatch(abilityMatch(), { count: 500 });
-    const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(1000);
+    // Fastest of three, not one shot: the suite runs its files in parallel, so
+    // a single timing measures how busy the machine is as much as how costly the
+    // search is. The floor still moves the moment the search itself gets slower.
+    // Same treatment as the render and simulation budgets, for the same reason.
+    let best = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < 3; i += 1) {
+      const start = performance.now();
+      findBestMatch(abilityMatch(), { count: 500 });
+      best = Math.min(best, performance.now() - start);
+    }
+    expect(best).toBeLessThan(1000);
   });
 
   it("rejects an empty range", () => {

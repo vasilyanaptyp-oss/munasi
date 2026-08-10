@@ -91,12 +91,3 @@ export function tempoReport(result: GauntletResult): TempoReport {
     durationFrames: result.durationFrames,
   };
 }
-
-/** One-line summary, for the CLI and the sample manifest. */
-export function describeTempo(report: TempoReport): string {
-  return (
-    `longest quiet ${report.longestGap}f (${(report.longestGap / FPS).toFixed(2)}s), ` +
-    `round changes ${report.junctions.map((j) => `${(j / FPS).toFixed(2)}s`).join("/")}, ` +
-    `${(report.quietShare * 100).toFixed(0)}% of frames quiet`
-  );
-}

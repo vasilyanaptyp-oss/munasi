@@ -1,7 +1,7 @@
 import type { GauntletResult } from "../sim/gauntlet.js";
 import { LANES } from "../sim/movement.js";
 import { FIGHTER_OUTLINE } from "./drawFighter.js";
-import { ARENA, HP_WIDGET, HP_WIDGET_SLOTS } from "./gauntletTheme.js";
+import { ARENA, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
 import { spriteBounds, spriteMotionBounds } from "./silhouette.js";
 import { HEIGHT } from "./theme.js";
 
@@ -32,8 +32,21 @@ const MAX_ZOOM = 1.12;
 const PAD = Math.round(ARENA.inner.w * 0.012) + FIGHTER_OUTLINE;
 /** Clearance under the arena roof, covering the keyline. */
 const VERTICAL_PAD = Math.round(HEIGHT * 0.006) + FIGHTER_OUTLINE + 2;
-/** Height floor a fighter never drops under, even at full zoom-out. */
-const MIN_HEIGHT_SHARE = 0.2;
+/**
+ * What the solve aims for, so the gate's floor survives the zoom pulling out.
+ *
+ * Derived from `MIN_FIGHTER_HEIGHT_SHARE` rather than written down again: the
+ * floor is one rule and belongs to one constant. There were two, 0.19 in the
+ * gate and 0.20 here, and nothing tied them together — exactly the shape of
+ * every divergence this project has had.
+ *
+ * The margin is real and has to stay: this solve runs before the camera walk,
+ * against the lowest zoom the *previous* pass saw, so it is aiming at a moving
+ * target. One point of headroom is what makes the floor hold at the widest
+ * moment of a round instead of landing on it.
+ */
+const HEIGHT_FLOOR_MARGIN = 0.01;
+const MIN_HEIGHT_SHARE = MIN_FIGHTER_HEIGHT_SHARE + HEIGHT_FLOOR_MARGIN;
 /** Depth scaling: the far fighter is drawn smaller than the near one. */
 const DEPTH_RANGE = 0.18;
 
@@ -229,7 +242,3 @@ export function cameraTrack(result: GauntletResult): CameraTrack {
   cache.set(result, track);
   return track;
 }
-
-/** Band the damage numbers may occupy: under the HP widgets, inside the arena. */
-export const NUMBER_CEILING =
-  HP_WIDGET_SLOTS.y + HP_WIDGET.height + Math.round(HEIGHT * 0.008);

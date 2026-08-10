@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Ability, Fighter, MatchConfig } from "../sim/types.js";
+import type { Ability, Fighter } from "../sim/types.js";
 
 export const ROSTER_PATH = join(import.meta.dirname, "fighters.json");
 
@@ -80,10 +80,6 @@ export function getFighter(id: string, roster = loadFighters()): Fighter {
   const found = roster.find((f) => f.id === id);
   if (!found) throw new Error(`unknown fighter id: ${id}`);
   return found;
-}
-
-export function matchConfig(a: Fighter, b: Fighter): MatchConfig {
-  return { a, b };
 }
 
 /** Every unordered pair in roster order. */

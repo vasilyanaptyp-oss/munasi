@@ -19,7 +19,8 @@
     "matchups": "tsx src/content/generateMatchups.ts",
     "diagnose": "tsx src/cli/diagnose.ts",
     "calibrate:gauntlet": "tsx src/content/calibrateGauntlet.ts",
-    "motion": "tsx src/cli/motion.ts"
+    "motion": "tsx src/cli/motion.ts",
+    "smoke": "tsx src/cli/smoke.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"
