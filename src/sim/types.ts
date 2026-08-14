@@ -6,7 +6,18 @@ export const TICKS_PER_FRAME = TICKS_PER_SECOND / FPS;
 /** Hard timeout: 60 seconds of video. */
 export const MAX_FRAMES = 60 * FPS;
 
-export type AbilityType = "spawn_minion" | "heal" | "buff_attack" | "aoe";
+/**
+ * `magnetic_north` and `nobody_moves` are signature abilities: they do no damage
+ * and instead seize the other fighter's *movement*, which in a game whose whole
+ * picture is two figures bouncing is the strongest thing an ability can do.
+ */
+export type AbilityType =
+  | "spawn_minion"
+  | "heal"
+  | "buff_attack"
+  | "aoe"
+  | "magnetic_north"
+  | "nobody_moves";
 
 /** Stats of a minion produced by a `spawn_minion` ability. */
 export interface MinionSpec {
@@ -213,7 +224,9 @@ export type EventType =
   | "minion_death"
   | "victory"
   | "pickup_spawn"
-  | "pickup_claim";
+  | "pickup_claim"
+  /** A signature ability fired. `value` carries whatever it needs to draw. */
+  | "signature";
 
 export interface MatchEvent {
   /** Video frame the event belongs to. */

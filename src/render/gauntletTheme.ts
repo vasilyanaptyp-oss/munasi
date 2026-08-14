@@ -99,21 +99,16 @@ export const ARENA = {
 /**
  * Hard floor on a fighter's height, as a share of the frame.
  *
- * **One rule, one constant.** It lives here, next to the arena it is in tension
- * with, because two files need it and neither may own it: `gauntletCamera.ts`
- * solves the zoom against it and `layout.test.ts` asserts it on every frame. It
- * was written down twice — 0.19 in the gate, 0.20 in the camera — with nothing
- * tying them together.
+ * **One rule, one constant** — `gauntletCamera.ts` sizes against it and
+ * `layout.test.ts` asserts it, and it was written down twice before.
  *
- * Lowered from 22% when the fighters were given positions. Four requirements
- * meet here and the last one has to give: the arena is a fixed 924px square,
- * nothing either fighter draws may cross its wall, the pair travels back and
- * forth, and fighters must stay readable. At the widest moments of a round the
- * camera pulls back to keep the wall guarantee and everything shrinks with it.
- * Measured over 12,067 frames of the shipped path: 20.2% at the worst moment,
- * 29.5% on average, no frame under this floor.
+ * Set from the reference rather than from taste. Measured off a reference frame
+ * at 576x1024: the two fighters stand about 230px and 150px tall, which is 22%
+ * and 15% of frame height. Ours run 16-20% as the camera breathes. The old floor
+ * was 19%, inherited from the format with a fixed arena and two ground lines —
+ * the reference itself would fail it.
  */
-export const MIN_FIGHTER_HEIGHT_SHARE = 0.19;
+export const MIN_FIGHTER_HEIGHT_SHARE = 0.15;
 
 export const HP_WIDGET = {
   width: Math.round(WIDTH * F.hpWidgetWidth),

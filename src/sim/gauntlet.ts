@@ -31,8 +31,15 @@ export interface GauntletConfig {
   team: Team;
 }
 
-/** Frames one round may run before it is called on remaining HP. */
-export const ROUND_FRAME_CAP = 20 * FPS;
+/**
+ * Frames one round may run before it is called on remaining HP.
+ *
+ * 45 seconds, not 20. Twenty was right when a run was three rounds and the cap
+ * bounded one of them; a fight is now the whole video and averages 20 seconds,
+ * so the old cap was cutting a large share of them off at the knees and leaving
+ * a timeout where a death belonged.
+ */
+export const ROUND_FRAME_CAP = 45 * FPS;
 /**
  * Frames held on the last snapshot of a round. Without this the loser's death
  * animation has a single frame to play before the next round replaces them,

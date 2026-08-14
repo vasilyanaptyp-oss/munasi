@@ -68,7 +68,7 @@ export function coldOpenPlan(
 ): FramePlan {
   const plan: FramePlan = [];
   const secondsIn = Math.max(1, Math.round(window.startFrame / FPS));
-  const label = `ЧЕРЕЗ ${secondsIn} СЕК`;
+  const label = `${secondsIn} SEC LATER`;
 
   for (let frame = window.startFrame; frame < window.endFrame; frame += 1) {
     plan.push({ source: frame, coldOpenLabel: label });
@@ -78,7 +78,7 @@ export function coldOpenPlan(
   body.forEach((planned, i) => {
     const entry: PlannedFrame = { ...planned };
     if (i < CUT_FLASH_FRAMES) entry.flash = 1 - i / CUT_FLASH_FRAMES;
-    if (i < START_BADGE_FRAMES) entry.startLabel = "НАЧАЛО БОЯ";
+    if (i < START_BADGE_FRAMES) entry.startLabel = "FROM THE TOP";
     plan.push(entry);
   });
   return plan;

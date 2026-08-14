@@ -5,16 +5,15 @@
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1200,
-    "attack": 17.8,
+    "attack": 23.3,
     "attackSpeed": 1.15,
     "critChance": 0.32,
     "critMult": 2.6,
     "abilities": [
       {
-        "type": "buff_attack",
-        "cooldown": 9,
-        "power": 1.35,
-        "duration": 4
+        "type": "magnetic_north",
+        "cooldown": 7,
+        "power": 0
       }
     ]
   },
@@ -24,15 +23,16 @@
     "spriteId": "bodyguard-guy",
     "aspect": 0.6286,
     "maxHp": 1350,
-    "attack": 26.7,
+    "attack": 31.8,
     "attackSpeed": 0.85,
     "critChance": 0.24,
     "critMult": 2.9,
     "abilities": [
       {
-        "type": "heal",
-        "cooldown": 11,
-        "power": 90
+        "type": "nobody_moves",
+        "cooldown": 9,
+        "power": 0,
+        "duration": 1.4
       }
     ]
   }

@@ -7,7 +7,7 @@ import {
   HP_WIDGET,
   HP_WIDGET_SLOTS,
 } from "./gauntletTheme.js";
-import { cameraTrack, FIGHTER_HEIGHT_PX, worldToScreen } from "./gauntletCamera.js";
+import { arenaOnScreen, cameraTrack, FIGHTER_HEIGHT_UNITS, worldToScreen } from "./gauntletCamera.js";
 import { minionMotionBounds } from "./silhouette.js";
 import { PHOTO_OUTLINE } from "./photo.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
@@ -118,8 +118,6 @@ export const ARENA_INNER: Rect = {
 /** Frames a damage number stays up, matching the renderer. */
 export const DAMAGE_NUMBER_FRAMES = 15;
 
-/** Breathing room inside the arena walls, where the pair has to stay. */
-const ARENA_PAD = Math.round(WIDTH * 0.01);
 /** Gap kept between the two HP widgets. */
 const HP_WIDGET_GAP = Math.round(WIDTH * 0.02);
 
@@ -146,103 +144,69 @@ export function fitText(text: string, startSize: number, maxWidth: number, minSi
 }
 
 export interface HudMetrics {
-  challengerNameSize: number;
-  vsSize: number;
-  panelSize: number;
-  panelLineHeight: number;
+  titleSize: number;
+  lineHeight: number;
   captionSize: number;
-  /** Baselines and top edge, so the renderer draws exactly where the gate looks. */
-  nameBaseline: number;
-  vsBaseline: number;
-  panelTop: number;
+  /** Baselines, so the renderer draws exactly where the gate looks. */
+  firstBaseline: number;
+  secondBaseline: number;
+  /** The two lines themselves, so the renderer never re-derives them. */
+  first: string;
+  second: string;
 }
 
+/** The reference closes every video on this, so we do too. */
+export const CAPTION = "Like and Subscribe!";
+
 /**
- * The overlay is laid out once per run, not per frame: it is a fixed HUD, and
- * anything that moves under it is scene, not chrome.
+ * The overlay: two centred lines above the arena and one below it.
+ *
+ * That is the *entire* overlay in the reference — "<A> vs" on the first line,
+ * "<B>" on the second, and the channel's call to action under the square. The
+ * roster panel, the VS mark, the round caption and the progress bar are gone.
+ * They were invented here; none of them exists in the format being copied.
+ *
+ * Laid out once per run: it is chrome, and it stays put while the arena slides
+ * under the camera.
  */
 export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: HudMetrics } {
-  const left = Math.round(WIDTH * 0.03);
-  const top = L.panelTop;
+  const margin = Math.round(WIDTH * 0.04);
+  const room = WIDTH - margin * 2;
+  const second = result.team.members[0]?.name ?? "";
+  const first = `${result.challenger.name} vs`;
 
-  // The challenger's name gets its own full-width line.
-  //
-  // It used to share the band with the roster panel, which left it 36% of the
-  // frame and shrank "САНТЕХНИК ЖЭКА" to 35px — 1.8% of frame height, unreadable
-  // at thumbnail size, and frame 0 is the thumbnail. Stacking the three blocks
-  // costs vertical room the header had spare.
-  const nameSize = fitText(
-    result.challenger.name,
-    Math.round(HEIGHT * 0.034),
-    WIDTH - left * 2,
-    Math.round(HEIGHT * 0.022),
+  // One size for both lines, so the title reads as a single block.
+  const titleSize = Math.min(
+    fitText(first, Math.round(HEIGHT * 0.034), room, Math.round(HEIGHT * 0.022)),
+    fitText(second, Math.round(HEIGHT * 0.034), room, Math.round(HEIGHT * 0.022)),
   );
-  const vsSize = Math.round(HEIGHT * 0.034);
-  const longest = result.team.members.reduce((a, b) => (a.name.length >= b.name.length ? a : b)).name;
-  const panelSize = fitText(
-    longest,
-    Math.round(HEIGHT * 0.025),
-    WIDTH - left * 2,
-    Math.round(HEIGHT * 0.019),
-  );
-  const panelLineHeight = Math.round(panelSize * 1.34);
+  const lineHeight = Math.round(titleSize * 1.18);
   const captionSize = L.captionSize;
 
-  const nameBaseline = top + nameSize;
-  const vsBaseline = nameBaseline + Math.round(vsSize * 1.2);
-  const panelTop = vsBaseline + Math.round(HEIGHT * 0.014);
+  const secondBaseline = ARENA.y - Math.round(HEIGHT * 0.028);
+  const firstBaseline = secondBaseline - lineHeight;
 
-  const header: Rect[] = [
-    {
-      name: "challengerName",
-      x: left,
-      y: nameBaseline - nameSize,
-      w: textWidth(result.challenger.name, nameSize),
-      h: nameSize * 1.15,
-    },
-    {
-      name: "vs",
-      x: left,
-      y: vsBaseline - vsSize,
-      w: textWidth("VS", vsSize),
-      h: vsSize * 1.15,
-    },
-  ];
-
-  // Panel is right-aligned; its box spans the widest line it holds.
-  const panelWidth = Math.max(
-    textWidth(result.team.name, Math.round(panelSize * 1.1)),
-    ...result.team.members.map((m) => textWidth(m.name, panelSize)),
-  );
-  const panelHeight = panelLineHeight * (result.team.members.length + 1) + panelSize * 0.4;
-  const panel: Rect = {
-    name: "teamPanel",
-    x: L.panelRight - panelWidth,
-    y: panelTop,
-    w: panelWidth,
-    h: panelHeight,
-  };
-
-  const caption: Rect = {
-    name: "caption",
-    x: WIDTH / 2 - textWidth("РАУНД 3/3", captionSize) / 2,
-    y: L.captionBaseline - captionSize,
-    w: textWidth("РАУНД 3/3", captionSize),
-    h: captionSize * 1.15,
-  };
+  const line = (name: string, text: string, baseline: number): Rect => ({
+    name,
+    x: WIDTH / 2 - textWidth(text, titleSize) / 2,
+    y: baseline - titleSize,
+    w: textWidth(text, titleSize),
+    h: titleSize * 1.15,
+  });
 
   return {
-    rects: [...header, panel, caption],
-    metrics: {
-      challengerNameSize: nameSize,
-      vsSize,
-      panelSize,
-      panelLineHeight,
-      captionSize,
-      nameBaseline,
-      vsBaseline,
-      panelTop,
-    },
+    rects: [
+      line("titleFirst", first, firstBaseline),
+      line("titleSecond", second, secondBaseline),
+      {
+        name: "caption",
+        x: WIDTH / 2 - textWidth(CAPTION, captionSize) / 2,
+        y: L.captionBaseline - captionSize,
+        w: textWidth(CAPTION, captionSize),
+        h: captionSize * 1.15,
+      },
+    ],
+    metrics: { titleSize, lineHeight, captionSize, firstBaseline, secondBaseline, first, second },
   };
 }
 
@@ -260,8 +224,10 @@ export function gauntletFrameLayout(
 
   // Position and size both come from the simulation now; the renderer projects.
   // A fighter is a photo, so its box is the photo — there is nothing to solve.
+  const onScreen = arenaOnScreen(cam);
+  const innerPx = onScreen.side - ARENA.border * cam.zoom * 2;
   const boxFor = (name: string, fighter: { aspect: number }, at: { x: number; y: number }): Rect => {
-    const h = FIGHTER_HEIGHT_PX * cam.zoom;
+    const h = FIGHTER_HEIGHT_UNITS * innerPx;
     const w = h * fighter.aspect;
     const centre = worldToScreen(at.x, at.y, cam);
     return { name, x: centre.x - w / 2, y: centre.y - h / 2, w, h };
@@ -275,28 +241,24 @@ export function gauntletFrameLayout(
   const sizeFar = spriteA.h;
   const sizeNear = spriteB.h;
 
-  // Pinned vertically to the arena's top band, tracking its own fighter along
-  // it so it stays readable as *whose* health it is.
-  const hpFor = (name: string, centreX: number): Rect => ({
-    name,
-    x: Math.max(
-      ARENA.inner.x + ARENA_PAD,
-      Math.min(
-        centreX - HP_WIDGET.width / 2,
-        ARENA.inner.x + ARENA.inner.w - ARENA_PAD - HP_WIDGET.width,
-      ),
-    ),
-    y: HP_WIDGET_SLOTS.y,
-    w: HP_WIDGET.width,
-    h: HP_WIDGET.height,
-  });
-  let hpA = hpFor("challengerHp", originAx);
-  let hpB = hpFor("opponentHp", originBx);
-  const clash = hpA.x + HP_WIDGET.width + HP_WIDGET_GAP - hpB.x;
-  if (clash > 0) {
-    hpA = hpFor("challengerHp", originAx - clash / 2);
-    hpB = hpFor("opponentHp", originBx + clash / 2);
-  }
+  // The HP cross rides above its own fighter's head, as in the reference —
+  // it used to be pinned in a fixed band at the top of the arena, which left a
+  // viewer working out which of two identical plus signs belonged to whom.
+  // Scaled with the camera so it stays glued to the figure at any zoom.
+  const hpFor = (name: string, box: Rect): Rect => {
+    const scale = innerPx / ARENA.inner.w;
+    const w = HP_WIDGET.width * scale;
+    const h = HP_WIDGET.height * scale;
+    return {
+      name,
+      x: box.x + box.w / 2 - w / 2,
+      y: box.y - h - HP_WIDGET_GAP * scale,
+      w,
+      h,
+    };
+  };
+  const hpA = hpFor("challengerHp", spriteA);
+  const hpB = hpFor("opponentHp", spriteB);
 
   // A photo has no wind-up and no death throw, so the box it draws is the box
   // it claims — grown only by the keyline, which is drawn pixels too.
@@ -323,7 +285,7 @@ export function gauntletFrameLayout(
       width: spriteB.w,
       outward: 1,
     },
-  });
+  }, [hpA, hpB]);
 
   const minions = minionPlacements(snap, {
     challenger: { id: snap.challenger.id, spriteId: result.challenger.spriteId, sprite: spriteA, originX: originAx },
@@ -337,7 +299,7 @@ export function gauntletFrameLayout(
     sizeNear,
     groundY: originBy,
     groundFarY: originAy,
-    arena: { ...ARENA_RECT },
+    arena: { name: "arena", x: onScreen.x, y: onScreen.y, w: onScreen.side, h: onScreen.side },
     camera: { x: cam.x, y: cam.y, zoom: cam.zoom },
     challenger: {
       sprite: spriteA,
@@ -477,15 +439,15 @@ export function victoryCardLayout(result: GauntletResult): VictoryCard {
 
   // Both sides can hit zero on the same tick — damage is applied after every
   // actor has swung, so a mutual kill is a real outcome, not a rounding
-  // artefact. "ОСТАЛОСЬ 0 HP" is true there and reads as a broken card, so that
+  // artefact. "0 HP LEFT" is true there and reads as a broken card, so that
   // case gets its own line.
   const trade = hpLeft <= 0;
   const headlineSize = Math.round(WIDTH * 0.036);
   const nameSize = fitText(name, Math.round(WIDTH * 0.062), room, Math.round(WIDTH * 0.03));
-  const hpText = trade ? "РАЗМЕН — УПАЛИ ОБА" : `ОСТАЛОСЬ ${hpLeft} HP`;
+  const hpText = trade ? "BOTH WENT DOWN" : `${hpLeft} HP LEFT`;
   const hpSize = fitText(hpText, Math.round(WIDTH * 0.048), room, Math.round(WIDTH * 0.026));
 
-  const headline = trade ? "ДОБИЛ И УПАЛ" : won ? "ПРОШЁЛ ВСЕХ" : "НЕ СПРАВИЛСЯ";
+  const headline = trade ? "TRADED" : won ? "WINNER" : "WINNER";
   const sizes = [headlineSize, nameSize, hpSize];
   const texts = [headline, name, hpText];
   const names = ["victoryHeadline", "victoryName", "victoryHp"];
@@ -551,7 +513,7 @@ function numberStyle(type: string): { size: number; heavy: boolean } | null {
 
 /** Text per event type, shared by the layout and the renderer. */
 export function numberText(type: string, value: number | undefined): string {
-  if (type === "pickup_claim") return "+БАФ";
+  if (type === "pickup_claim") return "+BUFF";
   if (type === "heal") return `+${value}`;
   if (type === "crit") return `-${value}!`;
   return `-${value}`;
@@ -571,11 +533,15 @@ export function damageNumberRects(
   frame: number,
   index: RenderIndex,
   anchors: DamageNumberAnchors,
+  widgets: Rect[] = [],
 ): Rect[] {
   const out: Rect[] = [];
-  const left = ARENA.inner.x;
-  const right = ARENA.inner.x + ARENA.inner.w;
-  const bottom = ARENA.inner.y + ARENA.inner.h;
+  // Held to the frame rather than to the arena: the arena moves and is cropped,
+  // and a number that follows it off the edge helps nobody.
+  const left = 0;
+  const right = WIDTH;
+  const top = Math.round(HEIGHT * 0.24);
+  const bottom = Math.round(HEIGHT * 0.9);
 
   for (let back = 0; back <= DAMAGE_NUMBER_FRAMES; back += 1) {
     const f = frame - back;
@@ -597,17 +563,29 @@ export function damageNumberRects(
       const h = style.size * scale * 1.05;
 
       const jitter = numberJitter(`${event.frame}:${event.actorId}:${event.type}`, WIDTH * 0.04);
-      // Anchored on the upper body, where the blow landed. The lift is short.
+      // Beside the fighter at chest height, pushed to its outer side.
+      //
+      // It used to sit at shoulder height under a fixed HUD band. The HP cross
+      // now rides directly above the head, so a number up there lands on top of
+      // it — measured, 242 frames of one video had exactly that collision.
       const rise = age * (HEIGHT * 0.022);
-      // Shoulder height, pushed to the fighter's outer side: the number sits
-      // on the blow without covering the face it landed on.
-      let x = anchor.origin + anchor.outward * anchor.width * 0.34 + jitter - w / 2;
-      let y = anchor.top + anchor.height * 0.16 - h / 2 - rise;
+      let x = anchor.origin + anchor.outward * anchor.width * 0.42 + jitter - w / 2;
+      let y = anchor.top + anchor.height * 0.45 - h / 2 - rise;
 
       x = Math.max(left, Math.min(x, right - w));
-      y = Math.max(NUMBER_CEILING, Math.min(y, bottom - h));
+      y = Math.max(top, Math.min(y, bottom - h));
 
-      out.push({ name: `damage:${event.type}@${event.frame}`, x, y, w, h });
+      // Both crosses ride their own fighter now, so when the two close on each
+      // other a number aimed beside one of them can land on the other's widget.
+      // Slide it clear rather than letting it sit on the one number a viewer is
+      // actually tracking.
+      const rect: Rect = { name: `damage:${event.type}@${event.frame}`, x, y, w, h };
+      for (const widget of widgets) {
+        if (!intersects(rect, widget)) continue;
+        rect.y = Math.min(bottom - h, widget.y + widget.h + Math.round(HEIGHT * 0.006));
+      }
+
+      out.push(rect);
     }
   }
   return out;

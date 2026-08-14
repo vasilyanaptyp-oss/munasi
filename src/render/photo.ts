@@ -82,13 +82,33 @@ export interface DrawPhotoOptions {
   fade?: number;
 }
 
-let scratch: { canvas: Canvas; w: number; h: number } | null = null;
+/**
+ * Scratch layers, keyed on the exact size and bounded.
+ *
+ * Exact, because an oversized canvas read back through a source rectangle does
+ * not give the same pixels as one that fits — measured. A shared canvas that
+ * grew as the camera zoomed made a frame depend on which frames had been drawn
+ * before it, which breaks the one contract the whole render rests on.
+ *
+ * Bounded, because the camera's zoom lands on a different integer nearly every
+ * frame, so an unbounded map is a leak wearing a cache's clothes. That one has
+ * been paid for once already.
+ */
+const SCRATCH_LIMIT = 8;
+const scratch = new Map<string, Canvas>();
 function scratchCanvas(w: number, h: number): Canvas {
-  const current = scratch;
-  if (current && current.w >= w && current.h >= h) return current.canvas;
-  const next = { canvas: createCanvas(Math.ceil(w), Math.ceil(h)), w: Math.ceil(w), h: Math.ceil(h) };
-  scratch = next;
-  return next.canvas;
+  const key = `${w}x${h}`;
+  const existing = scratch.get(key);
+  if (existing) return existing;
+  const canvas = createCanvas(w, h);
+  scratch.set(key, canvas);
+  if (scratch.size > SCRATCH_LIMIT) {
+    for (const k of scratch.keys()) {
+      scratch.delete(k);
+      break;
+    }
+  }
+  return canvas;
 }
 
 export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPhotoOptions): void {

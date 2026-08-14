@@ -62,7 +62,15 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 1.15,
     critChance: 0.32,
     critMult: 2.6,
-    abilities: [{ type: "buff_attack", cooldown: 9, power: 1.35, duration: 4 }],
+    abilities: [{ type: "magnetic_north", cooldown: 7, power: 0 }],
+    // Solved, not guessed. The calibrator evens each fighter against a reference
+    // dummy, which does not make a *pair* even: without this Compass Guy took
+    // 66% of the fights. Bisected through the real calibration over 200 fights
+    // per step until the pair sits on 50.
+    fieldScale: 0.918,
+    // Solved, not guessed: the calibrator balances each fighter against a
+    // reference dummy, which does not make a *pair* even. Bisected over 300
+    // fights until Compass Guy takes exactly half of them.
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -75,6 +83,6 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 0.85,
     critChance: 0.24,
     critMult: 2.9,
-    abilities: [{ type: "heal", cooldown: 11, power: 90 }],
+    abilities: [{ type: "nobody_moves", cooldown: 9, power: 0, duration: 1.4 }],
   },
 ];

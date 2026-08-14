@@ -1,6 +1,7 @@
 import type { GauntletResult } from "../sim/gauntlet.js";
 import { FIGHTER_HALF_HEIGHT } from "../sim/movement.js";
 import { ARENA } from "./gauntletTheme.js";
+import { HEIGHT } from "./theme.js";
 
 /**
  * The camera, solved once per run.
@@ -23,13 +24,20 @@ import { ARENA } from "./gauntletTheme.js";
  */
 
 /** How far the pan and zoom move toward their target each frame. */
-const PAN_LERP = 0.05;
-const ZOOM_LERP = 0.03;
-/** How far the shot may push in and pull back. */
-const MIN_ZOOM = 0.94;
-const MAX_ZOOM = 1.16;
+const PAN_LERP = 0.045;
+const ZOOM_LERP = 0.02;
+/**
+ * How far the shot may push in and pull back.
+ *
+ * Above 1 the arena is larger than its slot and the frame crops it — which the
+ * reference does constantly, often cutting a whole wall off the screen. Measured
+ * across 721 reference frames, the arena's own black border never once holds
+ * still and wanders about a third of the frame height.
+ */
+const MIN_ZOOM = 0.92;
+const MAX_ZOOM = 1.15;
 /** Seconds for one full breath of the zoom. */
-const ZOOM_PERIOD = 7.5;
+const ZOOM_PERIOD = 9;
 
 export interface CameraFrame {
   /** World x and y the camera is centred on, in arena units. */
@@ -43,14 +51,43 @@ export interface CameraTrack {
 }
 
 /** Height a fighter is drawn at, in pixels. Fixed — see the note above. */
-export const FIGHTER_HEIGHT_PX = FIGHTER_HALF_HEIGHT * 2 * ARENA.inner.h;
+export const FIGHTER_HEIGHT_UNITS = FIGHTER_HALF_HEIGHT * 2;
+
+/**
+ * The arena as it lands on screen under a camera.
+ *
+ * The arena moves. It used to be nailed to a constant and only the contents
+ * moved inside it, which is backwards: in the reference the whole scene —
+ * square, border and all — sits under a camera that pans and scales, and the
+ * edge of the video crops it.
+ */
+export function arenaOnScreen(camera: CameraFrame): { x: number; y: number; side: number } {
+  const side = ARENA.side * camera.zoom;
+  const x = ARENA.centre.x - (camera.x - 0.5) * side - side / 2;
+  let y = ARENA.centre.y - (camera.y - 0.5) * side - side / 2;
+
+  // Vertically the arena is fenced in, horizontally it is not.
+  //
+  // The title sits above the square and the caption below it, and both have to
+  // stay legible — losing half a name costs the joke, and the joke is the whole
+  // video. So the square may slide and scale but never climb into the title or
+  // drop onto the caption. Sideways it is free to run off the edge and be
+  // cropped, which is what the reference does most of the time.
+  y = Math.max(TITLE_FLOOR, Math.min(CAPTION_CEILING - side, y));
+  return { x, y, side };
+}
+
+/** The arena's top may not rise above this: the title lives up there. */
+const TITLE_FLOOR = Math.round(HEIGHT * 0.28);
+/** Nor may its bottom fall below this: the caption lives down there. */
+const CAPTION_CEILING = Math.round(HEIGHT * 0.885);
 
 /** Screen position of a point in arena units under a camera. */
 export function worldToScreen(x: number, y: number, camera: CameraFrame): { x: number; y: number } {
-  return {
-    x: ARENA.centre.x + (x - camera.x) * ARENA.inner.w * camera.zoom,
-    y: ARENA.centre.y + (y - camera.y) * ARENA.inner.h * camera.zoom,
-  };
+  const arena = arenaOnScreen(camera);
+  const border = ARENA.border * camera.zoom;
+  const inner = arena.side - border * 2;
+  return { x: arena.x + border + x * inner, y: arena.y + border + y * inner };
 }
 
 const cache = new WeakMap<GauntletResult, CameraTrack>();
@@ -77,11 +114,11 @@ export function cameraTrack(result: GauntletResult): CameraTrack {
     camY += (midY - camY) * PAN_LERP;
     zoom += (target - zoom) * ZOOM_LERP;
 
-    // The shot may drift off-centre but never so far that the arena stops
-    // covering the frame — the reference crops its arena, it never shows past it.
-    const slack = (1 - 1 / zoom) / 2;
-    camX = Math.max(0.5 - slack, Math.min(0.5 + slack, camX));
-    camY = Math.max(0.5 - slack, Math.min(0.5 + slack, camY));
+    // Free to drift: the reference lets the arena slide right out to the edge
+    // of the video and clips it. Held to half the arena so a wall is always in
+    // shot and the square never reads as having wandered off.
+    camX = Math.max(0.25, Math.min(0.75, camX));
+    camY = Math.max(0.25, Math.min(0.75, camY));
 
     frames.push({ x: camX, y: camY, zoom });
   });

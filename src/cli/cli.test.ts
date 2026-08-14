@@ -164,8 +164,8 @@ describe("gauntlet rendering", () => {
     const roster = loadFighters();
     const full = simulateGauntlet(
       buildGauntlet(
-        getFighter("plumber", roster),
-        ["arbiter", "councillor", "inspector"].map((id) => getFighter(id, roster)),
+        getFighter("compass", roster),
+        [getFighter("bodyguard", roster)],
       ),
       7,
       GAUNTLET_RULES,
@@ -196,8 +196,8 @@ describe("gauntlet rendering", () => {
     const roster = loadFighters();
     const result = simulateGauntlet(
       buildGauntlet(
-        getFighter("courier", roster),
-        ["viceroy", "silencer", "chairman"].map((id) => getFighter(id, roster)),
+        getFighter("bodyguard", roster),
+        [getFighter("compass", roster)],
       ),
       3,
       GAUNTLET_RULES,

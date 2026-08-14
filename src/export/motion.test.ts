@@ -53,8 +53,8 @@ describe.runIf(hasFfmpeg())("motion", () => {
   beforeAll(async () => {
     workdir = mkdtempSync(join(tmpdir(), "munasi-motion-"));
     const config = buildGauntlet(
-      getFighter("plumber", roster),
-      ["chairman", "silencer", "arbiter"].map((id) => getFighter(id, roster)),
+      getFighter("compass", roster),
+      [getFighter("bodyguard", roster)],
     );
     const { result } = findBestGauntlet(config, { count: 24, rules: GAUNTLET_RULES });
     const plan = defaultPlan(result, VICTORY_CARD_FRAMES);

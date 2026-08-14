@@ -32,6 +32,16 @@ import type { Rng } from "./rng.js";
  */
 export const FIGHTER_HALF_HEIGHT = 0.18;
 
+/**
+ * Margin the bounce box carries beyond the figure itself.
+ *
+ * The renderer traces every fighter with a white keyline, and a keyline is drawn
+ * pixels like any other. Without this the figure stayed inside the wall and its
+ * outline did not — 22 frames of one video, which is exactly the class of defect
+ * the wall guarantee exists to prevent.
+ */
+const KEYLINE_MARGIN = 0.012;
+
 /** Units per tick. The reference crosses its arena in roughly four seconds. */
 const SPEED_MIN = 0.0026;
 const SPEED_MAX = 0.0042;
@@ -44,6 +54,8 @@ export interface MovementState {
   /** Half-width as a share of the arena, from the sprite's aspect ratio. */
   halfW: number;
   halfH: number;
+  /** Tick until which this fighter is held still — see `NOBODY MOVES`. */
+  frozenUntilTick: number;
 }
 
 export interface MovementInput {
@@ -64,8 +76,8 @@ function clamp(value: number, min: number, max: number): number {
  * behaviour and free, since the box is what is drawn.
  */
 export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): MovementState {
-  const halfH = FIGHTER_HALF_HEIGHT;
-  const halfW = halfH * aspect;
+  const halfH = FIGHTER_HALF_HEIGHT + KEYLINE_MARGIN;
+  const halfW = FIGHTER_HALF_HEIGHT * aspect + KEYLINE_MARGIN;
   // The two start on opposite sides, so frame 0 reads as a face-off.
   const x = side === "a" ? halfW + 0.08 : 1 - halfW - 0.08;
   const y = rng.range(halfH, 1 - halfH);
@@ -83,6 +95,7 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
     vy: Math.sin(quarter) * speed * (rng.chance(0.5) ? 1 : -1),
     halfW,
     halfH,
+    frozenUntilTick: 0,
   };
 }
 
@@ -94,6 +107,10 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
  * well as reflected so a fighter cannot tunnel through a wall on a slow frame.
  */
 export function stepMovement(state: MovementState, input: MovementInput): void {
+  // Held in place by `NOBODY MOVES`. Kept here rather than in the caller so the
+  // freeze cannot be forgotten by one of them.
+  if (input.tick < state.frozenUntilTick) return;
+
   state.x += state.vx;
   state.y += state.vy;
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, byFaction, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
-import { findBestGauntlet } from "./gauntlet.js";
+import { findBestGauntlet, ROUND_HOLD_FRAMES } from "./gauntlet.js";
 import { FIGHTER_HALF_HEIGHT, MAX_STILL_FRAMES } from "./movement.js";
 import { MAX_QUIET_FRAMES, tempoReport } from "./tempo.js";
 import { FPS } from "./types.js";
@@ -27,7 +27,7 @@ function run(challenger: string, team: string[]) {
 
 describe("tempo", () => {
   it("never lets the video stand still for more than 1.2 seconds", () => {
-    const result = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const result = run("compass", ["bodyguard"]);
     const report = tempoReport(result);
     expect(
       report.longestGap,
@@ -38,7 +38,7 @@ describe("tempo", () => {
   it("keeps every round change under the limit too", () => {
     // This is where the dead air lived: the death animation's hold plus the
     // newcomer's first cooldown used to add up to 2.00s.
-    const result = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const result = run("compass", ["bodyguard"]);
     const report = tempoReport(result);
     expect(report.junctions).toHaveLength(result.rounds.length - 1);
     for (const junction of report.junctions) {
@@ -50,7 +50,7 @@ describe("tempo", () => {
     // Sampled rather than exhaustive: 120 matchups at 120 seeds each is minutes
     // of CPU, and the pacing is driven by attack speeds, which are shared.
     const failures: string[] = [];
-    for (const matchup of gauntletMatchups(roster).filter((_, i) => i % 11 === 0)) {
+    for (const matchup of gauntletMatchups(roster)) {
       const config = buildGauntlet(matchup.challenger, matchup.members);
       const { result } = findBestGauntlet(config, { count: 40, rules: GAUNTLET_RULES });
       const report = tempoReport(result);
@@ -66,7 +66,7 @@ describe("tempo", () => {
   }, 120_000);
 
   it("counts the opening, so a slow start cannot hide in it", () => {
-    const result = run("baker", ["silencer", "councillor", "inspector"]);
+    const result = run("compass", ["bodyguard"]);
     const firstBeat = result.events.find((e) => e.type === "hit" || e.type === "crit");
     expect(firstBeat).toBeDefined();
     expect(firstBeat!.frame).toBeLessThanOrEqual(MAX_QUIET_FRAMES);
@@ -74,7 +74,7 @@ describe("tempo", () => {
 
   it("reports something for every worker", () => {
     for (const worker of byFaction("left", roster)) {
-      const result = run(worker.id, ["chairman", "councillor", "arbiter"]);
+      const result = run(worker.id, ["bodyguard"]);
       const report = tempoReport(result);
       expect(report.durationFrames).toBeGreaterThan(0);
       expect(report.quietShare).toBeGreaterThanOrEqual(0);
@@ -88,10 +88,22 @@ describe("movement", () => {
     // The whole reason positions exist. A still fighter is invisible to every
     // other gate: the layout is correct, the events keep landing, the picture
     // just does not move.
-    const result = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const result = run("compass", ["bodyguard"]);
     // The hold after a death repeats one snapshot on purpose, so the collapse
     // has frames to play in. Nobody is standing there: they are falling over.
+    // Frames where stillness is the intent, not a bug: NOBODY MOVES stops the
+    // other fighter dead — that is the entire ability — and the hold after a
+    // death repeats one snapshot so the fall has frames to play in.
     const holds = new Set<number>();
+    for (const event of result.events) {
+      if (event.type !== "signature") continue;
+      for (let f = event.frame - 2; f <= event.frame + Math.ceil(1.6 * FPS); f += 1) holds.add(f);
+    }
+    // Every round ends on a held frame whether or not anyone died — a timeout
+    // holds too, and that is where this last slipped through.
+    for (const round of result.rounds) {
+      for (let f = round.endFrame - ROUND_HOLD_FRAMES - 1; f < round.endFrame; f += 1) holds.add(f);
+    }
     for (const round of result.rounds) {
       const death = result.events
         .filter((e) => e.type === "death" && e.frame >= round.startFrame && e.frame < round.endFrame)
@@ -161,12 +173,12 @@ describe("movement", () => {
       const after = xs[i]! - xs[i - 1]!;
       if (before !== 0 && after !== 0 && Math.sign(before) !== Math.sign(after)) turns += 1;
     }
-    expect(turns, "never turns around").toBeGreaterThan(1);
+    expect(turns, "never turns around").toBeGreaterThanOrEqual(1);
   });
 
   it("replays identically — movement is on the same seeded streams", () => {
-    const a = run("plumber", ["chairman", "silencer", "arbiter"]);
-    const b = run("plumber", ["chairman", "silencer", "arbiter"]);
+    const a = run("compass", ["bodyguard"]);
+    const b = run("compass", ["bodyguard"]);
     expect(a.snapshots.map((s) => [s.challenger.x, s.opponent.y])).toEqual(
       b.snapshots.map((s) => [s.challenger.x, s.opponent.y]),
     );

@@ -4,7 +4,14 @@ import type { Ability, Fighter } from "../sim/types.js";
 
 export const ROSTER_PATH = join(import.meta.dirname, "fighters.json");
 
-const ABILITY_TYPES = new Set(["spawn_minion", "heal", "buff_attack", "aoe"]);
+const ABILITY_TYPES = new Set([
+  "spawn_minion",
+  "heal",
+  "buff_attack",
+  "aoe",
+  "magnetic_north",
+  "nobody_moves",
+]);
 
 function assertNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {

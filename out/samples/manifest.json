@@ -1,32 +1,32 @@
 {
   "entries": [
     {
-      "file": "plumber-vs-chairman-silencer-arbiter-122.mp4",
+      "file": "compass-vs-bodyguard-168.mp4",
       "fighters": [
-        "plumber",
-        "chairman+silencer+arbiter"
+        "compass",
+        "bodyguard"
       ],
       "fighterNames": [
-        "САНТЕХНИК ЖЭКА",
-        "КОМИССИЯ"
+        "COMPASS GUY",
+        "OPPONENT"
       ],
-      "seed": 122,
-      "dramaScore": 87.5,
-      "durationSeconds": 36.17,
-      "frames": 1085,
-      "winnerId": "plumber",
-      "sizeBytes": 10027483,
-      "generatedAt": "2026-08-10T17:27:49.977Z",
+      "seed": 168,
+      "dramaScore": 69.6,
+      "durationSeconds": 30.67,
+      "frames": 920,
+      "winnerId": "compass",
+      "sizeBytes": 9854656,
+      "generatedAt": "2026-08-14T22:36:57.009Z",
       "provenance": {
-        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
+        "commit": "03f6a6f880012bf01c9f5da2c98045cd8622ebbc",
         "dirty": true,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
+        "rosterHash": "6b9f4421fb68dfd4",
+        "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
             "tempo": 1.03,
-            "challengerPower": 2.74
+            "challengerPower": 1
           },
           "rules": {
             "damageVariance": 0.15,
@@ -36,212 +36,29 @@
           },
           "duelDamageVariance": 0.35,
           "roundHoldFrames": 26,
-          "roundFrameCap": 600,
+          "roundFrameCap": 1350,
           "victoryCardFrames": 34,
           "victoryFreezeFrames": 60
         }
       },
       "gauntlet": {
-        "challengerId": "plumber",
+        "challengerId": "compass",
         "teamIds": [
-          "chairman",
-          "silencer",
-          "arbiter"
+          "bodyguard"
         ],
         "cleared": true,
-        "decidedInRound": 3,
+        "decidedInRound": 1,
         "hpByRound": [
-          1078,
-          647,
-          122
-        ]
-      }
-    },
-    {
-      "file": "baker-vs-silencer-councillor-viceroy-222.mp4",
-      "fighters": [
-        "baker",
-        "silencer+councillor+viceroy"
-      ],
-      "fighterNames": [
-        "НОЧНОЙ ПЕКАРЬ",
-        "КОМИССИЯ"
-      ],
-      "seed": 222,
-      "dramaScore": 88.7,
-      "durationSeconds": 29.4,
-      "frames": 882,
-      "winnerId": "baker",
-      "sizeBytes": 7812217,
-      "generatedAt": "2026-08-10T17:29:29.201Z",
-      "provenance": {
-        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
-        "dirty": true,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
-        "wantedOutcome": "cleared",
-        "constants": {
-          "tuning": {
-            "tempo": 1.03,
-            "challengerPower": 2.74
-          },
-          "rules": {
-            "damageVariance": 0.15,
-            "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
-          },
-          "duelDamageVariance": 0.35,
-          "roundHoldFrames": 26,
-          "roundFrameCap": 600,
-          "victoryCardFrames": 34,
-          "victoryFreezeFrames": 60
-        }
-      },
-      "gauntlet": {
-        "challengerId": "baker",
-        "teamIds": [
-          "silencer",
-          "councillor",
-          "viceroy"
-        ],
-        "cleared": true,
-        "decidedInRound": 3,
-        "hpByRound": [
-          789,
-          525,
-          67
-        ]
-      }
-    },
-    {
-      "file": "loader-vs-chairman-arbiter-inspector-98.mp4",
-      "fighters": [
-        "loader",
-        "chairman+arbiter+inspector"
-      ],
-      "fighterNames": [
-        "ГРУЗЧИК С РЫНКА",
-        "КОМИССИЯ"
-      ],
-      "seed": 98,
-      "dramaScore": 99.5,
-      "durationSeconds": 36.77,
-      "frames": 1103,
-      "winnerId": "inspector",
-      "sizeBytes": 9455378,
-      "generatedAt": "2026-08-10T17:31:16.095Z",
-      "provenance": {
-        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
-        "dirty": true,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
-        "wantedOutcome": "stopped",
-        "constants": {
-          "tuning": {
-            "tempo": 1.03,
-            "challengerPower": 2.74
-          },
-          "rules": {
-            "damageVariance": 0.15,
-            "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
-          },
-          "duelDamageVariance": 0.35,
-          "roundHoldFrames": 26,
-          "roundFrameCap": 600,
-          "victoryCardFrames": 34,
-          "victoryFreezeFrames": 60
-        }
-      },
-      "gauntlet": {
-        "challengerId": "loader",
-        "teamIds": [
-          "chairman",
-          "arbiter",
-          "inspector"
-        ],
-        "cleared": false,
-        "decidedInRound": 3,
-        "hpByRound": [
-          1052,
-          500,
-          0
+          25
         ]
       },
       "coldOpen": {
-        "startFrame": 766,
-        "endFrame": 796,
-        "reason": "damage_burst",
-        "damage": 291,
-        "leadChanges": 0,
-        "why": "biggest damage burst: 291 at 25.5s"
-      }
-    },
-    {
-      "file": "nailmaster-vs-councillor-viceroy-inspector-259.mp4",
-      "fighters": [
-        "nailmaster",
-        "councillor+viceroy+inspector"
-      ],
-      "fighterNames": [
-        "МАСТЕР МАНИКЮРА",
-        "КОМИССИЯ"
-      ],
-      "seed": 259,
-      "dramaScore": 89.8,
-      "durationSeconds": 28.87,
-      "frames": 866,
-      "winnerId": "nailmaster",
-      "sizeBytes": 8578402,
-      "generatedAt": "2026-08-10T17:32:27.554Z",
-      "provenance": {
-        "commit": "0b5bc7c65a2786676dfe4ed0d8d9d8fe36b04329",
-        "dirty": true,
-        "rosterHash": "9315f51160a31d56",
-        "seedsSearched": 400,
-        "wantedOutcome": "cleared",
-        "constants": {
-          "tuning": {
-            "tempo": 1.03,
-            "challengerPower": 2.74
-          },
-          "rules": {
-            "damageVariance": 0.15,
-            "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
-          },
-          "duelDamageVariance": 0.35,
-          "roundHoldFrames": 26,
-          "roundFrameCap": 600,
-          "victoryCardFrames": 34,
-          "victoryFreezeFrames": 60
-        }
-      },
-      "gauntlet": {
-        "challengerId": "nailmaster",
-        "teamIds": [
-          "councillor",
-          "viceroy",
-          "inspector"
-        ],
-        "cleared": true,
-        "decidedInRound": 3,
-        "hpByRound": [
-          883,
-          605,
-          114
-        ]
-      },
-      "coldOpen": {
-        "startFrame": 479,
-        "endFrame": 509,
-        "reason": "damage_burst",
-        "damage": 238,
-        "leadChanges": 0,
-        "why": "biggest damage burst: 238 at 16.0s"
+        "startFrame": 37,
+        "endFrame": 67,
+        "reason": "lead_change",
+        "damage": 99,
+        "leadChanges": 1,
+        "why": "lead changed 1x at 1.2s (99 damage in the window)"
       }
     }
   ]

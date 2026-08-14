@@ -1,4 +1,4 @@
-import { initialMovement, stepMovement, type MovementState } from "./movement.js";
+import { initialMovement, setHeading, stepMovement, type MovementState } from "./movement.js";
 import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
@@ -359,6 +359,32 @@ export function simulate(
   const castAbility = (state: FighterState, ability: Ability): void => {
     const enemy = opponentOf(state);
     switch (ability.type) {
+      // MAGNETIC NORTH. The needle picks a direction and everyone else is
+      // pointed at it, whether they liked where they were going or not.
+      case "magnetic_north": {
+        const heading = movementRng[state.side].range(0, Math.PI * 2);
+        setHeading(movement[enemy.side], heading);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: heading,
+        });
+        break;
+      }
+      // NOBODY MOVES. He lowers the sunglasses and the arena stops.
+      case "nobody_moves": {
+        movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.2,
+        });
+        break;
+      }
       case "spawn_minion": {
         const minion = spawnMinion(state, minionSpec(ability));
         events.push({

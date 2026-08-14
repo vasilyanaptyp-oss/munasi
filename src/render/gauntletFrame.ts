@@ -1,7 +1,6 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
-import type { GauntletResult, GauntletSnapshot } from "../sim/gauntlet.js";
-import type { PickupType } from "../sim/types.js";
+import type { GauntletResult } from "../sim/gauntlet.js";
 import {
   DEATH_FRAMES,
   drawFighter,
@@ -12,6 +11,7 @@ import { buildRenderIndex, eventsAt, strokedText, type RenderIndex } from "./fra
 import type { PlannedFrame } from "./framePlan.js";
 import {
   ARENA_RECT,
+  CAPTION,
   DAMAGE_NUMBER_FRAMES,
   gauntletFrameLayout,
   hudLayout,
@@ -24,6 +24,7 @@ import {
 } from "./gauntletLayout.js";
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
 import { drawPhoto } from "./photo.js";
+import { drawSignatures } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
@@ -156,54 +157,6 @@ export function drawHpWidgetForTest(ctx: Ctx, share: number): Rect {
   };
 }
 
-const PICKUP_LABEL: Record<PickupType, string> = {
-  heal: "+HP",
-  damage_buff: "+УРОН",
-  attack_speed: "+СКОР",
-};
-const PICKUP_COLOR: Record<PickupType, string> = {
-  heal: C.buffText,
-  damage_buff: C.critText,
-  attack_speed: C.hpHealthy,
-};
-
-/** The item on the floor: a disc that pulses until someone reaches it. */
-function drawPickup(ctx: Ctx, snap: GauntletSnapshot, layout: GauntletFrameLayout): void {
-  const pickup = snap.pickup;
-  if (!pickup) return;
-  const age = snap.frame - pickup.spawnFrame;
-  const pulse = 1 + Math.sin(age * 0.25) * 0.08;
-  // Between the fighters, on the floor.
-  const x = (layout.challenger.centre.x + layout.opponent.centre.x) / 2;
-  const y = layout.groundY - WIDTH * 0.1;
-  const r = WIDTH * 0.045 * pulse;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = PICKUP_COLOR[pickup.type];
-  ctx.fill();
-  ctx.lineWidth = Math.max(3, Math.round(WIDTH * 0.006));
-  ctx.strokeStyle = C.outline;
-  ctx.stroke();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  // Clamped inside the arena, so a long label never runs into the wall.
-  const label = PICKUP_LABEL[pickup.type];
-  const size = Math.round(WIDTH * 0.032);
-  ctx.font = font(size);
-  const half = ctx.measureText(label).width / 2 + 4;
-  const labelX = Math.max(
-    ARENA.inner.x + half,
-    Math.min(x, ARENA.inner.x + ARENA.inner.w - half),
-  );
-  strokedText(ctx, label, labelX, y + r + WIDTH * 0.04, size, PICKUP_COLOR[pickup.type], 6);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.restore();
-}
-
-
 function strikePhase(index: RenderIndex, frame: number, fighterId: string): number | null {
   let best: number | null = null;
   for (let f = frame - RECOVERY_FRAMES; f <= frame + WINDUP_FRAMES; f += 1) {
@@ -242,56 +195,17 @@ function visualState(
   return { flash, hurt: flash / 0.8, strike: strikePhase(index, frame, fighterId), death };
 }
 
-/** Team panel, top right: heading, then members with the active one marked. */
-function drawRosterPanel(
-  ctx: Ctx,
-  result: GauntletResult,
-  snap: GauntletSnapshot,
-  metrics: HudMetrics,
-): void {
-  ctx.textAlign = "right";
+/**
+ * The whole overlay: two centred title lines above the arena, the caption
+ * below. Screen-fixed while the arena slides under the camera.
+ */
+function drawOverlay(ctx: Ctx, metrics: HudMetrics): void {
+  ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  const x = L.panelRight;
-  const size = metrics.panelSize;
-  const lineHeight = metrics.panelLineHeight;
-  let y = metrics.panelTop + lineHeight;
-
-  strokedText(ctx, result.team.name, x, y, Math.round(size * 1.1), C.teamHeading, 8);
-  y += lineHeight;
-
-  result.team.members.forEach((member, i) => {
-    const defeated = i < snap.round;
-    const active = i === snap.round;
-    const colour = defeated ? C.memberDefeated : C.memberAlive;
-    strokedText(ctx, member.name, x, y, size, colour, 8);
-
-    if (active) {
-      // Pointer sits to the left of the name, like the reference's triangle.
-      ctx.font = font(size);
-      const width = ctx.measureText(member.name).width;
-      const px = x - width - Math.round(WIDTH * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(px, y - size * 0.62);
-      ctx.lineTo(px + size * 0.55, y - size * 0.32);
-      ctx.lineTo(px, y - size * 0.02);
-      ctx.closePath();
-      ctx.fillStyle = C.teamHeading;
-      ctx.fill();
-    }
-    y += lineHeight;
-  });
+  strokedText(ctx, metrics.first, WIDTH / 2, metrics.firstBaseline, metrics.titleSize, C.ink, 9);
+  strokedText(ctx, metrics.second, WIDTH / 2, metrics.secondBaseline, metrics.titleSize, C.ink, 9);
+  strokedText(ctx, CAPTION, WIDTH / 2, L.captionBaseline, metrics.captionSize, C.ink, 9);
   ctx.textAlign = "left";
-}
-
-/** Challenger's name and the VS mark, left of the panel. */
-function drawChallengerLabel(ctx: Ctx, name: string, metrics: HudMetrics): void {
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  const x = Math.round(WIDTH * 0.03);
-  // The name owns a full-width line of its own; VS sits under it, and the
-  // roster panel starts below both. See the note in `hudLayout`.
-  strokedText(ctx, name, x, metrics.nameBaseline, metrics.challengerNameSize, C.ink, 8);
-  strokedText(ctx, "VS", x, metrics.vsBaseline, metrics.vsSize, C.vs, 9);
 }
 
 function drawDamageNumbers(
@@ -452,14 +366,16 @@ export function renderGauntletFrame(
   const hud = options.hud ?? hudLayout(result);
   const layout = gauntletFrameLayout(result, frame, index, hud);
 
-  // Fixed square, fixed border. Nothing here reads the fighters.
-  ctx.lineWidth = ARENA.border;
+  // The arena rides the camera: it pans and scales and the frame crops it, which
+  // is what the reference does in every single frame.
+  const border = ARENA.border * layout.camera.zoom;
+  ctx.lineWidth = border;
   ctx.strokeStyle = C.outline;
   ctx.strokeRect(
-    ARENA_RECT.x + ARENA.border / 2,
-    ARENA_RECT.y + ARENA.border / 2,
-    ARENA_RECT.w - ARENA.border,
-    ARENA_RECT.h - ARENA.border,
+    layout.arena.x + border / 2,
+    layout.arena.y + border / 2,
+    layout.arena.w - border,
+    layout.arena.h - border,
   );
 
   const sides = [
@@ -523,36 +439,30 @@ export function renderGauntletFrame(
     drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
   }
 
-  // After the fighters: drawn under them, "+СКОР" lost its tail behind a body.
-  drawPickup(ctx, snap, layout);
   drawDamageNumbers(ctx, index, frame, layout);
 
-  // Overlay is screen-fixed so long names stay readable.
-  drawChallengerLabel(ctx, result.challenger.name, hud.metrics);
-  drawRosterPanel(ctx, result, snap, hud.metrics);
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  strokedText(
+  // Signatures go over the fighters and under the overlay: they are the scene's
+  // biggest moment, but the title still has to be readable through one.
+  const kindOf = (actorId: string): "magnetic_north" | "nobody_moves" | null => {
+    const who =
+      actorId === result.challenger.id
+        ? result.challenger
+        : result.team.members.find((m) => m.id === actorId);
+    const ability = who?.abilities.find(
+      (a) => a.type === "magnetic_north" || a.type === "nobody_moves",
+    );
+    return ability ? (ability.type as "magnetic_north" | "nobody_moves") : null;
+  };
+  drawSignatures(
     ctx,
-    `РАУНД ${snap.round + 1}/${result.team.members.length}`,
-    WIDTH / 2,
-    L.captionBaseline,
-    L.captionSize,
-    C.ink,
+    result.events,
+    frame,
+    { x: layout.arena.x, y: layout.arena.y, side: layout.arena.w, border },
+    { width: WIDTH, height: HEIGHT },
+    kindOf,
   );
-  ctx.textAlign = "left";
 
-  const progressWidth = WIDTH - Math.round(WIDTH * 0.15);
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
-  ctx.fillRect((WIDTH - progressWidth) / 2, L.progressY, progressWidth, 8);
-  ctx.fillStyle = C.hpHealthy;
-  ctx.fillRect(
-    (WIDTH - progressWidth) / 2,
-    L.progressY,
-    (progressWidth * (frame + 1)) / Math.max(1, result.durationFrames),
-    8,
-  );
+  drawOverlay(ctx, hud.metrics);
 
   const planned = options.planned;
   if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, C.critText);

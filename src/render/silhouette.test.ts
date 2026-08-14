@@ -1,131 +1,125 @@
+import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadFighters } from "../content/index.js";
-import { artFor, FIGHTER_ART } from "./fighters/index.js";
-import { iou, silhouetteMask, type Mask } from "./silhouette.js";
+import { photoAspect } from "./photo.js";
 
 /**
- * The silhouette gate.
+ * The cut-out gate.
  *
- * A viewer should recognise a fighter from its outline, so this renders each
- * one as a solid mask, scales them all to a common height, and measures
- * pairwise intersection-over-union. Colour and props-by-palette cannot help a
- * fighter here — only shape.
+ * Fighters are photographs now, so the old rules here — pairwise silhouette IoU
+ * over procedurally drawn masks — measure something that no longer exists. What
+ * matters about a photo cut-out is different and simpler: the background really
+ * is gone, the figure is not accidentally tiny, and the two people on screen
+ * read apart on a flat blue field.
  *
- * ## Why the threshold is 0.70
- *
- * Measured over the shipped roster (66 pairs):
- *
- *   min 0.026 | p25 0.319 | median 0.439 | p75 0.523 | p90 0.616 | max 0.663
- *
- * The number is not arbitrary — it is bracketed from both sides by measurement:
- *
- * - **Lower bound: what shipping costs.** The worst shipped pair is 0.663
- *   (chairman / inspector), and shape edits stopped helping around there. Two
- *   upright human figures normalised to the same height share a torso column;
- *   that overlap is structural, not a design failure. A gate below ~0.67 would
- *   demand non-humanoid shapes for everyone.
- * - **Upper bound: what a real collision looks like.** Two pairs measured
- *   during this work were genuine failures a viewer would call "the same guy
- *   twice": an earlier round-bellied guard against the plumber at **0.739**,
- *   and the arbiter against a triangle-robed councillor at **0.713**. Both were
- *   redrawn. The gate has to fail those.
- *
- * That leaves the threshold inside (0.663, 0.713). 0.70 sits there with ~0.04
- * of headroom over the shipped worst, so a new fighter that is a re-skin of an
- * existing one trips the gate, while the roster as drawn passes.
- *
- * If this test fails, the fix is to redraw the silhouette — change proportions,
- * pose or the signature prop. Raising the threshold defeats the point.
+ * Everything is measured off the PNG that ships, not off the source photo.
  */
-const MAX_IOU = 0.7;
 
 const roster = loadFighters();
-const masks = new Map<string, Mask>(
-  roster.map((fighter) => [fighter.id, silhouetteMask(fighter.spriteId)]),
-);
 
-interface PairScore {
-  a: string;
-  b: string;
-  value: number;
+interface Cut {
+  id: string;
+  width: number;
+  height: number;
+  /** Share of the PNG's pixels that are actually opaque. */
+  fill: number;
+  /** Mean perceived lightness of the figure's own pixels, 0..255. */
+  lightness: number;
+  /** Opaque pixels touching the PNG's own border. */
+  edgeTouch: number;
 }
 
-const pairs: PairScore[] = [];
-for (let i = 0; i < roster.length; i += 1) {
-  for (let j = i + 1; j < roster.length; j += 1) {
-    const a = roster[i]!;
-    const b = roster[j]!;
-    pairs.push({ a: a.id, b: b.id, value: iou(masks.get(a.id)!, masks.get(b.id)!) });
+async function measure(spriteId: string): Promise<Cut> {
+  const image = await loadImage(readFileSync(join("assets", "fighters", `${spriteId}.png`)));
+  const w = image.width;
+  const h = image.height;
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  let opaque = 0;
+  let sum = 0;
+  let edge = 0;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const i = (y * w + x) * 4;
+      if (px[i + 3]! < 128) continue;
+      opaque += 1;
+      sum += 0.299 * px[i]! + 0.587 * px[i + 1]! + 0.114 * px[i + 2]!;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge += 1;
+    }
   }
+  return {
+    id: spriteId,
+    width: w,
+    height: h,
+    fill: opaque / (w * h),
+    lightness: sum / Math.max(1, opaque),
+    edgeTouch: edge,
+  };
 }
 
-const sorted = [...pairs].sort((x, y) => x.value - y.value).map((p) => p.value);
-const quantile = (p: number): number => sorted[Math.floor((sorted.length - 1) * p)]!;
+const cuts = await Promise.all(roster.map((f) => measure(f.spriteId)));
 
-describe("fighter silhouettes", () => {
-  it("prints the pairwise IoU matrix", () => {
-    const ids = roster.map((f) => f.id);
-    const header = "      " + ids.map((id) => id.slice(0, 5).padStart(6)).join("");
-    const lines = [header];
-    for (const a of ids) {
-      const cells = ids.map((b) => {
-        if (a === b) return "     -";
-        return iou(masks.get(a)!, masks.get(b)!).toFixed(2).padStart(6);
-      });
-      lines.push(a.slice(0, 5).padEnd(6) + cells.join(""));
+describe("fighter cut-outs", () => {
+  it("prints what each cut-out measures", () => {
+    for (const c of cuts) {
+      console.log(
+        `${c.id.padEnd(16)} ${c.width}x${c.height}  fill ${(c.fill * 100).toFixed(0)}%  ` +
+          `lightness ${c.lightness.toFixed(0)}  aspect ${photoAspect(c.id).toFixed(3)}`,
+      );
     }
-    lines.push(
-      `\nn=${sorted.length}  min ${sorted[0]!.toFixed(3)}  p25 ${quantile(0.25).toFixed(3)}` +
-        `  median ${quantile(0.5).toFixed(3)}  p75 ${quantile(0.75).toFixed(3)}` +
-        `  p90 ${quantile(0.9).toFixed(3)}  max ${sorted.at(-1)!.toFixed(3)}`,
-    );
-    console.log(lines.join("\n"));
-    expect(sorted).toHaveLength((roster.length * (roster.length - 1)) / 2);
+    expect(cuts).toHaveLength(roster.length);
   });
 
-  it("keeps every pair of silhouettes distinguishable", () => {
-    const tooSimilar = pairs
-      .filter((p) => p.value >= MAX_IOU)
-      .sort((x, y) => y.value - x.value)
-      .map((p) => `${p.a} / ${p.b}: ${p.value.toFixed(3)}`);
-    expect(tooSimilar).toEqual([]);
+  it("actually removed the background", () => {
+    // A photo that still has its white backdrop fills almost the whole PNG.
+    // Both shipped cut-outs sit near 45-60%; anything over 85% means the flood
+    // fill found nothing and the figure will arrive with a white box round it.
+    for (const c of cuts) {
+      expect(c.fill, `${c.id} fills ${(c.fill * 100).toFixed(0)}% of its PNG`).toBeLessThan(0.85);
+      expect(c.fill, `${c.id} is nearly empty`).toBeGreaterThan(0.15);
+    }
   });
 
-  it("keeps the typical pair well clear of the gate", () => {
-    // Guards against the roster drifting toward the threshold as a whole
-    // rather than one pair tripping it.
-    expect(quantile(0.5)).toBeLessThan(0.55);
-    expect(quantile(0.9)).toBeLessThan(0.65);
+  it("is trimmed to the figure", () => {
+    // `cutout` crops to the opaque bounds, so the figure has to touch all four
+    // edges — if it does not, the sprite box is bigger than the person in it and
+    // every position the simulation computes is off by the slack.
+    for (const c of cuts) {
+      expect(c.edgeTouch, `${c.id} is not trimmed to its figure`).toBeGreaterThan(0);
+    }
   });
 
-  it("gives every roster fighter its own drawing function", () => {
+  it("keeps the two people on screen apart by lightness", () => {
+    // Two dark figures on the flat blue field read as one blob however different
+    // their outlines are. This was a rule for the drawn roster and it survives
+    // the move to photographs unchanged, because the reason for it does.
+    const MIN_GAP = 40;
+    const failures: string[] = [];
+    for (let i = 0; i < cuts.length; i += 1) {
+      for (let j = i + 1; j < cuts.length; j += 1) {
+        const a = cuts[i]!;
+        const b = cuts[j]!;
+        const gap = Math.abs(a.lightness - b.lightness);
+        if (gap < MIN_GAP) {
+          failures.push(
+            `${a.id} (${a.lightness.toFixed(0)}) × ${b.id} (${b.lightness.toFixed(0)}): gap ${gap.toFixed(0)}`,
+          );
+        }
+      }
+    }
+    expect(failures.join("\n")).toBe("");
+  });
+
+  it("gives the simulation the same aspect the renderer draws", () => {
+    // The bounce box and the drawn box have to be the same box. They are only
+    // the same if the roster's `aspect` came from this PNG.
     for (const fighter of roster) {
-      const art = artFor(fighter.spriteId);
-      expect(art, `${fighter.id} has no art`).toBeDefined();
-      expect(art!.note.length).toBeGreaterThan(0);
+      expect(fighter.aspect).toBeCloseTo(photoAspect(fighter.spriteId), 3);
     }
-    // No two fighters share art.
-    const used = roster.map((f) => f.spriteId);
-    expect(new Set(used).size).toBe(roster.length);
-  });
-
-  it("varies build, not just outline detail", () => {
-    const aspects = roster.map((f) => masks.get(f.id)!.aspect);
-    expect(Math.min(...aspects)).toBeLessThan(0.45);
-    expect(Math.max(...aspects)).toBeGreaterThan(1.0);
-  });
-
-  it("draws something for every registered fighter", () => {
-    for (const art of FIGHTER_ART) {
-      const mask = silhouetteMask(art.id);
-      expect(mask.area).toBeGreaterThan(1000);
-    }
-  });
-
-  it("is deterministic", () => {
-    const first = silhouetteMask("plumber");
-    const second = silhouetteMask("plumber");
-    expect(first.area).toBe(second.area);
-    expect(iou(first, second)).toBe(1);
   });
 });

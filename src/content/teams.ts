@@ -37,7 +37,14 @@ export interface GauntletTuning {
 }
 
 /** Solved by `calibrateGauntlet`; kept here so the pipeline can just use it. */
-export const GAUNTLET_TUNING: GauntletTuning = { tempo: 1.03, challengerPower: 2.74 };
+/**
+ * `challengerPower` is 1 now, and that is not a tuning choice — it is the format
+ * changing. It existed to let one worker survive three bosses in a row; a fight
+ * is one against one, both at full health, so an edge handed to one side is just
+ * a thumb on the scale. With it still at 2.74 a fight lasted 11 seconds and was
+ * over before it started.
+ */
+export const GAUNTLET_TUNING: GauntletTuning = { tempo: 1.03, challengerPower: 1 };
 
 /**
  * Rules the shipped gauntlet runs under.
@@ -85,7 +92,7 @@ function scaled(fighter: Fighter, damageMultiplier: number): Fighter {
 export function buildTeam(members: Fighter[], tuning: GauntletTuning, name?: string): Team {
   return {
     id: members.map((m) => m.id).join("+"),
-    name: name ?? "КОМИССИЯ",
+    name: name ?? "OPPONENT",
     members: members.map((m) => scaled(m, tuning.tempo)),
   };
 }
