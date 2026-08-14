@@ -123,9 +123,9 @@ export interface GauntletMatchup {
  * Every worker against every trio of bosses, in a stable order so a batch can
  * resume where the last one stopped.
  */
-export function gauntletMatchups(roster = loadFighters(), teamSize = 3): GauntletMatchup[] {
-  const workers = byFaction("workers", roster);
-  const bosses = byFaction("bosses", roster);
+export function gauntletMatchups(roster = loadFighters(), teamSize = 1): GauntletMatchup[] {
+  const workers = byFaction("left", roster);
+  const bosses = byFaction("right", roster);
   const out: GauntletMatchup[] = [];
   for (const challenger of workers) {
     for (const members of combinations(bosses, teamSize)) out.push({ challenger, members });

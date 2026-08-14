@@ -146,8 +146,8 @@ describe("gauntlet drama", () => {
 
 describe("teams from factions", () => {
   it("splits the roster in half", () => {
-    expect(byFaction("workers", roster)).toHaveLength(6);
-    expect(byFaction("bosses", roster)).toHaveLength(6);
+    expect(byFaction("left", roster)).toHaveLength(6);
+    expect(byFaction("right", roster)).toHaveLength(6);
   });
 
   it("enumerates every worker against every trio of bosses", () => {

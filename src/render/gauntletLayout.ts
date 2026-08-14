@@ -7,8 +7,9 @@ import {
   HP_WIDGET,
   HP_WIDGET_SLOTS,
 } from "./gauntletTheme.js";
-import { cameraTrack, depthScale, groundAt, worldToScreen } from "./gauntletCamera.js";
-import { minionMotionBounds, spriteBounds, spriteMotionBounds } from "./silhouette.js";
+import { cameraTrack, FIGHTER_HEIGHT_PX, worldToScreen } from "./gauntletCamera.js";
+import { minionMotionBounds } from "./silhouette.js";
+import { PHOTO_OUTLINE } from "./photo.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
 import type { Canvas } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
@@ -256,33 +257,23 @@ export function gauntletFrameLayout(
   const opponent = result.team.members[snap.round] ?? result.team.members[0]!;
   const track = cameraTrack(result);
   const cam = track.frames[frame] ?? track.frames[track.frames.length - 1]!;
-  const base = track.baseSize[snap.round] ?? track.baseSize[0]!;
 
-  // Position comes from the simulation now; the renderer only projects it.
-  const sizeFar = base * cam.zoom * depthScale(snap.challenger.y);
-  const sizeNear = base * cam.zoom * depthScale(snap.opponent.y);
-  const boundsA = spriteBounds(result.challenger.spriteId);
-  const boundsB = spriteBounds(opponent.spriteId);
-
-  const originAx = worldToScreen(snap.challenger.x, cam);
-  const originBx = worldToScreen(snap.opponent.x, cam);
-  const originAy = groundAt(snap.challenger.y) - boundsA.bottom * sizeFar;
-  const originBy = groundAt(snap.opponent.y) - boundsB.bottom * sizeNear;
-
-  const spriteA: Rect = {
-    name: "challengerSprite",
-    x: originAx + boundsA.left * sizeFar,
-    y: originAy + boundsA.top * sizeFar,
-    w: boundsA.width * sizeFar,
-    h: boundsA.height * sizeFar,
+  // Position and size both come from the simulation now; the renderer projects.
+  // A fighter is a photo, so its box is the photo — there is nothing to solve.
+  const boxFor = (name: string, fighter: { aspect: number }, at: { x: number; y: number }): Rect => {
+    const h = FIGHTER_HEIGHT_PX * cam.zoom;
+    const w = h * fighter.aspect;
+    const centre = worldToScreen(at.x, at.y, cam);
+    return { name, x: centre.x - w / 2, y: centre.y - h / 2, w, h };
   };
-  const spriteB: Rect = {
-    name: "opponentSprite",
-    x: originBx + boundsB.left * sizeNear,
-    y: originBy + boundsB.top * sizeNear,
-    w: boundsB.width * sizeNear,
-    h: boundsB.height * sizeNear,
-  };
+  const spriteA = boxFor("challengerSprite", result.challenger, snap.challenger);
+  const spriteB = boxFor("opponentSprite", opponent, snap.opponent);
+  const originAx = spriteA.x + spriteA.w / 2;
+  const originBx = spriteB.x + spriteB.w / 2;
+  const originAy = spriteA.y + spriteA.h / 2;
+  const originBy = spriteB.y + spriteB.h / 2;
+  const sizeFar = spriteA.h;
+  const sizeNear = spriteB.h;
 
   // Pinned vertically to the arena's top band, tracking its own fighter along
   // it so it stays readable as *whose* health it is.
@@ -307,26 +298,15 @@ export function gauntletFrameLayout(
     hpB = hpFor("opponentHp", originBx + clash / 2);
   }
 
-  // Reach boxes use the true measured envelope, per side.
-  const reachOf = (
-    name: string,
-    spriteId: string,
-    originX: number,
-    originY: number,
-    size: number,
-  ): Rect => {
-    // The full measured envelope, uncapped: if any part of a fighter would
-    // cross the arena wall, the gate must see it.
-    // Grown by the keyline, because the keyline is drawn pixels too.
-    const dead = spriteMotionBounds(spriteId, true);
-    return {
-      name: `${name}Reach`,
-      x: originX + dead.left * size - FIGHTER_OUTLINE,
-      y: originY + dead.top * size - FIGHTER_OUTLINE,
-      w: dead.width * size + FIGHTER_OUTLINE * 2,
-      h: dead.height * size + FIGHTER_OUTLINE * 2,
-    };
-  };
+  // A photo has no wind-up and no death throw, so the box it draws is the box
+  // it claims — grown only by the keyline, which is drawn pixels too.
+  const reachOf = (name: string, box: Rect): Rect => ({
+    name: `${name}Reach`,
+    x: box.x - PHOTO_OUTLINE,
+    y: box.y - PHOTO_OUTLINE,
+    w: box.w + PHOTO_OUTLINE * 2,
+    h: box.h + PHOTO_OUTLINE * 2,
+  });
 
   const damageNumbers = damageNumberRects(result, frame, index, {
     challenger: {
@@ -348,26 +328,26 @@ export function gauntletFrameLayout(
   const minions = minionPlacements(snap, {
     challenger: { id: snap.challenger.id, spriteId: result.challenger.spriteId, sprite: spriteA, originX: originAx },
     opponent: { id: snap.opponent.id, spriteId: opponent.spriteId, sprite: spriteB, originX: originBx },
-    groundY: groundAt(snap.opponent.y),
+    groundY: originBy,
   });
 
   return {
     fighterSize: sizeNear,
     sizeFar,
     sizeNear,
-    groundY: groundAt(snap.opponent.y),
-    groundFarY: groundAt(snap.challenger.y),
+    groundY: originBy,
+    groundFarY: originAy,
     arena: { ...ARENA_RECT },
-    camera: { x: cam.x, y: 0, zoom: cam.zoom },
+    camera: { x: cam.x, y: cam.y, zoom: cam.zoom },
     challenger: {
       sprite: spriteA,
-      reach: reachOf("challengerSprite", result.challenger.spriteId, originAx, originAy, sizeFar),
+      reach: reachOf("challengerSprite", spriteA),
       centre: { x: originAx, y: originAy },
       hp: hpA,
     },
     opponent: {
       sprite: spriteB,
-      reach: reachOf("opponentSprite", opponent.spriteId, originBx, originBy, sizeNear),
+      reach: reachOf("opponentSprite", spriteB),
       centre: { x: originBx, y: originBy },
       hp: hpB,
     },

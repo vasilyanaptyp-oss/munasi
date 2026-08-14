@@ -1,11 +1,4 @@
-import {
-  initialEngagement,
-  initialMovement,
-  stepEngagement,
-  stepMovement,
-  type EngagementState,
-  type MovementState,
-} from "./movement.js";
+import { initialMovement, stepMovement, type MovementState } from "./movement.js";
 import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
@@ -198,18 +191,14 @@ export function simulate(
 
   // Streams 4 and 5: added after the fact, so they cannot disturb the draws
   // that decide the fight (1 and 2) or the pickups (3).
-  const movement: Record<Side, MovementState> = {
-    a: initialMovement("a"),
-    b: initialMovement("b"),
-  };
   const movementRng: Record<Side, Rng> = {
     a: mulberry32(deriveSeed(4)),
     b: mulberry32(deriveSeed(5)),
   };
-  // One engagement anchor for both sides: independent drifts let the pair
-  // wander half an arena apart and swing at nothing.
-  const engagement: EngagementState = initialEngagement();
-  const engagementRng = mulberry32(deriveSeed(6));
+  const movement: Record<Side, MovementState> = {
+    a: initialMovement("a", fighters.a.aspect, movementRng.a),
+    b: initialMovement("b", fighters.b.aspect, movementRng.b),
+  };
 
   const events: MatchEvent[] = [];
   const snapshots: Snapshot[] = [];
@@ -455,18 +444,10 @@ export function simulate(
       }
     }
 
-    // The dance. Position never gates damage — see movement.ts — so this runs
+    // The bounce. Position never gates damage — see movement.ts — so this runs
     // beside the fight rather than inside it.
-    stepEngagement(engagement, tick, engagementRng);
     for (const side of [sides.a, sides.b]) {
-      stepMovement(movement[side.side], {
-        side: side.side,
-        attackCooldown: side.attackCooldown,
-        attackInterval: ticksPerAttack(effectiveAttackSpeed(side)),
-        anchor: engagement.anchor,
-        tick,
-        rng: movementRng[side.side],
-      });
+      stepMovement(movement[side.side], { tick, rng: movementRng[side.side] });
     }
 
     // Basic attacks.

@@ -4,6 +4,7 @@ import type { Fighter } from "../sim/types.js";
 import { isMain } from "../util/main.js";
 import { ROSTER, type FighterSpec } from "./roster.js";
 import { ROSTER_PATH } from "./index.js";
+import { spriteAspect } from "./cutout.js";
 
 /**
  * Turns the hand-authored specs in `roster.ts` into `fighters.json` by solving
@@ -48,6 +49,9 @@ const REFERENCE: Fighter = {
   id: "reference",
   name: "REFERENCE",
   spriteId: "knight",
+  // The dummy is never drawn, so its shape is arbitrary; a square keeps it from
+  // implying anything about the roster it calibrates.
+  aspect: 1,
   maxHp: MID_HP,
   hp: MID_HP,
   attack: MID_HP / MIRROR_TTK / (1 + REFERENCE_CRIT_CHANCE * (REFERENCE_CRIT_MULT - 1)),
@@ -103,6 +107,7 @@ export function scaleSpec(spec: FighterSpec, attack: number, scale: number): Fig
     id: spec.id,
     name: spec.name,
     spriteId: spec.spriteId,
+    aspect: spriteAspect(spec.spriteId),
     maxHp: spec.maxHp,
     hp: spec.maxHp,
     attack: attack * scale,
@@ -160,6 +165,9 @@ function serialise(fighter: Fighter): unknown {
     id: fighter.id,
     name: fighter.name,
     spriteId: fighter.spriteId,
+    // Four places is enough to reproduce the bounce box exactly; the aspect
+    // comes from the PNG's own pixel dimensions, so it is already exact.
+    aspect: Math.round(fighter.aspect * 10000) / 10000,
     maxHp: fighter.maxHp,
     attack: Math.round(fighter.attack * 10) / 10,
     attackSpeed: fighter.attackSpeed,

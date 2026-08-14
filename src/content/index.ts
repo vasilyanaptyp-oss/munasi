@@ -52,6 +52,7 @@ function parseFighter(raw: unknown, index: number): Fighter {
     id,
     name: typeof r["name"] === "string" ? r["name"] : id.toUpperCase(),
     spriteId: typeof r["spriteId"] === "string" ? r["spriteId"] : id,
+    aspect: assertNumber(r["aspect"], `${label}.aspect`),
     maxHp,
     hp: maxHp,
     attack: assertNumber(r["attack"], `${label}.attack`),

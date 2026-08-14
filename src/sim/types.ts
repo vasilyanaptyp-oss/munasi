@@ -40,6 +40,16 @@ export interface Fighter {
   id: string;
   name: string;
   spriteId: string;
+  /**
+   * Width over height of the fighter's cut-out.
+   *
+   * The simulation needs it because a fighter bounces off the walls as a box,
+   * and a wide figure has to turn around sooner than a narrow one. It comes from
+   * the PNG's own dimensions (`pnpm cutout` writes it into the roster), so the
+   * box the simulation bounces is the box the renderer draws — the two cannot
+   * drift apart.
+   */
+  aspect: number;
   maxHp: number;
   /** Current HP. Equals `maxHp` at the start of a match. */
   hp: number;

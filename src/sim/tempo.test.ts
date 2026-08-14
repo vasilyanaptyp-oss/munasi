@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, byFaction, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { findBestGauntlet } from "./gauntlet.js";
-import { LANES, MAX_STILL_FRAMES } from "./movement.js";
+import { FIGHTER_HALF_HEIGHT, MAX_STILL_FRAMES } from "./movement.js";
 import { MAX_QUIET_FRAMES, tempoReport } from "./tempo.js";
 import { FPS } from "./types.js";
 
@@ -73,7 +73,7 @@ describe("tempo", () => {
   });
 
   it("reports something for every worker", () => {
-    for (const worker of byFaction("workers", roster)) {
+    for (const worker of byFaction("left", roster)) {
       const result = run(worker.id, ["chairman", "councillor", "arbiter"]);
       const report = tempoReport(result);
       expect(report.durationFrames).toBeGreaterThan(0);
@@ -126,21 +126,42 @@ describe("movement", () => {
     );
   });
 
-  it("keeps the two of them in their own depth lanes", () => {
-    const result = run("baker", ["silencer", "councillor", "inspector"]);
+  it("keeps every fighter's box inside the arena", () => {
+    // The simulation bounces a box of exactly the size the renderer draws, so
+    // staying inside here is what keeps a figure off the wall on screen.
+    const result = run("compass", ["bodyguard"]);
+    const roster = loadFighters();
+    const half = (id: string): { w: number; h: number } => {
+      const f = getFighter(id, roster);
+      return { w: FIGHTER_HALF_HEIGHT * f.aspect, h: FIGHTER_HALF_HEIGHT };
+    };
+    const a = half("compass");
+    const b = half("bodyguard");
     for (const snap of result.snapshots) {
-      expect(snap.challenger.y).toBeGreaterThanOrEqual(LANES.a.min - 1e-9);
-      expect(snap.challenger.y).toBeLessThanOrEqual(LANES.a.max + 1e-9);
-      expect(snap.opponent.y).toBeGreaterThanOrEqual(LANES.b.min - 1e-9);
-      expect(snap.opponent.y).toBeLessThanOrEqual(LANES.b.max + 1e-9);
+      expect(snap.challenger.x).toBeGreaterThanOrEqual(a.w - 1e-9);
+      expect(snap.challenger.x).toBeLessThanOrEqual(1 - a.w + 1e-9);
+      expect(snap.challenger.y).toBeGreaterThanOrEqual(a.h - 1e-9);
+      expect(snap.challenger.y).toBeLessThanOrEqual(1 - a.h + 1e-9);
+      expect(snap.opponent.x).toBeGreaterThanOrEqual(b.w - 1e-9);
+      expect(snap.opponent.x).toBeLessThanOrEqual(1 - b.w + 1e-9);
     }
   });
 
-  it("actually travels — the pair closes and breaks apart", () => {
-    const result = run("courier", ["chairman", "arbiter", "viceroy"]);
-    const spreads = result.snapshots.map((s) => Math.abs(s.opponent.x - s.challenger.x));
-    const range = Math.max(...spreads) - Math.min(...spreads);
-    expect(range, "the gap between them never changes").toBeGreaterThan(0.1);
+  it("bounces — it reaches both sides of the arena and turns around", () => {
+    // The thing the previous model got wrong. A fighter that drifts near one
+    // spot passes a "does it move" check and is still not what the reference
+    // does: there, a fighter crosses the whole arena and comes back.
+    const result = run("compass", ["bodyguard"]);
+    const xs = result.snapshots.map((s) => s.challenger.x);
+    expect(Math.max(...xs) - Math.min(...xs), "never crosses the arena").toBeGreaterThan(0.45);
+
+    let turns = 0;
+    for (let i = 2; i < xs.length; i += 1) {
+      const before = xs[i - 1]! - xs[i - 2]!;
+      const after = xs[i]! - xs[i - 1]!;
+      if (before !== 0 && after !== 0 && Math.sign(before) !== Math.sign(after)) turns += 1;
+    }
+    expect(turns, "never turns around").toBeGreaterThan(1);
   });
 
   it("replays identically — movement is on the same seeded streams", () => {

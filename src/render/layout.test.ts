@@ -350,8 +350,8 @@ describe("gauntlet composition", () => {
     // round, so those are the pairs that have to be told apart.
     const MIN_GAP = 60;
     const failures: string[] = [];
-    for (const worker of byFaction("workers", roster)) {
-      for (const boss of byFaction("bosses", roster)) {
+    for (const worker of byFaction("left", roster)) {
+      for (const boss of byFaction("right", roster)) {
         const light = meanLightness(worker.spriteId);
         const dark = meanLightness(boss.spriteId);
         const gap = Math.abs(light - dark);
@@ -389,8 +389,8 @@ describe("gauntlet composition", () => {
     // one of the 36 pairings is simulated and walked through the same layout the
     // renderer draws from, on a spread of frames per pairing.
     const failures: string[] = [];
-    for (const worker of byFaction("workers", roster)) {
-      for (const boss of byFaction("bosses", roster)) {
+    for (const worker of byFaction("left", roster)) {
+      for (const boss of byFaction("right", roster)) {
         const run = simulateGauntlet(buildGauntlet(worker, [boss]), 3, GAUNTLET_RULES);
         const plan = defaultPlan(run, VICTORY_CARD_FRAMES).filter((_, i) => i % 7 === 0);
         const violations = auditFrames(run, plan);

@@ -5,7 +5,6 @@ import type { PickupType } from "../sim/types.js";
 import {
   DEATH_FRAMES,
   drawFighter,
-  FIGHTER_OUTLINE,
   RECOVERY_FRAMES,
   WINDUP_FRAMES,
 } from "./drawFighter.js";
@@ -24,8 +23,7 @@ import {
   type Rect,
 } from "./gauntletLayout.js";
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
-import { worldToScreen } from "./gauntletCamera.js";
-import { spriteMotionBounds } from "./silhouette.js";
+import { drawPhoto } from "./photo.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
@@ -205,60 +203,6 @@ function drawPickup(ctx: Ctx, snap: GauntletSnapshot, layout: GauntletFrameLayou
   ctx.restore();
 }
 
-/**
- * The floor: two depth lines and a band of stripes that travel with the camera.
- *
- * Without this a pan is nearly invisible. The arena frame is nailed down and it
- * is the highest-contrast thing on screen; the field inside it is one flat
- * colour. Moving the camera over a flat colour changes no pixels at all, so a
- * shot that pans and zooms still measured as a slideshow. The stripes are scene
- * rather than chrome: they sit at fixed world positions and slide as the camera
- * moves, which is what a viewer reads as the shot travelling.
- *
- * Faint on purpose — they are a floor, not a pattern to look at.
- */
-function drawFloor(ctx: Ctx, layout: GauntletFrameLayout): void {
-  const left = ARENA.inner.x;
-  const right = ARENA.inner.x + ARENA.inner.w;
-  // Full height of the arena, not just the floor band: the striped area is
-  // what a pan actually changes, and half an arena of flat colour was half the
-  // motion budget thrown away.
-  const top = ARENA.inner.y;
-  const bottom = ARENA.inner.y + ARENA.inner.h;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(left, ARENA.inner.y, ARENA.inner.w, ARENA.inner.h);
-  ctx.clip();
-
-  // One stripe every eighth of the arena, in world space.
-  const step = 0.125;
-  // 0.055 was invisible in more than the obvious sense: over the blue field it
-  // shifts luma by 7 of 255, and the motion measurement ignores anything under
-  // 8 as codec noise. A stripe nobody can measure is a stripe nobody can see.
-  ctx.fillStyle = "rgba(0,0,0,0.15)";
-  for (let world = Math.floor(layout.camera.x / step) * step - 1; world < layout.camera.x + 1; world += step * 2) {
-    const x0 = worldToScreen(world, layout.camera);
-    const x1 = worldToScreen(world + step, layout.camera);
-    if (x1 < left || x0 > right) continue;
-    const a = Math.max(left, x0);
-    const b = Math.min(right, x1);
-    if (b > a) ctx.fillRect(a, top, b - a, bottom - top);
-  }
-
-  for (const [y, alpha] of [
-    [ARENA.groundFarY, 0.1],
-    [ARENA.groundY, 0.2],
-  ] as const) {
-    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
-    ctx.lineWidth = Math.max(2, Math.round(HEIGHT * 0.0022));
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
 
 function strikePhase(index: RenderIndex, frame: number, fighterId: string): number | null {
   let best: number | null = null;
@@ -517,8 +461,6 @@ export function renderGauntletFrame(
     ARENA_RECT.w - ARENA.border,
     ARENA_RECT.h - ARENA.border,
   );
-  // The floor the pair stands on, also fixed.
-  drawFloor(ctx, layout);
 
   const sides = [
     {
@@ -564,22 +506,19 @@ export function renderGauntletFrame(
       ctx.fillRect(minion.bar.x, minion.bar.y, minion.bar.w * share, minion.bar.h);
     }
 
-    ctx.save();
-    ctx.translate(place.centre.x, place.centre.y);
-    drawFighter(ctx, fighter.spriteId, {
-      size,
-      facing,
-      frame,
-      strike: vis.strike,
-      death: vis.death,
+    // A cut-out photo with a white keyline, exactly the reference's treatment.
+    // There is no wind-up and no lunge to draw: the figure is a photograph, and
+    // what animates is where it is, not what it is doing.
+    void size;
+    void facing;
+    drawPhoto(ctx, fighter.spriteId, {
+      x: place.sprite.x + place.sprite.w / 2,
+      y: place.sprite.y + place.sprite.h / 2,
+      w: place.sprite.w,
+      h: place.sprite.h,
       flash: vis.flash,
-      hurt: vis.hurt,
-      buffed: state.buffed,
-      lungeAxis: "x",
-      outline: FIGHTER_OUTLINE,
-      outlineBounds: spriteMotionBounds(fighter.spriteId, true),
+      ...(vis.death === undefined ? {} : { fade: vis.death * 0.85 }),
     });
-    ctx.restore();
 
     drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
   }

@@ -1,144 +1,153 @@
 import type { Rng } from "./rng.js";
 
 /**
- * Where the fighters are, tick by tick.
+ * Where the fighters are, tick by tick. **They bounce.**
  *
- * Until this existed the simulation was a race between two numbers and the
- * renderer stood the figures in fixed slots, so a finished video changed 3% of
- * its pixels per frame against the reference channel's 12.7% and held a fifth
- * of its frames completely still. No composition rule catches that: the frame
- * is laid out correctly, it simply is not moving.
+ * Each fighter carries a position and a velocity in the arena's unit square,
+ * travels in a straight line, and reflects off the walls. Nothing pulls the two
+ * together and nothing ties movement to the attack schedule: they cross the
+ * whole arena, pass over each other, and end up on opposite sides from where
+ * they started. Traced frame by frame in the reference, the two fighters swap
+ * sides completely over a fight.
  *
- * The arena here is an abstract unit square — `x` runs left to right, `y` runs
- * from the far side to the near one. Nothing in this file knows how big the
- * arena is on screen or where it sits; the renderer maps these into the two
- * ground lines it already draws.
+ * The previous model had them approach each other and lunge on the beat of
+ * their own cooldown. That was wrong, and wrong in a way no measurement caught,
+ * because it produced motion — just not this motion.
  *
- * **Position does not decide damage, so it follows the schedule instead.** The
- * attack cadence is driven by the cooldown alone, exactly as before, and the
- * lunge is locked to it: a fighter's distance to its opponent bottoms out on
- * the frame its own blow lands. That keeps a calibrated roster calibrated — an
- * outcome cannot depend on whether someone walked fast enough — and it also
- * makes a swing readable, because the step and the hit are the same event.
+ * **Movement decides nothing.** Damage comes from the attack schedule alone, at
+ * whatever distance the pair happens to be. So the roster stays calibrated no
+ * matter how the bouncing goes, and a fighter is never punished for its speed.
  *
- * The two sides run on their own periods, so the gap widens whenever either
- * one is between swings. What they share is the anchor: the engagement drifts
- * across the arena as one thing. Giving each fighter its own drift was the
- * first version and it let the two wander half an arena apart — 8.9% of damage
- * events landed with the pair further than 1.4 mean widths from each other.
+ * The arena here is an abstract unit square. Nothing in this file knows how big
+ * it is on screen; the renderer projects it.
  */
 
-/** Lateral gap at which a blow lands. */
-const STRIKE_GAP = 0.11;
-/** Lateral gap a fighter falls back to right after swinging. */
-const BACK_GAP = 0.30;
-/** Units per tick, for the parts that are rate-limited rather than exact. */
-const SPEED = 0.0095;
-/** Depth is a slower drift than the lateral dance. */
-const DEPTH_SPEED = 0.0032;
-/** Ticks a fighter holds one sideways offset before drawing another. */
-const STRAFE_TICKS = 46;
-/** Sideways offset a fighter may hold. Small: it must not undo the lunge. */
-const STRAFE_RANGE = 0.035;
 /**
- * How far, and how often, the engagement as a whole wanders across the arena.
+ * Half the height a fighter occupies, as a share of the arena.
  *
- * Shared by both fighters — see the note at the top. This is also what the
- * camera follows: the pair swings in and out on its own periods, which mostly
- * cancels at the midpoint, so without a drift the shot has nothing to track.
+ * This is a contract with the renderer, not a hint: the simulation keeps a
+ * fighter's centre far enough from the wall that a figure of this size stays
+ * inside, and the renderer draws it at exactly this size. Measured off the
+ * reference, a fighter is a bit over a third of the arena tall.
  */
-const DRIFT_RANGE = 0.24;
-const DRIFT_TICKS = 150;
+export const FIGHTER_HALF_HEIGHT = 0.18;
 
-/** Depth band each side lives in. They never trade places. */
-export const LANES = {
-  a: { min: 0.14, max: 0.4 },
-  b: { min: 0.6, max: 0.86 },
-} as const;
-
-/** Where the fight as a whole is standing. One of these per match. */
-export interface EngagementState {
-  anchor: number;
-  target: number;
-  repickAtTick: number;
-}
-
-export function initialEngagement(): EngagementState {
-  return { anchor: 0.5, target: 0.5, repickAtTick: 0 };
-}
-
-export function stepEngagement(state: EngagementState, tick: number, rng: Rng): void {
-  if (tick >= state.repickAtTick) {
-    state.target = 0.5 + rng.range(-DRIFT_RANGE / 2, DRIFT_RANGE / 2);
-    state.repickAtTick = tick + DRIFT_TICKS;
-  }
-  state.anchor = approach(state.anchor, state.target, SPEED * 0.7);
-}
+/** Units per tick. The reference crosses its arena in roughly four seconds. */
+const SPEED_MIN = 0.0026;
+const SPEED_MAX = 0.0042;
 
 export interface MovementState {
   x: number;
   y: number;
-  /** Sideways offset this fighter is holding this beat. */
-  strafe: number;
-  targetY: number;
-  repickAtTick: number;
+  vx: number;
+  vy: number;
+  /** Half-width as a share of the arena, from the sprite's aspect ratio. */
+  halfW: number;
+  halfH: number;
 }
 
-export function initialMovement(side: "a" | "b"): MovementState {
-  const lane = LANES[side];
-  const y = (lane.min + lane.max) / 2;
-  const x = side === "a" ? 0.5 - BACK_GAP / 2 : 0.5 + BACK_GAP / 2;
-  return { x, y, strafe: 0, targetY: y, repickAtTick: 0 };
+export interface MovementInput {
+  /** Ticks since the round began, for the drift that keeps a fight from looping. */
+  tick: number;
+  rng: Rng;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
-function approach(current: number, target: number, speed: number): number {
-  const delta = target - current;
-  if (Math.abs(delta) <= speed) return target;
-  return current + Math.sign(delta) * speed;
-}
+/**
+ * Starting corner, heading and speed.
+ *
+ * `aspect` is width over height of the fighter's cut-out, so a wide figure gets
+ * a wide box and bounces off the side walls sooner — which is the correct
+ * behaviour and free, since the box is what is drawn.
+ */
+export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): MovementState {
+  const halfH = FIGHTER_HALF_HEIGHT;
+  const halfW = halfH * aspect;
+  // The two start on opposite sides, so frame 0 reads as a face-off.
+  const x = side === "a" ? halfW + 0.08 : 1 - halfW - 0.08;
+  const y = rng.range(halfH, 1 - halfH);
 
-export interface MovementInput {
-  side: "a" | "b";
-  /** Ticks until this fighter's next basic attack. */
-  attackCooldown: number;
-  /** Ticks between this fighter's attacks. */
-  attackInterval: number;
-  /** Where the engagement is standing, shared by both sides. */
-  anchor: number;
-  tick: number;
-  rng: Rng;
+  // A heading that is never near-vertical or near-horizontal: a fighter that
+  // only slides up and down never crosses the arena, and the crossing is the
+  // whole point.
+  const quarter = rng.range(0.22, 0.78) * (Math.PI / 2);
+  const speed = rng.range(SPEED_MIN, SPEED_MAX);
+  const towards = side === "a" ? 1 : -1;
+  return {
+    x,
+    y,
+    vx: Math.cos(quarter) * speed * towards,
+    vy: Math.sin(quarter) * speed * (rng.chance(0.5) ? 1 : -1),
+    halfW,
+    halfH,
+  };
 }
 
 /**
- * Advances one fighter by a tick.
+ * One tick of travel, reflecting off the arena walls.
  *
- * The gap to the centre closes linearly as the cooldown runs down and snaps
- * back the moment the blow lands, so the closest point of the whole cycle is
- * the frame of the hit. It is set rather than eased toward: easing caps the
- * speed, and a capped fighter arrives late, which is exactly the fault this
- * replaces. There is no branch where the fighter holds position.
+ * The reflection is a mirror, not a random redirect: it has to look like a ball,
+ * and a viewer notices immediately when it does not. The position is clamped as
+ * well as reflected so a fighter cannot tunnel through a wall on a slow frame.
  */
 export function stepMovement(state: MovementState, input: MovementInput): void {
-  const lane = LANES[input.side];
-  const home = input.side === "a" ? -1 : 1;
+  state.x += state.vx;
+  state.y += state.vy;
 
-  if (input.tick >= state.repickAtTick) {
-    state.strafe = input.rng.range(-STRAFE_RANGE, STRAFE_RANGE);
-    state.targetY = input.rng.range(lane.min, lane.max);
-    state.repickAtTick = input.tick + STRAFE_TICKS;
+  const left = state.halfW;
+  const right = 1 - state.halfW;
+  const top = state.halfH;
+  const bottom = 1 - state.halfH;
+
+  if (state.x <= left) {
+    state.x = left;
+    state.vx = Math.abs(state.vx);
+  } else if (state.x >= right) {
+    state.x = right;
+    state.vx = -Math.abs(state.vx);
+  }
+  if (state.y <= top) {
+    state.y = top;
+    state.vy = Math.abs(state.vy);
+  } else if (state.y >= bottom) {
+    state.y = bottom;
+    state.vy = -Math.abs(state.vy);
   }
 
-  // 0 on the frame the blow lands, 1 just after the previous one.
-  const interval = Math.max(1, input.attackInterval);
-  const untilSwing = clamp(Math.max(0, input.attackCooldown - 1) / interval, 0, 1);
-  const gap = STRIKE_GAP + (BACK_GAP - STRIKE_GAP) * untilSwing;
+  // A hair of drift on every bounce, so a fight never settles into a loop that
+  // retraces the same diagonal for thirty seconds.
+  if (state.x === left || state.x === right || state.y === top || state.y === bottom) {
+    const wobble = input.rng.range(-0.06, 0.06);
+    const speed = Math.hypot(state.vx, state.vy);
+    const heading = Math.atan2(state.vy, state.vx) + wobble;
+    state.vx = Math.cos(heading) * speed;
+    state.vy = Math.sin(heading) * speed;
+  }
 
-  state.x = clamp(input.anchor + home * (gap / 2) + state.strafe, 0.06, 0.94);
-  state.y = clamp(approach(state.y, state.targetY, DEPTH_SPEED), lane.min, lane.max);
+  state.x = clamp(state.x, left, right);
+  state.y = clamp(state.y, top, bottom);
+}
+
+/**
+ * Rewrites everyone's heading to one direction — Compass Guy's `MAGNETIC NORTH`.
+ *
+ * Lives here because it is a movement effect and movement is this file's job.
+ * The speed is kept and only the heading changes, so nobody is sped up by being
+ * pointed at a wall.
+ */
+export function setHeading(state: MovementState, heading: number): void {
+  const speed = Math.hypot(state.vx, state.vy);
+  state.vx = Math.cos(heading) * speed;
+  state.vy = Math.sin(heading) * speed;
+}
+
+/** Stops a fighter dead — Bodyguard Guy's `NOBODY MOVES`, and his own stance. */
+export function halt(state: MovementState): void {
+  state.vx = 0;
+  state.vy = 0;
 }
 
 /** Longest a fighter may hold still, in video frames. */

@@ -6,6 +6,7 @@ export function makeFighter(overrides: Partial<Fighter> & { id: string }): Fight
   const base: Fighter = {
     id: overrides.id,
     name: overrides.id.toUpperCase(),
+    aspect: 0.8,
     spriteId: "default",
     maxHp: 1000,
     hp: 1000,
