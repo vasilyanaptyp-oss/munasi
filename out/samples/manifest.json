@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "compass-vs-bodyguard-168.mp4",
+      "file": "compass-vs-bodyguard-52.mp4",
       "fighters": [
         "compass",
         "bodyguard"
@@ -10,17 +10,17 @@
         "COMPASS GUY",
         "OPPONENT"
       ],
-      "seed": 168,
+      "seed": 52,
       "dramaScore": 69.6,
-      "durationSeconds": 30.67,
-      "frames": 920,
+      "durationSeconds": 30.93,
+      "frames": 928,
       "winnerId": "compass",
-      "sizeBytes": 9854656,
-      "generatedAt": "2026-08-14T22:36:57.009Z",
+      "sizeBytes": 9337316,
+      "generatedAt": "2026-08-15T08:25:04.972Z",
       "provenance": {
-        "commit": "03f6a6f880012bf01c9f5da2c98045cd8622ebbc",
+        "commit": "3ba2de3c4406bab5203ae4fa126235f4493959db",
         "dirty": true,
-        "rosterHash": "6b9f4421fb68dfd4",
+        "rosterHash": "18f391d471f433b0",
         "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {
@@ -31,8 +31,8 @@
           "rules": {
             "damageVariance": 0.15,
             "openingCooldown": 0.22,
-            "attackRate": 3,
-            "pickups": {}
+            "attackRate": 0.35,
+            "pickups": null
           },
           "duelDamageVariance": 0.35,
           "roundHoldFrames": 26,
@@ -49,16 +49,16 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          25
+          26
         ]
       },
       "coldOpen": {
-        "startFrame": 37,
-        "endFrame": 67,
-        "reason": "lead_change",
-        "damage": 99,
+        "startFrame": 17,
+        "endFrame": 47,
+        "reason": "damage_burst",
+        "damage": 492,
         "leadChanges": 1,
-        "why": "lead changed 1x at 1.2s (99 damage in the window)"
+        "why": "biggest damage burst: 492 at 0.6s"
       }
     }
   ]

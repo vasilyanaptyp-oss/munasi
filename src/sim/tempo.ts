@@ -9,14 +9,29 @@ import { FPS } from "./types.js";
  * about whether anything is *happening* in it. This measures the other half:
  * how long the video ever goes without an event a viewer can see.
  *
- * Measured on the shipped roster before this existed: every gap over the limit
- * sat at a round change, and none sat inside a round. A change cost 27 frames
- * of death animation plus another 20-33 waiting for the newcomer's first swing
- * — up to 2.00s of a fight where nothing moved but the idle bob.
+ * **This gate used to measure dead air. It no longer does, and the limit has
+ * been re-derived because of it.** When fighters stood in slots, the only thing
+ * that ever moved was an event, so a gap between events really was a frozen
+ * picture. They bounce now and the camera pans continuously, so a stretch with
+ * no hit in it is not dead air — it is two people crossing the arena.
+ *
+ * The number comes from the reference, measured the same way as everything else
+ * here: 721 frames at full resolution, tracking the white silhouette flash the
+ * format uses for a hit. It lands 16 hits, a median of 36 frames apart, and its
+ * own worst stretch without one is **146 frames — 4.87 seconds**. A gate at 1.2s
+ * would fail the thing being copied, four times over.
+ *
+ * What actually guards liveliness now is `motion.test.ts`, which measures
+ * changed pixels on the encoded mp4 and is not fooled by an event list.
  */
 
-/** Longest run of frames allowed with nothing happening. */
-export const MAX_QUIET_FRAMES = Math.round(FPS * 1.2);
+/**
+ * Longest run of frames allowed with nothing happening.
+ *
+ * 5.0s, just past the reference's own worst of 4.87s. A breach now means the
+ * fight has genuinely stalled, not that it is between blows.
+ */
+export const MAX_QUIET_FRAMES = Math.round(FPS * 5);
 
 /** Event types a viewer reads as "something happened". */
 const VISIBLE = new Set<MatchEvent["type"]>([

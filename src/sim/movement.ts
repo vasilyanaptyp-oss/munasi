@@ -68,6 +68,12 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+/** Holds a fighter's box inside the arena walls. */
+function keepInside(state: MovementState): void {
+  state.x = clamp(state.x, state.halfW, 1 - state.halfW);
+  state.y = clamp(state.y, state.halfH, 1 - state.halfH);
+}
+
 /**
  * Starting corner, heading and speed.
  *
@@ -146,6 +152,107 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
 
   state.x = clamp(state.x, left, right);
   state.y = clamp(state.y, top, bottom);
+}
+
+/**
+ * Share of the drawn box that is solid.
+ *
+ * The bounce box is the whole photograph, and a photograph is mostly air at its
+ * corners: an outstretched arm, a guitar neck, the gap under a raised elbow.
+ * Colliding on the full box keeps two figures a visible margin apart at all
+ * times and reads as an invisible wall between them. Colliding on the core lets
+ * the edges overlap the way they do in the reference — traced frame by frame,
+ * the guitarist's neck crosses the other man's jacket repeatedly — while the two
+ * bodies never sit on top of each other, which is the thing that looked broken.
+ */
+const COLLISION_SHARE = 0.75;
+
+/**
+ * Two fighters cannot occupy the same place: they push off each other.
+ *
+ * An equal-mass elastic bounce along whichever axis they are least deep into
+ * each other, which is what a box collision looks like when it looks right —
+ * meeting head on sends them back the way they came, clipping a corner sends
+ * them past each other. They are then separated by exactly the overlap, so the
+ * next tick starts clear and the pair cannot weld together and drift as one.
+ *
+ * A frozen fighter (`NOBODY MOVES`) is an immovable object: it neither moves nor
+ * trades velocity, and the other one takes the whole bounce. Anything else makes
+ * a freeze cancellable by walking into it.
+ */
+export function resolveCollision(
+  a: MovementState,
+  b: MovementState,
+  tick: number,
+): void {
+  const aFrozen = tick < a.frozenUntilTick;
+  const bFrozen = tick < b.frozenUntilTick;
+  if (aFrozen && bFrozen) return;
+
+  const halfWs = (a.halfW + b.halfW) * COLLISION_SHARE;
+  const halfHs = (a.halfH + b.halfH) * COLLISION_SHARE;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const overlapX = halfWs - Math.abs(dx);
+  const overlapY = halfHs - Math.abs(dy);
+  if (overlapX <= 0 || overlapY <= 0) return;
+
+  // Push apart along the shallower axis: that is the face they actually met on.
+  const horizontal = overlapX < overlapY;
+  const push = horizontal ? overlapX : overlapY;
+  // `dx === 0` on a dead-centre overlap; pick a side rather than divide by zero.
+  const sign = horizontal ? (dx < 0 ? -1 : 1) : dy < 0 ? -1 : 1;
+
+  // Separation. An immovable fighter donates its share of the push to the other.
+  const aShare = aFrozen ? 0 : bFrozen ? 1 : 0.5;
+  const bShare = bFrozen ? 0 : aFrozen ? 1 : 0.5;
+  if (horizontal) {
+    a.x -= sign * push * aShare;
+    b.x += sign * push * bShare;
+  } else {
+    a.y -= sign * push * aShare;
+    b.y += sign * push * bShare;
+  }
+
+  // The push runs after `stepMovement` has already clamped, so it can shove a
+  // fighter that was against a wall straight through it. Clamp again. Being
+  // pressed back into the other one for a tick is fine — the wall wins, and the
+  // pair separates on the next tick once the velocities have been exchanged.
+  keepInside(a);
+  keepInside(b);
+
+  // Equal masses exchange the component along the axis of contact. Only if they
+  // are closing: two figures already separating must not be flung back together.
+  if (horizontal) {
+    if ((b.vx - a.vx) * sign >= 0) return;
+    if (aFrozen) b.vx = -b.vx;
+    else if (bFrozen) a.vx = -a.vx;
+    else {
+      const swap = a.vx;
+      a.vx = b.vx;
+      b.vx = swap;
+    }
+  } else {
+    if ((b.vy - a.vy) * sign >= 0) return;
+    if (aFrozen) b.vy = -b.vy;
+    else if (bFrozen) a.vy = -a.vy;
+    else {
+      const swap = a.vy;
+      a.vy = b.vy;
+      b.vy = swap;
+    }
+  }
+}
+
+/** Half-extents the collision actually uses, for the gate to assert against. */
+export function collisionHalfExtents(
+  a: MovementState,
+  b: MovementState,
+): { halfW: number; halfH: number } {
+  return {
+    halfW: (a.halfW + b.halfW) * COLLISION_SHARE,
+    halfH: (a.halfH + b.halfH) * COLLISION_SHARE,
+  };
 }
 
 /**

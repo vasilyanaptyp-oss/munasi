@@ -26,16 +26,32 @@ export const GAUNTLET_COLORS = {
   memberAlive: "#ffffff",
   memberDefeated: "#8b8b8b",
   buffText: "#00b05b",
-  damageText: "#ffffff",
-  // Brighter than plain white damage, so a crit reads on colour alone.
-  critText: "#ffe45c",
+  /**
+   * Damage numbers are **yellow**, not white. Sampled off the reference at full
+   * resolution: every floating number in it reads about #ffff50. Ours were white
+   * with a dark outline, which on the flat blue field is the same colour as the
+   * fighters' keylines, the HP plus and the title — the one number a viewer is
+   * meant to catch had no colour of its own.
+   */
+  damageText: "#ffef4d",
+  // Hotter still, so a crit reads on colour as well as on size.
+  critText: "#fffbc2",
   ink: "#ffffff",
   vs: "#0f7fa8",
   /** Victory card plate: lighter than the field, never a blackout. */
   cardPlate: "#0d6f97",
-  /** Constant plate under the HP digits, and the digits themselves. */
-  hpPlate: "#23262b",
-  hpDigits: "#ffffff",
+  /**
+   * Constant plate under the HP digits, and the digits themselves.
+   *
+   * White plate, dark digits — the reference's way round. It was a black plate
+   * with white digits, which turned the one white shape above each fighter into
+   * a black box on a stick and read nothing like the format. The plate still
+   * exists, and for the original reason: the fill line crosses the crossbar
+   * somewhere around half HP, so digits taking their colour from the fill would
+   * sit half on white and half on the empty grey.
+   */
+  hpPlate: "#ffffff",
+  hpDigits: "#3f4448",
 } as const;
 
 /** Fractions of frame width or height. See the note above on which are measured. */
@@ -53,11 +69,29 @@ const F = {
    */
   groundNear: 0.84,
   groundFar: 0.66,
-  hpWidgetWidth: 0.13, // of frame width
-  hpStemWidth: 0.036,
-  hpBarWidth: 0.115,
-  hpBarHeight: 0.052,
+  /**
+   * The HP plus. Measured off the reference at full resolution rather than
+   * chosen: on a 576x1024 frame the plus occupies 85x75px, so it is **wider than
+   * it is tall** (h/w = 0.88) with a stem a third of its width. Ours was
+   * 140x161 — h/w = 1.15, half again as tall in proportion — which is what
+   * reads as a stretched crucifix rather than the reference's chunky plus.
+   */
+  hpWidgetWidth: 0.148, // of frame width
+  hpWidgetAspect: 0.88, // height over width
+  hpStemWidth: 0.33, // of the widget width
+  hpBarHeight: 0.36, // of the widget height
   captionCap: 0.033, // of frame height
+  /**
+   * Where the overlay sits relative to the arena — not relative to the screen.
+   *
+   * Measured across 721 reference frames: the caption's top edge is 30-32px
+   * under the arena's bottom border (spread 2px over the whole video) and the
+   * title's top edge is 76-77px above the arena's top border. Both hold while
+   * the pair of them slides 200-250px around the frame, which is the proof that
+   * the overlay and the arena are one rigid scene.
+   */
+  titleAboveArena: 76 / 1024, // of frame height
+  captionBelowArena: 30 / 1024, // of frame height
 } as const;
 
 const side = Math.round(WIDTH * F.arenaSide);
@@ -110,15 +144,25 @@ export const ARENA = {
  */
 export const MIN_FIGHTER_HEIGHT_SHARE = 0.15;
 
+const hpWidth = Math.round(WIDTH * F.hpWidgetWidth);
+const hpHeight = Math.round(hpWidth * F.hpWidgetAspect);
+
 export const HP_WIDGET = {
-  width: Math.round(WIDTH * F.hpWidgetWidth),
-  stem: Math.round(WIDTH * F.hpStemWidth),
-  barWidth: Math.round(WIDTH * F.hpBarWidth),
-  barHeight: Math.round(WIDTH * F.hpBarHeight),
-  /** Total height of the plus, a little taller than it is wide. */
-  height: Math.round(WIDTH * F.hpWidgetWidth * 1.15),
+  width: hpWidth,
+  /** Total height of the plus — **shorter than it is wide**, as in the reference. */
+  height: hpHeight,
+  stem: Math.round(hpWidth * F.hpStemWidth),
+  /** The horizontal arm spans the whole plus, as in the reference. */
+  barWidth: hpWidth,
+  barHeight: Math.round(hpHeight * F.hpBarHeight),
   /** Above half HP the fill reads white, below it turns red. */
   hurtBelow: 0.5,
+} as const;
+
+/** Overlay offsets from the arena, in pixels. See `F.titleAboveArena`. */
+export const HUD_OFFSETS = {
+  titleAbove: Math.round(HEIGHT * F.titleAboveArena),
+  captionBelow: Math.round(HEIGHT * F.captionBelowArena),
 } as const;
 
 /**

@@ -6,8 +6,15 @@ import {
   GAUNTLET_LAYOUT as L,
   HP_WIDGET,
   HP_WIDGET_SLOTS,
+  HUD_OFFSETS,
 } from "./gauntletTheme.js";
-import { arenaOnScreen, cameraTrack, FIGHTER_HEIGHT_UNITS, worldToScreen } from "./gauntletCamera.js";
+import {
+  arenaOnScreen,
+  cameraTrack,
+  FIGHTER_HEIGHT_UNITS,
+  worldToScreen,
+  type CameraFrame,
+} from "./gauntletCamera.js";
 import { minionMotionBounds } from "./silhouette.js";
 import { PHOTO_OUTLINE } from "./photo.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
@@ -45,16 +52,15 @@ export interface Rect {
 }
 
 /**
- * Camera over arena world space.
+ * Camera over the scene.
  *
- * World origin is the arena's centre on the x axis and the ground line on the
- * y axis, so a fighter stands at world y 0. One world unit is one screen pixel
- * at zoom 1.
+ * A pure translation in screen pixels: the title, the arena and the caption are
+ * one rigid group and the camera slides all of it together. There is no zoom —
+ * the reference's arena measures 612-613px tall in all 721 frames.
  */
 export interface Camera {
-  x: number;
-  y: number;
-  zoom: number;
+  dx: number;
+  dy: number;
 }
 
 export interface GauntletFrameLayout {
@@ -147,9 +153,10 @@ export interface HudMetrics {
   titleSize: number;
   lineHeight: number;
   captionSize: number;
-  /** Baselines, so the renderer draws exactly where the gate looks. */
+  /** Scene-space baselines, so the renderer draws exactly where the gate looks. */
   firstBaseline: number;
   secondBaseline: number;
+  captionBaseline: number;
   /** The two lines themselves, so the renderer never re-derives them. */
   first: string;
   second: string;
@@ -166,8 +173,17 @@ export const CAPTION = "Like and Subscribe!";
  * roster panel, the VS mark, the round caption and the progress bar are gone.
  * They were invented here; none of them exists in the format being copied.
  *
- * Laid out once per run: it is chrome, and it stays put while the arena slides
- * under the camera.
+ * **Laid out in scene space, not screen space.** These positions are where the
+ * overlay sits relative to the arena; `gauntletFrameLayout` then slides the whole
+ * group — overlay and arena together — by the camera's translation. The overlay
+ * used to be pinned to the screen while the arena panned out from under it, so
+ * the two visibly slid against each other. In the reference they never do: the
+ * caption holds 30-32px under the arena's bottom border for all 721 frames while
+ * both travel a quarter of the frame. See `gauntletCamera.ts`.
+ *
+ * It follows that the title can be cut in half by the edge of the frame. That is
+ * the format, not a defect — it happens constantly in the reference and in both
+ * frames the owner sent as the target.
  */
 export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: HudMetrics } {
   const margin = Math.round(WIDTH * 0.04);
@@ -183,8 +199,12 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   const lineHeight = Math.round(titleSize * 1.18);
   const captionSize = L.captionSize;
 
-  const secondBaseline = ARENA.y - Math.round(HEIGHT * 0.028);
-  const firstBaseline = secondBaseline - lineHeight;
+  // Both blocks hang off the arena's own edges at the measured offsets.
+  const firstTop = ARENA.y - HUD_OFFSETS.titleAbove - titleSize * 1.15;
+  const firstBaseline = firstTop + titleSize;
+  const secondBaseline = firstBaseline + lineHeight;
+  const captionBaseline =
+    ARENA.y + ARENA.side + HUD_OFFSETS.captionBelow + captionSize;
 
   const line = (name: string, text: string, baseline: number): Rect => ({
     name,
@@ -201,13 +221,27 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
       {
         name: "caption",
         x: WIDTH / 2 - textWidth(CAPTION, captionSize) / 2,
-        y: L.captionBaseline - captionSize,
+        y: captionBaseline - captionSize,
         w: textWidth(CAPTION, captionSize),
         h: captionSize * 1.15,
       },
     ],
-    metrics: { titleSize, lineHeight, captionSize, firstBaseline, secondBaseline, first, second },
+    metrics: {
+      titleSize,
+      lineHeight,
+      captionSize,
+      firstBaseline,
+      secondBaseline,
+      captionBaseline,
+      first,
+      second,
+    },
   };
+}
+
+/** Slides a rect by the camera's scene translation. */
+function shifted(rect: Rect, cam: CameraFrame): Rect {
+  return { ...rect, x: rect.x + cam.dx, y: rect.y + cam.dy };
 }
 
 /** Full layout for one frame. Pure in `(result, frame)`. */
@@ -224,8 +258,10 @@ export function gauntletFrameLayout(
 
   // Position and size both come from the simulation now; the renderer projects.
   // A fighter is a photo, so its box is the photo — there is nothing to solve.
+  // The arena no longer scales, so the inner box is a constant and a fighter is
+  // the same size in every frame of every video.
   const onScreen = arenaOnScreen(cam);
-  const innerPx = onScreen.side - ARENA.border * cam.zoom * 2;
+  const innerPx = ARENA.inner.w;
   const boxFor = (name: string, fighter: { aspect: number }, at: { x: number; y: number }): Rect => {
     const h = FIGHTER_HEIGHT_UNITS * innerPx;
     const w = h * fighter.aspect;
@@ -245,18 +281,13 @@ export function gauntletFrameLayout(
   // it used to be pinned in a fixed band at the top of the arena, which left a
   // viewer working out which of two identical plus signs belonged to whom.
   // Scaled with the camera so it stays glued to the figure at any zoom.
-  const hpFor = (name: string, box: Rect): Rect => {
-    const scale = innerPx / ARENA.inner.w;
-    const w = HP_WIDGET.width * scale;
-    const h = HP_WIDGET.height * scale;
-    return {
-      name,
-      x: box.x + box.w / 2 - w / 2,
-      y: box.y - h - HP_WIDGET_GAP * scale,
-      w,
-      h,
-    };
-  };
+  const hpFor = (name: string, box: Rect): Rect => ({
+    name,
+    x: box.x + box.w / 2 - HP_WIDGET.width / 2,
+    y: box.y - HP_WIDGET.height - HP_WIDGET_GAP,
+    w: HP_WIDGET.width,
+    h: HP_WIDGET.height,
+  });
   const hpA = hpFor("challengerHp", spriteA);
   const hpB = hpFor("opponentHp", spriteB);
 
@@ -300,7 +331,7 @@ export function gauntletFrameLayout(
     groundY: originBy,
     groundFarY: originAy,
     arena: { name: "arena", x: onScreen.x, y: onScreen.y, w: onScreen.side, h: onScreen.side },
-    camera: { x: cam.x, y: cam.y, zoom: cam.zoom },
+    camera: { dx: cam.dx, dy: cam.dy },
     challenger: {
       sprite: spriteA,
       reach: reachOf("challengerSprite", spriteA),
@@ -313,7 +344,8 @@ export function gauntletFrameLayout(
       centre: { x: originBx, y: originBy },
       hp: hpB,
     },
-    hud: hud.rects,
+    // The overlay rides the camera with everything else — see `hudLayout`.
+    hud: hud.rects.map((rect) => shifted(rect, cam)),
     damageNumbers,
     minions,
   };
@@ -431,38 +463,51 @@ export function victoryCardLayout(result: GauntletResult): VictoryCard {
   const hpLeft = Math.max(0, Math.round(won ? last.challenger.hp : last.opponent.hp));
   const name = won ? result.challenger.name : (result.rounds.at(-1)?.opponentName ?? "");
 
-  // The card lives in the band under the arena — the strip the round caption
-  // already occupies. Over the arena it covered the winner from the chest down,
-  // which defeated the point of keeping them in shot.
+  // The card lives in the strip under the caption. It used to have the whole
+  // band beneath the arena to itself, but the caption has moved up to the
+  // reference's measured offset — 30px under the arena's bottom border on a
+  // 1024-tall frame — and the two would now sit on top of each other. Over the
+  // arena is not an option either: it covered the winner from the chest down,
+  // which defeats the point of keeping them in shot.
   const pad = Math.round(WIDTH * 0.02);
   const room = WIDTH - Math.round(WIDTH * 0.03) * 2 - pad * 2;
+  const caption = hudLayout(result).rects.find((r) => r.name === "caption")!;
 
   // Both sides can hit zero on the same tick — damage is applied after every
   // actor has swung, so a mutual kill is a real outcome, not a rounding
   // artefact. "0 HP LEFT" is true there and reads as a broken card, so that
   // case gets its own line.
   const trade = hpLeft <= 0;
-  const headlineSize = Math.round(WIDTH * 0.036);
-  const nameSize = fitText(name, Math.round(WIDTH * 0.062), room, Math.round(WIDTH * 0.03));
   const hpText = trade ? "BOTH WENT DOWN" : `${hpLeft} HP LEFT`;
-  const hpSize = fitText(hpText, Math.round(WIDTH * 0.048), room, Math.round(WIDTH * 0.026));
 
-  const headline = trade ? "TRADED" : won ? "WINNER" : "WINNER";
-  const sizes = [headlineSize, nameSize, hpSize];
-  const texts = [headline, name, hpText];
-  const names = ["victoryHeadline", "victoryName", "victoryHp"];
+  // The strip left under the caption, and everything is sized to fit inside it
+  // rather than assumed to. Two lines: the winner's name and what they finished
+  // on. The "WINNER" headline is gone — the name over an HP count says it, and
+  // the third line no longer fits the band it has to live in.
+  const bandTop = caption.y + caption.h + Math.round(HEIGHT * 0.008);
+  const bandBottom = HEIGHT - Math.round(HEIGHT * 0.012);
+  const band = bandBottom - bandTop;
+
   const gap = Math.round(HEIGHT * 0.005);
+  // Split the room between the two lines, then let `fitText` narrow each to the
+  // plate's width. Height first: a name that overflows the band is unreadable
+  // in a way a slightly small one is not.
+  const inner = band - pad * 2 - gap;
+  const nameCap = Math.floor((inner * 0.56) / 1.2);
+  const hpCap = Math.floor((inner * 0.44) / 1.2);
+  const nameSize = fitText(name, Math.min(nameCap, Math.round(WIDTH * 0.062)), room, 18);
+  const hpSize = fitText(hpText, Math.min(hpCap, Math.round(WIDTH * 0.048)), room, 16);
+
+  const sizes = [nameSize, hpSize];
+  const texts = [name, hpText];
+  const names = ["victoryName", "victoryHp"];
   const bodyHeight = sizes.reduce((sum, size) => sum + size * 1.2, 0) + gap * (sizes.length - 1);
 
-  // Under the arena, never over it. The strip between the arena's bottom edge
-  // and the progress bar is already empty and already meant for text.
   const plateHeight = bodyHeight + pad * 2;
-  const bandTop = ARENA.y + ARENA.side;
-  const bandBottom = L.progressY - Math.round(HEIGHT * 0.008);
   const plate: Rect = {
     name: "victoryPlate",
     x: Math.round(WIDTH * 0.03),
-    y: Math.round(bandTop + (bandBottom - bandTop - plateHeight) / 2),
+    y: Math.round(bandTop + (band - plateHeight) / 2),
     w: WIDTH - Math.round(WIDTH * 0.03) * 2,
     h: plateHeight,
   };
@@ -479,7 +524,7 @@ export function victoryCardLayout(result: GauntletResult): VictoryCard {
       h: size * 1.2,
     };
     y += size * 1.2 + gap;
-    return { name: names[i]!, text, rect, size, accent: i === 2 };
+    return { name: names[i]!, text, rect, size, accent: i === 1 };
   });
 
   return { plate, lines, winner: won ? "challenger" : "opponent", hpLeft };

@@ -1,4 +1,10 @@
-import { initialMovement, setHeading, stepMovement, type MovementState } from "./movement.js";
+import {
+  initialMovement,
+  resolveCollision,
+  setHeading,
+  stepMovement,
+  type MovementState,
+} from "./movement.js";
 import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
@@ -475,6 +481,11 @@ export function simulate(
     for (const side of [sides.a, sides.b]) {
       stepMovement(movement[side.side], { tick, rng: movementRng[side.side] });
     }
+    // ...and then off each other. After both have travelled, so the pair is
+    // resolved from the positions they actually reached rather than from one
+    // fighter's stale position, which would make the outcome depend on which of
+    // them stepped first.
+    resolveCollision(movement.a, movement.b, tick);
 
     // Basic attacks.
     for (const side of [sides.a, sides.b]) {

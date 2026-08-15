@@ -225,6 +225,42 @@ describe("composition", () => {
       .toBeGreaterThan(1);
   });
 
+  it("welds the overlay to the arena — one scene, never sliding apart", () => {
+    // The owner's second complaint about the last cut, and the one this gate
+    // exists to make impossible: the arena panned while the title stayed nailed
+    // to the screen, so the two visibly slid against each other.
+    //
+    // The reference is unambiguous. Measured over its 721 frames at full
+    // resolution, the caption's top edge holds 30-32px under the arena's bottom
+    // border and the title's top edge holds 76-77px above the arena's top, while
+    // the pair of them travels 200-250px around the frame. It is one rigid
+    // scene under a camera.
+    //
+    // So: the offset from the arena to every overlay box must be *identical* in
+    // every frame, to the pixel.
+    const index = buildRenderIndex(result);
+    const hud = hudLayout(result);
+    const frames = [0, 45, 120, 240, 360, result.durationFrames - 1];
+    const offsets = new Map<string, Set<string>>();
+    for (const f of frames) {
+      const layout = gauntletFrameLayout(result, f, index, hud);
+      for (const rect of layout.hud) {
+        const key = `${(rect.x - layout.arena.x).toFixed(3)},${(rect.y - layout.arena.y).toFixed(3)}`;
+        if (!offsets.has(rect.name)) offsets.set(rect.name, new Set());
+        offsets.get(rect.name)!.add(key);
+      }
+    }
+    const drifting = [...offsets]
+      .filter(([, seen]) => seen.size > 1)
+      .map(([name, seen]) => `${name} sat at ${seen.size} different offsets: ${[...seen].join(" | ")}`);
+    expect(drifting.join("\n")).toBe("");
+
+    // ...and the arena must not scale, or "one rigid scene" is a half-truth.
+    // The reference's arena measures 612-613px tall in all 721 frames.
+    const sides = frames.map((f) => gauntletFrameLayout(result, f, index, hud).arena.w);
+    expect(new Set(sides).size, `arena scaled: ${[...new Set(sides)].join(", ")}`).toBe(1);
+  });
+
   it("keeps the title and the caption on screen and apart", () => {
     const hud = hudLayout(result);
     const named = (n: string): Rect => hud.rects.find((r) => r.name === n)!;
@@ -301,9 +337,7 @@ describe("hp widget readability", () => {
         histogram.set(key, (histogram.get(key) ?? 0) + 1);
       }
       const sorted = [...lums].sort((a, b) => a - b);
-      const ink = sorted[Math.floor(sorted.length * 0.995)]!;
-      // The modal colour, not the darkest: the darkest pixel is the black
-      // keyline around each digit, which flatters the reading by 5 points.
+      // The modal colour is the plate: it is most of the rectangle either way.
       let bestKey = 0;
       let bestCount = -1;
       for (const [key, count] of histogram) {
@@ -313,7 +347,17 @@ describe("hp widget readability", () => {
         }
       }
       const plate = luminance((bestKey >> 16) & 0xff, (bestKey >> 8) & 0xff, bestKey & 0xff);
-      const contrast = (ink + 0.05) / (plate + 0.05);
+
+      // The ink is whichever tail is on the far side of the plate. This used to
+      // assume light digits on a dark plate and read the brightest pixel; the
+      // digits are dark on white now — the reference's way round — and that
+      // assumption scored a perfectly legible widget at 1.00:1, because the
+      // brightest pixel *was* the plate. The rule was always "4.5:1 between the
+      // digits and what they sit on", which has no preferred polarity.
+      const ink = plate > 0.5
+        ? sorted[Math.floor(sorted.length * 0.02)]!
+        : sorted[Math.floor(sorted.length * 0.98)]!;
+      const contrast = plate > ink ? (plate + 0.05) / (ink + 0.05) : (ink + 0.05) / (plate + 0.05);
       expect(contrast, `contrast ${contrast.toFixed(2)}:1 at ${share * 100}% HP`)
         .toBeGreaterThanOrEqual(4.5);
     });

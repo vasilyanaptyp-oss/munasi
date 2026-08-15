@@ -10,9 +10,14 @@ import { FPS } from "./types.js";
  * Pacing gate.
  *
  * Geometry is not the same as motion: a video can pass every composition rule
- * and still stand still. Nothing may go longer than 1.2 seconds without an
- * event, and the fix for a breach is to compress the pause, never to paper
+ * and still stand still. Nothing may go longer than `MAX_QUIET_FRAMES` without
+ * an event, and the fix for a breach is to compress the pause, never to paper
  * over it with effects.
+ *
+ * The limit is 5.0s, taken from the reference's own worst gap of 4.87s — see the
+ * note in `tempo.ts` for why it is not the 1.2s it used to be. Short version: a
+ * gap between hits stopped meaning a frozen picture once the fighters started
+ * bouncing, and `motion.test.ts` measures the picture directly anyway.
  */
 
 const roster = loadFighters();
@@ -26,7 +31,7 @@ function run(challenger: string, team: string[]) {
 }
 
 describe("tempo", () => {
-  it("never lets the video stand still for more than 1.2 seconds", () => {
+  it("never goes longer without a hit than the reference does", () => {
     const result = run("compass", ["bodyguard"]);
     const report = tempoReport(result);
     expect(
@@ -78,7 +83,12 @@ describe("tempo", () => {
       const report = tempoReport(result);
       expect(report.durationFrames).toBeGreaterThan(0);
       expect(report.quietShare).toBeGreaterThanOrEqual(0);
-      expect(report.quietShare).toBeLessThan(0.5);
+      // Also re-based on the reference. Scored the same way — a frame counts as
+      // quiet when no hit landed in the preceding 15 — the reference itself
+      // comes out at 0.66, because it lands 16 hits in 721 frames and lets the
+      // bouncing carry the rest. Ours sits at 0.60. The old bound of 0.5 was
+      // set when a fighter without an event to play was standing still.
+      expect(report.quietShare).toBeLessThan(0.7);
     }
   }, 60_000);
 });
@@ -157,6 +167,52 @@ describe("movement", () => {
       expect(snap.opponent.x).toBeGreaterThanOrEqual(b.w - 1e-9);
       expect(snap.opponent.x).toBeLessThanOrEqual(1 - b.w + 1e-9);
     }
+  });
+
+  it("pushes the two apart — they never sit inside each other", () => {
+    // The owner's first complaint about the last cut: the two figures walked
+    // through each other. They collide now, and this is the gate on it.
+    //
+    // Measured against the same box the collision uses, not the drawn box: a
+    // photograph is mostly air at its corners, so the bodies collide on their
+    // core and a stray arm may still overlap, which is what the reference does.
+    const result = run("compass", ["bodyguard"]);
+    const roster = loadFighters();
+    const core = (id: string) => {
+      const f = getFighter(id, roster);
+      return { w: FIGHTER_HALF_HEIGHT * f.aspect, h: FIGHTER_HALF_HEIGHT };
+    };
+    const a = core("compass");
+    const b = core("bodyguard");
+    // The same 0.75 the simulation collides on, minus a hair for float drift.
+    const halfW = (a.w + b.w) * 0.75 * 0.98;
+    const halfH = (a.h + b.h) * 0.75 * 0.98;
+
+    const worst: string[] = [];
+    for (const snap of result.snapshots) {
+      const dx = Math.abs(snap.challenger.x - snap.opponent.x);
+      const dy = Math.abs(snap.challenger.y - snap.opponent.y);
+      if (dx < halfW && dy < halfH) {
+        worst.push(
+          `frame ${snap.frame}: apart by ${dx.toFixed(3)}x${dy.toFixed(3)}, ` +
+            `needs ${halfW.toFixed(3)}x${halfH.toFixed(3)}`,
+        );
+      }
+    }
+    expect(worst.slice(0, 5).join("\n")).toBe("");
+  });
+
+  it("actually collides — the pair meet often enough for it to matter", () => {
+    // A collision rule that never fires is not a fixed bug, it is a dead branch.
+    // Two fighters crossing a shared arena for thirty seconds have to meet.
+    const result = run("compass", ["bodyguard"]);
+    let near = 0;
+    for (const snap of result.snapshots) {
+      const dx = Math.abs(snap.challenger.x - snap.opponent.x);
+      const dy = Math.abs(snap.challenger.y - snap.opponent.y);
+      if (dx < 0.45 && dy < 0.45) near += 1;
+    }
+    expect(near, "the two never come near each other").toBeGreaterThan(10);
   });
 
   it("bounces — it reaches both sides of the arena and turns around", () => {

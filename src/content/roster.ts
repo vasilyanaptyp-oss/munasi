@@ -65,12 +65,17 @@ export const ROSTER: FighterSpec[] = [
     abilities: [{ type: "magnetic_north", cooldown: 7, power: 0 }],
     // Solved, not guessed. The calibrator evens each fighter against a reference
     // dummy, which does not make a *pair* even: without this Compass Guy took
-    // 66% of the fights. Bisected through the real calibration over 200 fights
-    // per step until the pair sits on 50.
-    fieldScale: 0.918,
-    // Solved, not guessed: the calibrator balances each fighter against a
-    // reference dummy, which does not make a *pair* even. Bisected over 300
-    // fights until Compass Guy takes exactly half of them.
+    // 66% of the fights. Bisected through the real calibration — change the
+    // scale, re-run the whole calibrator, play 300 gauntlets, read the winrate —
+    // until the pair sits on 50. Lands at 50.0% over 400 gauntlets.
+    //
+    // Re-bisected twice in one go. First when `attackRate` went from 3 to 0.35:
+    // damage per second is identical either way, but the fight stopped being a
+    // smooth race and became a dozen discrete blows, and who lands the last one
+    // is a different question — at the old 0.918 the pair had drifted to 26/74.
+    // Then again when the pickups that had been running by accident were turned
+    // off, which on its own moved it to 43/57.
+    fieldScale: 1.0107,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off

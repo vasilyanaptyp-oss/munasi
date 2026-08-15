@@ -59,7 +59,11 @@ export const GAUNTLET_TUNING: GauntletTuning = { tempo: 1.03, challengerPower: 1
  */
 export const GAUNTLET_RULES = {
   damageVariance: 0.15,
-  pickups: {},
+  // No pickups. `MatchRules.pickups` is "omit to disable", and `{}` is truthy —
+  // so this line used to read as "off" and run them on their defaults. It was
+  // putting four pickups and a floating green "+BUFF" into every video, which is
+  // one of the things this format explicitly does not have: there is no pickup
+  // anywhere in any of the four references.
   /**
    * A round opens on a short fuse. Measured: every gap over 1.2s in a finished
    * video sat at a round change, and it was 27 frames of death animation plus
@@ -68,11 +72,21 @@ export const GAUNTLET_RULES = {
    */
   openingCooldown: 0.22,
   /**
-   * Three swings for a third of the damage each. Damage per second is
-   * unchanged by construction; what changes is the picture, which now takes a
-   * hit almost every frame instead of a big one every second and a half.
+   * **Fewer, bigger swings** — the multiplier runs below 1 now.
+   *
+   * `attack / rate` and `attackSpeed * rate` leave damage per second exactly
+   * unchanged (`ticksPerAttack` does not round), so this moves nothing but the
+   * picture. It was 3, which was a mistake made without measuring: it put a hit
+   * on screen every 0.29s for eight damage a time, and the owner's verdict on
+   * that video was that it was unwatchable.
+   *
+   * 0.35 is set from the reference, measured at full resolution over 721 frames
+   * by tracking the white hit-flash: a hit lands every 1.20s (median) or 1.48s
+   * (mean), for 75-120 damage. This puts our two on 2.48s and 3.36s each, which
+   * is a hit every ~1.43s between them, for 67 and 91 damage. The shipped video
+   * before this change measured 0.43s between numbers.
    */
-  attackRate: 3,
+  attackRate: 0.35,
 } as const;
 
 function scaled(fighter: Fighter, damageMultiplier: number): Fighter {

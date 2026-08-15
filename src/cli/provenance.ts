@@ -88,7 +88,11 @@ export function provenance(input: ProvenanceInput): Provenance {
         damageVariance: GAUNTLET_RULES.damageVariance,
         openingCooldown: GAUNTLET_RULES.openingCooldown,
         attackRate: GAUNTLET_RULES.attackRate,
-        pickups: GAUNTLET_RULES.pickups ?? null,
+        // Recorded as an explicit null rather than dropped: a row that simply
+        // lacks the key is ambiguous between "pickups off" and "written before
+        // anyone recorded pickups", and the point of provenance is that a row
+        // replays to the same bytes.
+        pickups: null,
       },
       duelDamageVariance: DAMAGE_VARIANCE,
       roundHoldFrames: ROUND_HOLD_FRAMES,

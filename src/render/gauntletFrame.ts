@@ -46,7 +46,14 @@ const FLASH_FRAMES = 4;
  * enough that losing half of one costs the joke, so the overlay is screen-fixed.
  */
 
-/** Traces the plus-shaped HP widget, centred on the origin. */
+/**
+ * Traces the plus-shaped HP widget, centred on the origin.
+ *
+ * The proportions are the reference's, measured at full resolution: 85x75px on a
+ * 576-wide frame, so the plus is **wider than it is tall**, with a stem a third
+ * of its width and an arm that spans the full width. Ours was 140x161 — taller
+ * than wide — which is why it read as a stretched crucifix instead.
+ */
 function plusPath(ctx: Ctx, w: number, h: number, stem: number, barW: number, barH: number): void {
   const halfStem = stem / 2;
   const halfBarW = barW / 2;
@@ -122,7 +129,10 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   // digits half on white and half on the empty grey.
   ctx.fillStyle = C.hpPlate;
   ctx.fillRect(-barWidth / 2, barTop, barWidth, barHeight);
-  strokedText(ctx, label, 0, barTop + barHeight / 2, size, C.hpDigits, Math.round(size * 0.14));
+  // A hairline, not the usual heavy keyline: that exists to hold light text off
+  // a light background, and these digits are dark on white. At the old weight
+  // the outline ate the strokes of the digits and every number read as a blob.
+  strokedText(ctx, label, 0, barTop + barHeight / 2, size, C.hpDigits, 2);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.restore();
@@ -196,15 +206,22 @@ function visualState(
 }
 
 /**
- * The whole overlay: two centred title lines above the arena, the caption
- * below. Screen-fixed while the arena slides under the camera.
+ * The whole overlay: two centred title lines above the arena, the caption below.
+ *
+ * **It rides the camera along with the arena**, because in the reference the two
+ * are one rigid scene — measured over 721 frames, the caption holds 30-32px under
+ * the arena's bottom border while the pair of them travels a quarter of the frame.
+ * This used to be screen-fixed, so the arena visibly slid out from under the
+ * title. A consequence, and the correct one: the title can now be cut in half by
+ * the edge of the frame, exactly as it is in the reference.
  */
-function drawOverlay(ctx: Ctx, metrics: HudMetrics): void {
+function drawOverlay(ctx: Ctx, metrics: HudMetrics, cam: { dx: number; dy: number }): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  strokedText(ctx, metrics.first, WIDTH / 2, metrics.firstBaseline, metrics.titleSize, C.ink, 9);
-  strokedText(ctx, metrics.second, WIDTH / 2, metrics.secondBaseline, metrics.titleSize, C.ink, 9);
-  strokedText(ctx, CAPTION, WIDTH / 2, L.captionBaseline, metrics.captionSize, C.ink, 9);
+  const x = WIDTH / 2 + cam.dx;
+  strokedText(ctx, metrics.first, x, metrics.firstBaseline + cam.dy, metrics.titleSize, C.ink, 9);
+  strokedText(ctx, metrics.second, x, metrics.secondBaseline + cam.dy, metrics.titleSize, C.ink, 9);
+  strokedText(ctx, CAPTION, x, metrics.captionBaseline + cam.dy, metrics.captionSize, C.ink, 9);
   ctx.textAlign = "left";
 }
 
@@ -267,38 +284,41 @@ function drawDamageNumbers(
  * Cold-open / cut badge, in the gap between the arena and the caption so it
  * never lands on the HUD or on a fighter.
  */
-function drawBadge(ctx: Ctx, text: string, accent: string): void {
+function drawBadge(ctx: Ctx, text: string, accent: string, cam: { dx: number; dy: number }): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const size = Math.round(HEIGHT * 0.026);
   ctx.font = font(size);
   const w = ctx.measureText(text).width + size * 1.6;
   const h = size * 1.7;
-  const x = WIDTH / 2 - w / 2;
-  const y = ARENA_RECT.y + ARENA_RECT.h + Math.round(HEIGHT * 0.03);
+  // Rides the camera like the rest of the scene, so it keeps its place under the
+  // arena instead of drifting across it.
+  const x = WIDTH / 2 - w / 2 + cam.dx;
+  const y = ARENA_RECT.y + ARENA_RECT.h + Math.round(HEIGHT * 0.03) + cam.dy;
 
   ctx.fillStyle = "rgba(5,18,26,0.82)";
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = accent;
   ctx.fillRect(x, y, Math.round(WIDTH * 0.008), h);
-  strokedText(ctx, text, WIDTH / 2, y + h / 2, size, accent, 6);
+  strokedText(ctx, text, x + w / 2, y + h / 2, size, accent, 6);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
 
-function drawVictoryBanner(ctx: Ctx, result: GauntletResult): void {
+function drawVictoryBanner(ctx: Ctx, result: GauntletResult, cam: { dx: number; dy: number }): void {
   const card = victoryCardLayout(result);
 
   // A plate, not a blackout. The old card dimmed the whole frame to 34%
   // brightness, which hid the winner and both HP widgets at the exact moment
-  // the viewer wants to read them.
+  // the viewer wants to read them. It rides the camera with the rest of the
+  // scene, so it holds its place under the caption instead of drifting.
   ctx.fillStyle = C.cardPlate;
-  ctx.fillRect(card.plate.x, card.plate.y, card.plate.w, card.plate.h);
+  ctx.fillRect(card.plate.x + cam.dx, card.plate.y + cam.dy, card.plate.w, card.plate.h);
   ctx.lineWidth = Math.max(4, Math.round(WIDTH * 0.006));
   ctx.strokeStyle = C.outline;
   ctx.strokeRect(
-    card.plate.x + ctx.lineWidth / 2,
-    card.plate.y + ctx.lineWidth / 2,
+    card.plate.x + cam.dx + ctx.lineWidth / 2,
+    card.plate.y + cam.dy + ctx.lineWidth / 2,
     card.plate.w - ctx.lineWidth,
     card.plate.h - ctx.lineWidth,
   );
@@ -309,8 +329,8 @@ function drawVictoryBanner(ctx: Ctx, result: GauntletResult): void {
     strokedText(
       ctx,
       line.text,
-      line.rect.x + line.rect.w / 2,
-      line.rect.y + line.rect.h / 2,
+      line.rect.x + line.rect.w / 2 + cam.dx,
+      line.rect.y + line.rect.h / 2 + cam.dy,
       line.size,
       line.accent ? (result.challengerWon ? C.hpHealthy : C.hpHurt) : C.ink,
       Math.round(line.size * 0.16),
@@ -366,9 +386,10 @@ export function renderGauntletFrame(
   const hud = options.hud ?? hudLayout(result);
   const layout = gauntletFrameLayout(result, frame, index, hud);
 
-  // The arena rides the camera: it pans and scales and the frame crops it, which
-  // is what the reference does in every single frame.
-  const border = ARENA.border * layout.camera.zoom;
+  // The arena rides the camera: it slides and the frame crops it, which is what
+  // the reference does in every single frame. It does not scale — measured, the
+  // reference's arena is 612-613px tall in all 721 of them.
+  const border = ARENA.border;
   ctx.lineWidth = border;
   ctx.strokeStyle = C.outline;
   ctx.strokeRect(
@@ -462,11 +483,11 @@ export function renderGauntletFrame(
     kindOf,
   );
 
-  drawOverlay(ctx, hud.metrics);
+  drawOverlay(ctx, hud.metrics, layout.camera);
 
   const planned = options.planned;
-  if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, C.critText);
-  if (planned?.startLabel !== undefined) drawBadge(ctx, planned.startLabel, C.hpHealthy);
+  if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, C.critText, layout.camera);
+  if (planned?.startLabel !== undefined) drawBadge(ctx, planned.startLabel, C.hpHealthy, layout.camera);
   if (planned?.flash !== undefined && planned.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(1, planned.flash).toFixed(3)})`;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -474,7 +495,7 @@ export function renderGauntletFrame(
   if (options.victoryOverlay || planned?.victoryOverlay) {
     const winner = result.challengerWon ? layout.challenger : layout.opponent;
     markWinner(ctx, winner.hp, result.challengerWon);
-    drawVictoryBanner(ctx, result);
+    drawVictoryBanner(ctx, result, layout.camera);
   }
 
   return canvas.toBuffer("image/png");

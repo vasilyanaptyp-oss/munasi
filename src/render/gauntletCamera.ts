@@ -1,93 +1,100 @@
 import type { GauntletResult } from "../sim/gauntlet.js";
 import { FIGHTER_HALF_HEIGHT } from "../sim/movement.js";
 import { ARENA } from "./gauntletTheme.js";
-import { HEIGHT } from "./theme.js";
+import { HEIGHT, WIDTH } from "./theme.js";
 
 /**
  * The camera, solved once per run.
  *
- * Almost nothing is solved any more, and that is the point. The fighters bounce
- * around a flat arena at a fixed size, so there is no depth to stage, no spread
- * to fit and no size to negotiate: a fighter is `FIGHTER_HALF_HEIGHT` of the
- * arena tall because the simulation bounces a box of exactly that size, and the
- * renderer draws that box.
+ * **The camera translates the scene and does nothing else.** Title, arena and
+ * caption are one rigid group; the camera slides that group around behind the
+ * frame, and the frame crops whatever falls outside. Nothing is pinned to the
+ * screen and nothing scales.
  *
- * What is left is the shot: it pans after the midpoint between the two and
- * breathes its zoom, both lagged, because in the reference the arena's own frame
- * slides and rescales in every single frame and is regularly cropped by the edge
- * of the video. Measured across 721 frames of one reference: the black frame
- * wanders about a third of the frame height and never once holds still.
+ * Both halves of that were measured on 721 frames of one reference, at full
+ * resolution, not on crops:
+ *
+ * - **No zoom.** The arena's black border measures 612-613px tall in every one
+ *   of the 721 frames — a spread of one pixel across the whole video. It never
+ *   scales. Ours used to breathe between 0.92x and 1.15x, which is a thing the
+ *   format does not do.
+ * - **The overlay is welded to the arena.** The caption's top edge sits
+ *   30-32px below the arena's bottom border in every frame (spread: 2px), and
+ *   the title's top edge sits 76-77px above the arena's top border on every
+ *   frame where the title is not clipped. Meanwhile both slide 200-250px around
+ *   the screen. They are not two things that happen to move alike; they are one
+ *   thing. Ours held the title still at a fixed y and let the arena slide out
+ *   from under it, which is the defect being fixed here.
+ *
+ * The overlay is therefore allowed to run off the edge and be cut in half. That
+ * is not a regression: the reference does it constantly, and both frames the
+ * owner sent as "this is how it should look" have the title clipped by the frame
+ * edge.
  *
  * A lag is stateful and `gauntletFrameLayout` has to stay a pure function of
  * `(result, frame)`, so the whole track is solved in one pass and cached against
  * the result object.
  */
 
-/** How far the pan and zoom move toward their target each frame. */
+/** How far the pan moves toward its target each frame. */
 const PAN_LERP = 0.045;
-const ZOOM_LERP = 0.02;
+
 /**
- * How far the shot may push in and pull back.
+ * How far the scene may slide from its home position, as a share of the frame.
  *
- * Above 1 the arena is larger than its slot and the frame crops it — which the
- * reference does constantly, often cutting a whole wall off the screen. Measured
- * across 721 reference frames, the arena's own black border never once holds
- * still and wanders about a third of the frame height.
+ * From the reference: the arena's top border wanders between y=27 and y=276 on a
+ * 1024-tall frame, so the scene travels about 24% of the frame height. Sideways
+ * it goes further — a wall is off screen on roughly 40% of frames. Held to a
+ * little under the measured range so a fighter is never chased entirely out of
+ * shot.
  */
-const MIN_ZOOM = 0.92;
-const MAX_ZOOM = 1.15;
-/** Seconds for one full breath of the zoom. */
-const ZOOM_PERIOD = 9;
+const PAN_RANGE_X = 0.16;
+const PAN_RANGE_Y = 0.11;
+
+/**
+ * How hard the camera leans on the pair's midpoint.
+ *
+ * Two fighters bouncing around a shared arena have a midpoint that sits near the
+ * centre most of the time — one is high when the other is low. Following it
+ * one-for-one produced a camera that barely moved: measured on a finished video,
+ * the arena's top edge travelled 33px where the reference's travels 249px. The
+ * gain saturates the pan against its limits instead, so the arena runs to the
+ * edge of the frame and is cropped there, which is what the reference does on
+ * roughly 40% of its frames.
+ */
+const PAN_GAIN = 3.2;
 
 export interface CameraFrame {
-  /** World x and y the camera is centred on, in arena units. */
-  x: number;
-  y: number;
-  zoom: number;
+  /** Scene translation in pixels. The whole group moves by this and nothing else. */
+  dx: number;
+  dy: number;
 }
 
 export interface CameraTrack {
   frames: CameraFrame[];
 }
 
-/** Height a fighter is drawn at, in pixels. Fixed — see the note above. */
+/** Height a fighter is drawn at, as a share of the arena's inner box. */
 export const FIGHTER_HEIGHT_UNITS = FIGHTER_HALF_HEIGHT * 2;
 
 /**
  * The arena as it lands on screen under a camera.
  *
- * The arena moves. It used to be nailed to a constant and only the contents
- * moved inside it, which is backwards: in the reference the whole scene —
- * square, border and all — sits under a camera that pans and scales, and the
- * edge of the video crops it.
+ * A fixed square at a fixed size, offset by the camera. The clamps that used to
+ * fence it away from the title and the caption are gone: those two now move with
+ * it, so there is nothing to collide with, and holding the square inside a box
+ * was what stopped the shot from ever looking like the reference.
  */
 export function arenaOnScreen(camera: CameraFrame): { x: number; y: number; side: number } {
-  const side = ARENA.side * camera.zoom;
-  const x = ARENA.centre.x - (camera.x - 0.5) * side - side / 2;
-  let y = ARENA.centre.y - (camera.y - 0.5) * side - side / 2;
-
-  // Vertically the arena is fenced in, horizontally it is not.
-  //
-  // The title sits above the square and the caption below it, and both have to
-  // stay legible — losing half a name costs the joke, and the joke is the whole
-  // video. So the square may slide and scale but never climb into the title or
-  // drop onto the caption. Sideways it is free to run off the edge and be
-  // cropped, which is what the reference does most of the time.
-  y = Math.max(TITLE_FLOOR, Math.min(CAPTION_CEILING - side, y));
-  return { x, y, side };
+  return { x: ARENA.x + camera.dx, y: ARENA.y + camera.dy, side: ARENA.side };
 }
-
-/** The arena's top may not rise above this: the title lives up there. */
-const TITLE_FLOOR = Math.round(HEIGHT * 0.28);
-/** Nor may its bottom fall below this: the caption lives down there. */
-const CAPTION_CEILING = Math.round(HEIGHT * 0.885);
 
 /** Screen position of a point in arena units under a camera. */
 export function worldToScreen(x: number, y: number, camera: CameraFrame): { x: number; y: number } {
-  const arena = arenaOnScreen(camera);
-  const border = ARENA.border * camera.zoom;
-  const inner = arena.side - border * 2;
-  return { x: arena.x + border + x * inner, y: arena.y + border + y * inner };
+  return {
+    x: ARENA.inner.x + camera.dx + x * ARENA.inner.w,
+    y: ARENA.inner.y + camera.dy + y * ARENA.inner.h,
+  };
 }
 
 const cache = new WeakMap<GauntletResult, CameraTrack>();
@@ -97,31 +104,27 @@ export function cameraTrack(result: GauntletResult): CameraTrack {
   if (cached) return cached;
 
   const frames: CameraFrame[] = [];
-  let camX = 0.5;
-  let camY = 0.5;
-  let zoom = 1;
+  const maxX = Math.round(WIDTH * PAN_RANGE_X);
+  const maxY = Math.round(HEIGHT * PAN_RANGE_Y);
+  let dx = 0;
+  let dy = 0;
 
-  result.snapshots.forEach((snap, i) => {
+  for (const snap of result.snapshots) {
+    // Follow the midpoint of the pair. The camera moves the scene the *opposite*
+    // way to the thing it is following: to put a fighter on the right of the
+    // frame you slide the world left.
     const midX = (snap.challenger.x + snap.opponent.x) / 2;
     const midY = (snap.challenger.y + snap.opponent.y) / 2;
+    const targetX = -(midX - 0.5) * 2 * maxX * PAN_GAIN;
+    const targetY = -(midY - 0.5) * 2 * maxY * PAN_GAIN;
 
-    // A slow breath rather than a reaction to the pair's spread: the fighters
-    // cross the whole arena constantly, so a spread-driven zoom would pump.
-    const breath = (Math.sin((i / 30 / ZOOM_PERIOD) * Math.PI * 2) + 1) / 2;
-    const target = MIN_ZOOM + (MAX_ZOOM - MIN_ZOOM) * breath;
+    dx += (targetX - dx) * PAN_LERP;
+    dy += (targetY - dy) * PAN_LERP;
+    dx = Math.max(-maxX, Math.min(maxX, dx));
+    dy = Math.max(-maxY, Math.min(maxY, dy));
 
-    camX += (midX - camX) * PAN_LERP;
-    camY += (midY - camY) * PAN_LERP;
-    zoom += (target - zoom) * ZOOM_LERP;
-
-    // Free to drift: the reference lets the arena slide right out to the edge
-    // of the video and clips it. Held to half the arena so a wall is always in
-    // shot and the square never reads as having wandered off.
-    camX = Math.max(0.25, Math.min(0.75, camX));
-    camY = Math.max(0.25, Math.min(0.75, camY));
-
-    frames.push({ x: camX, y: camY, zoom });
-  });
+    frames.push({ dx, dy });
+  }
 
   const track: CameraTrack = { frames };
   cache.set(result, track);

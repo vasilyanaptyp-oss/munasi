@@ -5,7 +5,7 @@
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1200,
-    "attack": 23.3,
+    "attack": 25.6,
     "attackSpeed": 1.15,
     "critChance": 0.32,
     "critMult": 2.6,
