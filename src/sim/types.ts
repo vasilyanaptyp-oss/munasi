@@ -17,7 +17,9 @@ export type AbilityType =
   | "buff_attack"
   | "aoe"
   | "magnetic_north"
-  | "nobody_moves";
+  | "nobody_moves"
+  | "haymaker"
+  | "four_eyes";
 
 /** Stats of a minion produced by a `spawn_minion` ability. */
 export interface MinionSpec {

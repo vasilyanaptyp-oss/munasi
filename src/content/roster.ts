@@ -95,4 +95,60 @@ export const ROSTER: FighterSpec[] = [
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
   },
+
+  /*
+   * BOXER GUY and GLASSES GUY are built and waiting on their photographs.
+   *
+   * Both signatures exist and are drawn — `haymaker` and `four_eyes` in
+   * `src/sim/simulate.ts` and `src/render/signatures.ts` — on the same shape as
+   * the other two: the effect starts on its owner, crosses the arena, and
+   * arrives on the frame the damage lands.
+   *
+   * What is missing is the only thing that cannot be written: the cut-outs. Put
+   * the two photographs in `assets/fighters/source/` as `boxer-guy.jpg` and
+   * `glasses-guy.jpg`, then:
+   *
+   *     pnpm cutout          # background off, keyline on, aspect measured
+   *     # uncomment the two entries below
+   *     pnpm calibrate       # solves `attack` for all four
+   *     pnpm balance         # check the six pairings
+   *
+   * `aspect` is filled in by `pnpm cutout`, so leave whatever is here — it is
+   * overwritten. `fieldScale` will need bisecting per fighter once the pairs
+   * can actually be played; see the note on Compass Guy above for why it cannot
+   * be guessed.
+   *
+   * A warning worth having in writing: Glasses Guy is a dark suit on a dark
+   * background, and so is Bodyguard Guy. `silhouette.test.ts` requires the two
+   * to differ by 40 points of mean lightness so they do not read as one blob on
+   * the blue field. If that gate fails, the fix is a different photograph, not a
+   * lower threshold.
+   *
+  {
+    // Gloves up, scowling. The one who actually throws a punch.
+    id: "boxer",
+    faction: "left",
+    name: "BOXER GUY",
+    spriteId: "boxer-guy",
+    maxHp: 1080,
+    attackSpeed: 1.05,
+    critChance: 0.34,
+    critMult: 2.7,
+    // The glove crosses the arena and knocks whatever it hits along its own
+    // line, so the punch moves the fight as well as damaging it.
+    abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
+  },
+  {
+    // Reads the room, then throws his glasses at it.
+    id: "glasses",
+    faction: "right",
+    name: "GLASSES GUY",
+    spriteId: "glasses-guy",
+    maxHp: 1120,
+    attackSpeed: 0.95,
+    critChance: 0.28,
+    critMult: 2.8,
+    abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
+  },
+  */
 ];

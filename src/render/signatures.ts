@@ -50,6 +50,9 @@ export interface Point {
   y: number;
 }
 
+/** Every signature the renderer knows how to draw. */
+export type SignatureKind = "magnetic_north" | "nobody_moves" | "haymaker" | "four_eyes";
+
 /** Ease-out, so the thing leaves fast and settles onto its target. */
 function ease(t: number): number {
   return 1 - Math.pow(1 - t, 2.2);
@@ -174,6 +177,136 @@ function magneticNorth(
   label(ctx, "MAGNETIC NORTH", alpha, width, arena, "#ffe45c", slot);
 }
 
+
+/**
+ * HAYMAKER — Boxer Guy.
+ *
+ * A glove leaves him, crosses the arena spinning, and lands. The most literal
+ * reading of "who is attacking": the thing that hits you is the thing he threw.
+ */
+function haymaker(
+  ctx: Ctx,
+  from: Point,
+  to: Point,
+  age: number,
+  scale: number,
+  width: number,
+  arena: ArenaBox,
+  slot: number,
+): void {
+  const t = Math.min(1, age / SIGNATURE_FRAMES);
+  const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+  const alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
+  const p = ease(travel);
+  const gx = from.x + (to.x - from.x) * p;
+  const gy = from.y + (to.y - from.y) * p;
+  const r = scale * 0.28;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Speed lines trailing back the way it came, so the direction is unmistakable.
+  const back = Math.atan2(from.y - to.y, from.x - to.x);
+  ctx.strokeStyle = "rgba(255,255,255,0.65)";
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(3, scale * 0.02);
+  for (const off of [-0.5, 0, 0.5]) {
+    const nx = Math.cos(back + Math.PI / 2) * r * off;
+    const ny = Math.sin(back + Math.PI / 2) * r * off;
+    ctx.beginPath();
+    ctx.moveTo(gx + nx, gy + ny);
+    ctx.lineTo(gx + nx + Math.cos(back) * r * 2.4, gy + ny + Math.sin(back) * r * 2.4);
+    ctx.stroke();
+  }
+
+  // The glove: a fist-shaped blob with a cuff, turned to face where it is going.
+  ctx.translate(gx, gy);
+  ctx.rotate(Math.atan2(to.y - from.y, to.x - from.x) + travel * Math.PI * 1.5);
+  ctx.fillStyle = "#e02b1e";
+  ctx.strokeStyle = C.outline;
+  ctx.lineWidth = Math.max(3, r * 0.14);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // The thumb, so it reads as a glove rather than a ball.
+  ctx.beginPath();
+  ctx.arc(-r * 0.55, r * 0.5, r * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // The cuff.
+  ctx.fillStyle = "#1b1b1b";
+  ctx.beginPath();
+  ctx.rect(-r * 1.5, -r * 0.42, r * 0.6, r * 0.84);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  label(ctx, "HAYMAKER", alpha, width, arena, "#ff6a3d", slot);
+}
+
+/**
+ * FOUR EYES — Glasses Guy.
+ *
+ * He flings a fan of spectacles. They leave him together, spread on the way
+ * over, and arrive on the same frame — a scatter rather than one projectile, so
+ * the volley reads even when it crosses a busy arena.
+ */
+function fourEyes(
+  ctx: Ctx,
+  from: Point,
+  to: Point,
+  age: number,
+  scale: number,
+  width: number,
+  arena: ArenaBox,
+  slot: number,
+): void {
+  const t = Math.min(1, age / SIGNATURE_FRAMES);
+  const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+  const alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
+  const p = ease(travel);
+  const heading = Math.atan2(to.y - from.y, to.x - from.x);
+  const across = heading + Math.PI / 2;
+  const w = scale * 0.3;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Bow out at the midpoint and close again on the target, so the fan is widest
+  // where there is room for it and tightest where it lands.
+  const spread = Math.sin(p * Math.PI) * scale * 0.55;
+  for (const lane of [-1, 0, 1]) {
+    const cx = from.x + (to.x - from.x) * p + Math.cos(across) * spread * lane;
+    const cy = from.y + (to.y - from.y) * p + Math.sin(across) * spread * lane;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(heading + travel * Math.PI * 4 * (lane === 0 ? 1 : lane));
+    // A pair of spectacles: two rims and a bridge.
+    ctx.strokeStyle = "#111318";
+    ctx.lineWidth = Math.max(3, w * 0.16);
+    ctx.lineJoin = "round";
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(side * w * 0.42, 0, w * 0.34, w * 0.28, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.08, -w * 0.04);
+    ctx.lineTo(w * 0.08, -w * 0.04);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.76, -w * 0.02);
+    ctx.lineTo(-w * 1.02, -w * 0.16);
+    ctx.moveTo(w * 0.76, -w * 0.02);
+    ctx.lineTo(w * 1.02, -w * 0.16);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  label(ctx, "FOUR EYES", alpha, width, arena, "#9fd8ff", slot);
+}
+
 /**
  * NOBODY MOVES — Bodyguard Guy.
  *
@@ -273,7 +406,7 @@ export function drawSignatures(
   frame: number,
   arena: ArenaBox,
   size: { width: number; height: number },
-  kindOf: (actorId: string) => "magnetic_north" | "nobody_moves" | null,
+  kindOf: (actorId: string) => SignatureKind | null,
   positionOf: (id: string) => Point | null,
   fighterScale: number,
 ): void {
@@ -288,12 +421,13 @@ export function drawSignatures(
     const to = positionOf(event.targetId);
     if (!from || !to) continue;
 
-    casterRing(ctx, from, age, fighterScale, kind === "magnetic_north" ? "#ed1e2a" : "#ffffff");
-    if (kind === "magnetic_north") {
-      magneticNorth(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    } else {
-      nobodyMoves(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    }
+    const ringColour =
+      kind === "magnetic_north" ? "#ed1e2a" : kind === "haymaker" ? "#ff6a3d" : kind === "four_eyes" ? "#9fd8ff" : "#ffffff";
+    casterRing(ctx, from, age, fighterScale, ringColour);
+    if (kind === "magnetic_north") magneticNorth(ctx, from, to, age, fighterScale, size.width, arena, slot);
+    else if (kind === "haymaker") haymaker(ctx, from, to, age, fighterScale, size.width, arena, slot);
+    else if (kind === "four_eyes") fourEyes(ctx, from, to, age, fighterScale, size.width, arena, slot);
+    else nobodyMoves(ctx, from, to, age, fighterScale, size.width, arena, slot);
     slot += 1;
   }
 }

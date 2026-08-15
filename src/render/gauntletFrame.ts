@@ -26,10 +26,13 @@ import {
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
 import { worldToScreen } from "./gauntletCamera.js";
 import { drawPhoto } from "./photo.js";
-import { drawSignatures } from "./signatures.js";
+import { drawSignatures, type SignatureKind } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
+
+/** Ability types that draw a signature effect. */
+const SIGNATURE_KINDS = new Set<string>(["magnetic_north", "nobody_moves", "haymaker", "four_eyes"]);
 
 const FLASH_FRAMES = 4;
 
@@ -599,15 +602,13 @@ export function renderGauntletFrame(
 
   // Signatures go over the fighters and under the overlay: they are the scene's
   // biggest moment, but the title still has to be readable through one.
-  const kindOf = (actorId: string): "magnetic_north" | "nobody_moves" | null => {
+  const kindOf = (actorId: string): SignatureKind | null => {
     const who =
       actorId === result.challenger.id
         ? result.challenger
         : result.team.members.find((m) => m.id === actorId);
-    const ability = who?.abilities.find(
-      (a) => a.type === "magnetic_north" || a.type === "nobody_moves",
-    );
-    return ability ? (ability.type as "magnetic_north" | "nobody_moves") : null;
+    const ability = who?.abilities.find((a) => SIGNATURE_KINDS.has(a.type));
+    return ability ? (ability.type as SignatureKind) : null;
   };
   // Both ends of the effect come from this frame's layout, so it stays attached
   // to two fighters who are still moving.

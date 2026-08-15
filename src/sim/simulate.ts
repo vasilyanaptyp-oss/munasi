@@ -423,6 +423,47 @@ export function simulate(
         });
         break;
       }
+      /**
+       * HAYMAKER — Boxer Guy throws a glove across the arena.
+       *
+       * The knock is the character: whatever it lands on is sent flying the way
+       * the punch was going. Same shape as the other two — it leaves him, it
+       * crosses, it arrives on the frame the damage lands.
+       */
+      case "haymaker": {
+        const heading = Math.atan2(
+          movement[enemy.side].y - movement[state.side].y,
+          movement[enemy.side].x - movement[state.side].x,
+        );
+        setHeading(movement[enemy.side], heading);
+        scheduleSignature(state);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: heading,
+        });
+        break;
+      }
+      /**
+       * FOUR EYES — Glasses Guy flings a volley of spectacles.
+       *
+       * They land as a spread rather than a single hit, so the effect reads as a
+       * scatter; the freeze-frame of a pair of glasses spinning across the
+       * arena is the whole gag.
+       */
+      case "four_eyes": {
+        scheduleSignature(state);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: 0,
+        });
+        break;
+      }
       // NOBODY MOVES. He lowers the sunglasses and the arena stops.
       case "nobody_moves": {
         movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
