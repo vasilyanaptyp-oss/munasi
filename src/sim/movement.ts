@@ -69,6 +69,9 @@ export interface MovementState {
   halfH: number;
   /** Tick until which this fighter is held still — see `NOBODY MOVES`. */
   frozenUntilTick: number;
+  /** Tick until which this fighter travels at `dashMul` speed — see `HAYMAKER`. */
+  dashUntilTick: number;
+  dashMul: number;
 }
 
 export interface MovementInput {
@@ -115,6 +118,8 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
     halfW,
     halfH,
     frozenUntilTick: 0,
+    dashUntilTick: 0,
+    dashMul: 1,
   };
 }
 
@@ -130,8 +135,11 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
   // freeze cannot be forgotten by one of them.
   if (input.tick < state.frozenUntilTick) return;
 
-  state.x += state.vx;
-  state.y += state.vy;
+  // A dash multiplies travel for a short window without changing the stored
+  // velocity, so the fighter carries on at his own speed once it expires.
+  const dash = input.tick < state.dashUntilTick ? state.dashMul : 1;
+  state.x += state.vx * dash;
+  state.y += state.vy * dash;
 
   const left = state.halfW;
   const right = 1 - state.halfW;
@@ -300,6 +308,20 @@ export function setHeading(state: MovementState, heading: number): void {
   const speed = Math.hypot(state.vx, state.vy);
   state.vx = Math.cos(heading) * speed;
   state.vy = Math.sin(heading) * speed;
+}
+
+/**
+ * Sends a fighter at something, fast, for a moment — Boxer Guy closing the
+ * distance for `HAYMAKER`.
+ *
+ * He is a boxer: he does not throw his gloves across the arena, he gets in
+ * range and hits you. So the ability moves *him*, and the punch lands when he
+ * arrives.
+ */
+export function dash(state: MovementState, heading: number, mul: number, untilTick: number): void {
+  setHeading(state, heading);
+  state.dashMul = mul;
+  state.dashUntilTick = untilTick;
 }
 
 /** Stops a fighter dead — Bodyguard Guy's `NOBODY MOVES`, and his own stance. */

@@ -309,8 +309,7 @@ function drawImpacts(
       const at = worldToScreen(event.atX, event.atY, cam);
       const age = back / IMPACT_FRAMES;
       const alpha = 1 - age;
-      // Grows a little as it fades, so it reads as a burst rather than a stamp.
-      const reach = WIDTH * (event.type === "crit" ? 0.085 : 0.062) * (0.75 + age * 0.6);
+      const reach = WIDTH * (event.type === "crit" ? 0.075 : 0.055) * (0.8 + age * 0.5);
       const spin = numberJitter(`${event.frame}:${event.actorId}:impact`, Math.PI);
 
       ctx.save();
@@ -319,42 +318,24 @@ function drawImpacts(
       ctx.globalAlpha = alpha;
       ctx.lineCap = "round";
 
-      // Pale speed lines first, so the red sits on top of them.
-      ctx.strokeStyle = "rgba(214,240,255,0.75)";
-      ctx.lineWidth = Math.max(2, WIDTH * 0.004);
-      for (const t of [-0.55, 0.55]) {
+      // **A burst, not a grid.** This drew four red slashes across two pale
+      // horizontal speed lines, and crossed lines in two colours read as
+      // noughts and crosses scribbled between the numbers rather than as a
+      // blow. Now it is spokes from one centre, none of them crossing another,
+      // in the same yellow as the number they belong to — one hit, one colour.
+      ctx.strokeStyle = C.damageText;
+      ctx.lineWidth = Math.max(4, WIDTH * 0.009);
+      const spokes = 6;
+      for (let i = 0; i < spokes; i += 1) {
+        const a = (i / spokes) * Math.PI * 2;
+        const inner = reach * 0.38;
+        const outer = reach * (i % 2 === 0 ? 1 : 0.72);
         ctx.beginPath();
-        ctx.moveTo(-reach * 1.15, t * reach * 0.5);
-        ctx.lineTo(reach * 1.15, t * reach * 0.5);
-        ctx.stroke();
-      }
-
-      // The slashes. Four, uneven, none through the centre — a clean asterisk
-      // reads as a sparkle, and this has to read as a hit.
-      ctx.strokeStyle = C.impact;
-      ctx.lineWidth = Math.max(3, WIDTH * 0.0075);
-      const slashes: [number, number, number][] = [
-        [-0.9, -0.5, 1.0],
-        [-0.35, 0.75, 0.8],
-        [0.4, -0.8, 0.9],
-        [0.85, 0.35, 0.7],
-      ];
-      for (const [ox, oy, len] of slashes) {
-        ctx.beginPath();
-        ctx.moveTo(ox * reach, oy * reach);
-        ctx.lineTo(ox * reach + len * reach * 0.55, oy * reach + len * reach * 0.42);
+        ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+        ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
         ctx.stroke();
       }
       ctx.restore();
-
-      // The "!" sits upright above the mark, unrotated, and only while the mark
-      // is fresh — it is a punctuation on the blow, not part of the debris.
-      if (back <= 4) {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        strokedText(ctx, "!", at.x, at.y - reach * 1.5, Math.round(WIDTH * 0.058), C.telegraph, 7);
-        ctx.restore();
-      }
     }
   }
   ctx.globalAlpha = 1;

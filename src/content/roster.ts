@@ -87,7 +87,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9260,
+    fieldScale: 0.9373,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -101,21 +101,16 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0292,
+    fieldScale: 1.0402,
   },
 
   /*
-   * Both of these throw something you can watch cross the arena, which is the
-   * whole brief: `haymaker` puts a glove in the air, `four_eyes` a fan of
-   * spectacles. Same shape as the other two — the effect starts on its owner,
-   * travels in view, and arrives on the frame the damage lands.
-   *
-   * Glasses Guy and Bodyguard Guy are both a man in a suit with his arms
-   * crossed, which is exactly the collision `silhouette.test.ts` exists to
-   * catch: it requires 40 points of mean lightness between any two fighters so
-   * they cannot read as one blob on the blue field. The navy suit and white
-   * shirt clear it against the black one; if a future photograph does not, the
-   * fix is a different photograph, not a lower threshold.
+   * **Only one of these throws anything.** A boxer fights at range zero: he
+   * closes the distance and hits you. `haymaker` dashes him at the other man
+   * and lands the punch when he arrives — it used to send a glove flying across
+   * the arena, which is a different character. The thrown weapon belongs to
+   * Glasses Guy, and it is his actual spectacles: the image is in
+   * `assets/props/glasses.png` and the effect draws that, not a sketch of one.
    */
   {
     // Gloves up, scowling. The one who actually throws a punch.
@@ -127,10 +122,10 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 1.05,
     critChance: 0.34,
     critMult: 2.7,
-    // The glove crosses the arena and knocks whatever it hits along its own
-    // line, so the punch moves the fight as well as damaging it.
+    // He closes the distance himself and knocks whatever he lands on along the
+    // line of the punch, so the blow moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
-    fieldScale: 0.9830,
+    fieldScale: 0.9627,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -143,6 +138,6 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.28,
     critMult: 2.8,
     abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
-    fieldScale: 0.9615,
+    fieldScale: 0.9593,
   },
 ];

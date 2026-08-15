@@ -1,4 +1,5 @@
 import {
+  dash,
   initialMovement,
   resolveCollision,
   setHeading,
@@ -40,6 +41,14 @@ export const DAMAGE_VARIANCE = 0.35;
  * the same moment, or the ability reads as decoration again.
  */
 export const SIGNATURE_LEAD_SECONDS = 0.35;
+
+/**
+ * How much faster Boxer Guy travels while closing for `HAYMAKER`.
+ *
+ * Enough to cross most of a typical gap inside the lead time, so the punch
+ * lands from somewhere near the other man rather than across the square.
+ */
+const HAYMAKER_DASH = 4.5;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
 const DERIVED_MINION_ATTACK_SPEED = 0.9;
@@ -394,13 +403,14 @@ export function simulate(
   const SIGNATURE_PULSE_SHARE = 1.33;
   const SIGNATURE_FIRST_TICK = Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
   const SIGNATURE_PULSE_GAP = Math.round(0.5 * TICKS_PER_SECOND);
-  const pulses: { atTick: number; side: Side }[] = [];
+  const pulses: { atTick: number; side: Side; knockback: boolean }[] = [];
 
-  const scheduleSignature = (state: FighterState): void => {
+  const scheduleSignature = (state: FighterState, knockback = false): void => {
     for (let i = 0; i < SIGNATURE_PULSES; i += 1) {
       pulses.push({
         atTick: tick + SIGNATURE_FIRST_TICK + i * SIGNATURE_PULSE_GAP,
         side: state.side,
+        knockback,
       });
     }
   };
@@ -435,8 +445,17 @@ export function simulate(
           movement[enemy.side].y - movement[state.side].y,
           movement[enemy.side].x - movement[state.side].x,
         );
-        setHeading(movement[enemy.side], heading);
-        scheduleSignature(state);
+        // **He closes the distance himself.** A boxer does not throw his gloves
+        // across the arena; he gets in range and hits you. So the dash moves the
+        // caster, at a speed that covers most of the gap inside the lead time,
+        // and the punch lands when he arrives.
+        dash(
+          movement[state.side],
+          heading,
+          HAYMAKER_DASH,
+          tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND),
+        );
+        scheduleSignature(state, true);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -642,6 +661,15 @@ export function simulate(
         comebackMultiplier(caster, rubberBand);
       const dealt = damageFighter(victim, rollDamage(caster.rng, raw));
       const at = movement[victim.side];
+      // The knock happens when the punch lands, not when it was thrown. Sending
+      // the victim flying before the blow arrives is exactly the incoherence
+      // this whole pass is about.
+      if (pulse.knockback) {
+        setHeading(
+          at,
+          Math.atan2(at.y - movement[caster.side].y, at.x - movement[caster.side].x),
+        );
+      }
       events.push({
         frame,
         type: isCrit ? "crit" : "hit",

@@ -18,6 +18,7 @@ import { join } from "node:path";
  */
 
 const FIGHTER_DIR = join(process.cwd(), "assets", "fighters");
+const PROP_DIR = join(process.cwd(), "assets", "props");
 
 /**
  * Every fighter's cut-out, decoded once when this module loads.
@@ -39,6 +40,28 @@ const images = new Map<string, Image>(
       ]),
   ),
 );
+
+/**
+ * Props an ability throws — decoded here for the same reason the fighters are:
+ * the frame render is synchronous and every worker draws its own stripe.
+ */
+const props = new Map<string, Image>(
+  await Promise.all(
+    readdirSync(PROP_DIR)
+      .filter((f) => f.endsWith(".png"))
+      .map(async (f): Promise<[string, Image]> => [
+        f.replace(/\.png$/, ""),
+        await loadImage(readFileSync(join(PROP_DIR, f))),
+      ]),
+  ),
+);
+
+/** A thrown prop, e.g. the pair of spectacles `FOUR EYES` puts in the air. */
+export function propImage(id: string): Image {
+  const image = props.get(id);
+  if (!image) throw new Error(`no prop ${id} — expected assets/props/${id}.png`);
+  return image;
+}
 
 export function fighterImage(spriteId: string): Image {
   const image = images.get(spriteId);
