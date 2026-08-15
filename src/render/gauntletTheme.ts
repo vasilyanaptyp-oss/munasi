@@ -36,6 +36,14 @@ export const GAUNTLET_COLORS = {
   damageText: "#ffef4d",
   // Hotter still, so a crit reads on colour as well as on size.
   critText: "#fffbc2",
+  /**
+   * The impact mark at the point of contact, and the "!" over it. Both sampled
+   * off the reference, which draws red slashes and an orange exclamation at
+   * every blow — the one thing that told a viewer where the damage came from,
+   * and the one thing we had nothing of.
+   */
+  impact: "#e02b1e",
+  telegraph: "#ff9d1c",
   ink: "#ffffff",
   vs: "#0f7fa8",
   /** Victory card plate: lighter than the field, never a blackout. */

@@ -362,6 +362,40 @@ export function simulate(
     }
   };
 
+  /**
+   * Damage a signature is still owed, tick by tick.
+   *
+   * **A signature has to land damage, and land it visibly.** Ours took over the
+   * screen for 1.4 seconds and did nothing to anyone's health: every point of
+   * damage in the video came from somewhere else, so the biggest thing on screen
+   * was decoration and the fight was decided off-camera. The reference does the
+   * opposite — its one signature is a note highway that deals essentially all of
+   * the damage a viewer can see arriving, note by note, each with its own flash
+   * and its own number.
+   *
+   * So a cast schedules a short burst rather than one lump: several pulses over
+   * the animation, each rolled and reported separately, each carrying the
+   * victim's position so the renderer can mark it on them. Contact hits alone
+   * cannot carry the fight either way — measured, two fighters meet every 2.3s
+   * at best, against the reference's 1.20s between blows, and its own worst gap
+   * of 4.87s. The pulses fill exactly the stretches where nobody is touching.
+   */
+  const SIGNATURE_PULSES = 3;
+  /** Damage per pulse, as a share of the caster's attack. Solved by bisection. */
+  const SIGNATURE_PULSE_SHARE = 0.62;
+  const SIGNATURE_FIRST_TICK = Math.round(0.35 * TICKS_PER_SECOND);
+  const SIGNATURE_PULSE_GAP = Math.round(0.3 * TICKS_PER_SECOND);
+  const pulses: { atTick: number; side: Side }[] = [];
+
+  const scheduleSignature = (state: FighterState): void => {
+    for (let i = 0; i < SIGNATURE_PULSES; i += 1) {
+      pulses.push({
+        atTick: tick + SIGNATURE_FIRST_TICK + i * SIGNATURE_PULSE_GAP,
+        side: state.side,
+      });
+    }
+  };
+
   const castAbility = (state: FighterState, ability: Ability): void => {
     const enemy = opponentOf(state);
     switch (ability.type) {
@@ -370,6 +404,7 @@ export function simulate(
       case "magnetic_north": {
         const heading = movementRng[state.side].range(0, Math.PI * 2);
         setHeading(movement[enemy.side], heading);
+        scheduleSignature(state);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -382,6 +417,7 @@ export function simulate(
       // NOBODY MOVES. He lowers the sunglasses and the arena stops.
       case "nobody_moves": {
         movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
+        scheduleSignature(state);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -476,8 +512,7 @@ export function simulate(
       }
     }
 
-    // The bounce. Position never gates damage — see movement.ts — so this runs
-    // beside the fight rather than inside it.
+    // The bounce...
     for (const side of [sides.a, sides.b]) {
       stepMovement(movement[side.side], { tick, rng: movementRng[side.side] });
     }
@@ -485,27 +520,87 @@ export function simulate(
     // resolved from the positions they actually reached rather than from one
     // fighter's stale position, which would make the outcome depend on which of
     // them stepped first.
-    resolveCollision(movement.a, movement.b, tick);
+    const contact = resolveCollision(movement.a, movement.b, tick);
 
-    // Basic attacks.
+    /**
+     * **Damage lands on contact.** This is the fight.
+     *
+     * It used to come off a clock, at whatever distance the pair happened to
+     * be, and the owner's verdict on that was that they were hitting air: a
+     * number appeared over someone standing alone in an empty half of the
+     * arena, and nothing on screen said why. Traced through the reference frame
+     * by frame, that is not what it does. When the two run into each other:
+     *
+     *   - **both take damage in the same frame**, each dealing their own — one
+     *     video shows "-75" over one man and "-120" over the other, together;
+     *   - both flash white, and an impact mark is drawn where they met.
+     *
+     * So the swing happens where a viewer is already looking, and the cause is
+     * on screen. The cooldown survives as a readiness gate rather than a
+     * metronome: a fighter who has just swung cannot swing again until it
+     * refills, so lying against each other for a few ticks is one blow, not
+     * twenty.
+     */
+    if (contact?.closing === true) {
+      const landed: { side: FighterState; dealt: number; crit: boolean }[] = [];
+      for (const side of [sides.a, sides.b]) {
+        if (side.attackCooldown > 0) continue;
+        const isCrit = side.rng.chance(side.base.critChance);
+        const raw =
+          effectiveAttack(side) *
+          (isCrit ? side.base.critMult : 1) *
+          comebackMultiplier(side, rubberBand);
+        landed.push({ side, dealt: rollDamage(side.rng, raw), crit: isCrit });
+      }
+      // Rolled for both before either is applied, so a fighter who dies to this
+      // exchange still lands the blow they were throwing. A mutual knockout is
+      // a real outcome of running into each other and reads as one.
+      for (const { side, dealt, crit } of landed) {
+        const enemy = opponentOf(side);
+        const done = damageFighter(enemy, dealt);
+        events.push({
+          frame,
+          type: crit ? "crit" : "hit",
+          actorId: side.base.id,
+          targetId: enemy.base.id,
+          value: done,
+          atX: contact.x,
+          atY: contact.y,
+        });
+        side.attackCooldown = ticksPerAttack(effectiveAttackSpeed(side));
+      }
+    }
     for (const side of [sides.a, sides.b]) {
-      const enemy = opponentOf(side);
-      side.attackCooldown -= 1;
-      if (side.attackCooldown > 0) continue;
-      const isCrit = side.rng.chance(side.base.critChance);
+      if (side.attackCooldown > 0) side.attackCooldown -= 1;
+    }
+
+    // Signature pulses that come due this tick. Reported at the victim's own
+    // position rather than the caster's: the effect fills the arena, so what a
+    // viewer needs marked is where it bit.
+    for (let i = pulses.length - 1; i >= 0; i -= 1) {
+      const pulse = pulses[i]!;
+      if (pulse.atTick !== tick) continue;
+      pulses.splice(i, 1);
+      const caster = sides[pulse.side];
+      const victim = opponentOf(caster);
+      if (caster.hp <= 0 || victim.hp <= 0) continue;
+      const isCrit = caster.rng.chance(caster.base.critChance);
       const raw =
-        effectiveAttack(side) *
-        (isCrit ? side.base.critMult : 1) *
-        comebackMultiplier(side, rubberBand);
-      const dealt = damageFighter(enemy, rollDamage(side.rng, raw));
+        effectiveAttack(caster) *
+        SIGNATURE_PULSE_SHARE *
+        (isCrit ? caster.base.critMult : 1) *
+        comebackMultiplier(caster, rubberBand);
+      const dealt = damageFighter(victim, rollDamage(caster.rng, raw));
+      const at = movement[victim.side];
       events.push({
         frame,
         type: isCrit ? "crit" : "hit",
-        actorId: side.base.id,
-        targetId: enemy.base.id,
+        actorId: caster.base.id,
+        targetId: victim.base.id,
         value: dealt,
+        atX: at.x,
+        atY: at.y,
       });
-      side.attackCooldown += ticksPerAttack(effectiveAttackSpeed(side));
     }
 
     // Minions attack the enemy fighter and age.

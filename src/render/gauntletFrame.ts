@@ -16,6 +16,7 @@ import {
   gauntletFrameLayout,
   hudLayout,
   MINION_OUTLINE,
+  numberJitter,
   numberText,
   victoryCardLayout,
   type GauntletFrameLayout,
@@ -23,6 +24,7 @@ import {
   type Rect,
 } from "./gauntletLayout.js";
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
+import { worldToScreen } from "./gauntletCamera.js";
 import { drawPhoto } from "./photo.js";
 import { drawSignatures } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
@@ -272,6 +274,89 @@ function drawOverlay(ctx: Ctx, metrics: HudMetrics, cam: { dx: number; dy: numbe
   ctx.textAlign = "left";
 }
 
+/** Frames an impact mark stays on screen. Measured off the reference: ~9. */
+const IMPACT_FRAMES = 9;
+
+/**
+ * The blow itself, drawn where it landed.
+ *
+ * This is the answer to the video's biggest defect: numbers used to appear over
+ * a fighter standing alone in an empty half of the arena, with nothing on screen
+ * saying where the damage had come from. Traced through the reference, every hit
+ * is marked at the point of contact — a spray of short red slashes, a few pale
+ * speed lines across them, and an orange "!" riding just above. The victim
+ * flashes white and the number floats off them, but it is this mark that tells a
+ * viewer *that two things just met here*.
+ *
+ * Events carry `atX`/`atY` in arena units, so the mark rides the camera with
+ * everything else.
+ */
+function drawImpacts(
+  ctx: Ctx,
+  index: RenderIndex,
+  frame: number,
+  cam: { dx: number; dy: number },
+): void {
+  for (let back = IMPACT_FRAMES; back >= 0; back -= 1) {
+    const f = frame - back;
+    if (f < 0) continue;
+    for (const event of eventsAt(index, f)) {
+      if (event.type !== "hit" && event.type !== "crit") continue;
+      if (event.atX === undefined || event.atY === undefined) continue;
+      const at = worldToScreen(event.atX, event.atY, cam);
+      const age = back / IMPACT_FRAMES;
+      const alpha = 1 - age;
+      // Grows a little as it fades, so it reads as a burst rather than a stamp.
+      const reach = WIDTH * (event.type === "crit" ? 0.085 : 0.062) * (0.75 + age * 0.6);
+      const spin = numberJitter(`${event.frame}:${event.actorId}:impact`, Math.PI);
+
+      ctx.save();
+      ctx.translate(at.x, at.y);
+      ctx.rotate(spin);
+      ctx.globalAlpha = alpha;
+      ctx.lineCap = "round";
+
+      // Pale speed lines first, so the red sits on top of them.
+      ctx.strokeStyle = "rgba(214,240,255,0.75)";
+      ctx.lineWidth = Math.max(2, WIDTH * 0.004);
+      for (const t of [-0.55, 0.55]) {
+        ctx.beginPath();
+        ctx.moveTo(-reach * 1.15, t * reach * 0.5);
+        ctx.lineTo(reach * 1.15, t * reach * 0.5);
+        ctx.stroke();
+      }
+
+      // The slashes. Four, uneven, none through the centre — a clean asterisk
+      // reads as a sparkle, and this has to read as a hit.
+      ctx.strokeStyle = C.impact;
+      ctx.lineWidth = Math.max(3, WIDTH * 0.0075);
+      const slashes: [number, number, number][] = [
+        [-0.9, -0.5, 1.0],
+        [-0.35, 0.75, 0.8],
+        [0.4, -0.8, 0.9],
+        [0.85, 0.35, 0.7],
+      ];
+      for (const [ox, oy, len] of slashes) {
+        ctx.beginPath();
+        ctx.moveTo(ox * reach, oy * reach);
+        ctx.lineTo(ox * reach + len * reach * 0.55, oy * reach + len * reach * 0.42);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // The "!" sits upright above the mark, unrotated, and only while the mark
+      // is fresh — it is a punctuation on the blow, not part of the debris.
+      if (back <= 4) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        strokedText(ctx, "!", at.x, at.y - reach * 1.5, Math.round(WIDTH * 0.058), C.telegraph, 7);
+        ctx.restore();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawDamageNumbers(
   ctx: Ctx,
   index: RenderIndex,
@@ -507,6 +592,9 @@ export function renderGauntletFrame(
     drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
   }
 
+  // Under the numbers, over the fighters: the mark is the cause, the number
+  // is the readout.
+  drawImpacts(ctx, index, frame, layout.camera);
   drawDamageNumbers(ctx, index, frame, layout);
 
   // Signatures go over the fighters and under the overlay: they are the scene's

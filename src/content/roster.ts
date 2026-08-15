@@ -67,15 +67,15 @@ export const ROSTER: FighterSpec[] = [
     // dummy, which does not make a *pair* even: without this Compass Guy took
     // 66% of the fights. Bisected through the real calibration — change the
     // scale, re-run the whole calibrator, play 300 gauntlets, read the winrate —
-    // until the pair sits on 50. Lands at 50.0% over 400 gauntlets.
+    // until the pair sits on 50. Lands at 49.8% over 400 gauntlets.
     //
-    // Re-bisected twice in one go. First when `attackRate` went from 3 to 0.35:
-    // damage per second is identical either way, but the fight stopped being a
-    // smooth race and became a dozen discrete blows, and who lands the last one
-    // is a different question — at the old 0.918 the pair had drifted to 26/74.
-    // Then again when the pickups that had been running by accident were turned
-    // off, which on its own moved it to 43/57.
-    fieldScale: 1.0107,
+    // Re-bisected on every change to how damage happens, because every one of
+    // them moved the pair: `attackRate` 3 -> 0.35 (26/74), pickups off (43/57),
+    // and now damage landing on contact instead of on a clock (39/61). Note
+    // that the calibrator itself plays matches, so a combat change moves the
+    // calibration *and* the pair, and the bracket has to be re-found rather
+    // than nudged.
+    fieldScale: 0.9733,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off

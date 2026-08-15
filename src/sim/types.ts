@@ -238,6 +238,13 @@ export interface MatchEvent {
   targetId: string;
   /** Damage, healing, minion HP, buff power — depends on `type`. */
   value: number;
+  /**
+   * Where in the arena's unit square the blow landed, when it landed anywhere
+   * in particular. Present on contact hits, so the renderer can draw the impact
+   * between the two figures instead of leaving a number to appear from nowhere.
+   */
+  atX?: number;
+  atY?: number;
 }
 
 export type Winner = Side | "draw";

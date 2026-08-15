@@ -177,17 +177,31 @@ describe("simulate", () => {
     }
   });
 
-  it("attacks at roughly the configured attack speed", () => {
+  it("never swings faster than its attack speed allows", () => {
+    // `attackSpeed` stopped being a metronome when damage moved onto contact.
+    // Blows land when the two run into each other, so the rate is set by how
+    // often that happens; what the stat still guarantees is the floor between
+    // two swings, which is what stops a pair lying against each other for half a
+    // second from registering thirty hits.
     const config = {
-      a: makeFighter({ id: "fast", attackSpeed: 3, attack: 1 }),
+      a: makeFighter({ id: "fast", attackSpeed: 3, attack: 1, maxHp: 100000, hp: 100000 }),
       b: makeFighter({ id: "slow", attackSpeed: 1, attack: 1, maxHp: 100000, hp: 100000 }),
     };
-    const result = simulate({ ...config, a: { ...config.a, maxHp: 100000, hp: 100000 } }, 4);
-    const seconds = result.durationFrames / FPS;
-    const fastHits = result.events.filter(
-      (e) => e.actorId === "fast" && (e.type === "hit" || e.type === "crit"),
-    ).length;
-    expect(fastHits / seconds).toBeCloseTo(3, 0);
+    const result = simulate(config, 4);
+    for (const [id, speed] of [["fast", 3], ["slow", 1]] as const) {
+      const frames = result.events
+        .filter((e) => e.actorId === id && (e.type === "hit" || e.type === "crit"))
+        .map((e) => e.frame);
+      expect(frames.length, `${id} never swung`).toBeGreaterThan(0);
+      // Signature pulses are exempt: they are one cast spending itself over
+      // several ticks, not several swings. This roster has no abilities.
+      const floor = FPS / speed;
+      for (let i = 1; i < frames.length; i += 1) {
+        const gap = frames[i]! - frames[i - 1]!;
+        expect(gap, `${id} swung again after ${gap} frames, floor ${floor}`)
+          .toBeGreaterThanOrEqual(Math.floor(floor) - 1);
+      }
+    }
   });
 
   it("rolls crits at roughly the configured rate", () => {

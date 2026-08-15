@@ -43,8 +43,8 @@ export const FIGHTER_HALF_HEIGHT = 0.18;
 const KEYLINE_MARGIN = 0.012;
 
 /** Units per tick. The reference crosses its arena in roughly four seconds. */
-const SPEED_MIN = 0.0026;
-const SPEED_MAX = 0.0042;
+const SPEED_MIN = 0.00780;
+const SPEED_MAX = 0.01260;
 
 export interface MovementState {
   x: number;
@@ -184,10 +184,10 @@ export function resolveCollision(
   a: MovementState,
   b: MovementState,
   tick: number,
-): void {
+): Contact | null {
   const aFrozen = tick < a.frozenUntilTick;
   const bFrozen = tick < b.frozenUntilTick;
-  if (aFrozen && bFrozen) return;
+  if (aFrozen && bFrozen) return null;
 
   const halfWs = (a.halfW + b.halfW) * COLLISION_SHARE;
   const halfHs = (a.halfH + b.halfH) * COLLISION_SHARE;
@@ -195,7 +195,7 @@ export function resolveCollision(
   const dy = b.y - a.y;
   const overlapX = halfWs - Math.abs(dx);
   const overlapY = halfHs - Math.abs(dy);
-  if (overlapX <= 0 || overlapY <= 0) return;
+  if (overlapX <= 0 || overlapY <= 0) return null;
 
   // Push apart along the shallower axis: that is the face they actually met on.
   const horizontal = overlapX < overlapY;
@@ -221,10 +221,16 @@ export function resolveCollision(
   keepInside(a);
   keepInside(b);
 
+  // Where they actually met, halfway between the two centres along the axis they
+  // met on. The renderer draws the impact here, so a viewer sees the blow land
+  // between the two figures rather than a number appearing out of nowhere.
+  const contact: Contact = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, closing: false };
+
   // Equal masses exchange the component along the axis of contact. Only if they
   // are closing: two figures already separating must not be flung back together.
   if (horizontal) {
-    if ((b.vx - a.vx) * sign >= 0) return;
+    if ((b.vx - a.vx) * sign >= 0) return contact;
+    contact.closing = true;
     if (aFrozen) b.vx = -b.vx;
     else if (bFrozen) a.vx = -a.vx;
     else {
@@ -233,7 +239,8 @@ export function resolveCollision(
       b.vx = swap;
     }
   } else {
-    if ((b.vy - a.vy) * sign >= 0) return;
+    if ((b.vy - a.vy) * sign >= 0) return contact;
+    contact.closing = true;
     if (aFrozen) b.vy = -b.vy;
     else if (bFrozen) a.vy = -a.vy;
     else {
@@ -242,6 +249,20 @@ export function resolveCollision(
       b.vy = swap;
     }
   }
+  return contact;
+}
+
+/**
+ * A meeting between the two fighters.
+ *
+ * `closing` marks the tick they actually ran into each other, as opposed to the
+ * ticks afterwards where they are still overlapping but already moving apart.
+ * That first tick is the blow; the rest are follow-through.
+ */
+export interface Contact {
+  x: number;
+  y: number;
+  closing: boolean;
 }
 
 /** Half-extents the collision actually uses, for the gate to assert against. */

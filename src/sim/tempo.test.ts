@@ -169,6 +169,48 @@ describe("movement", () => {
     }
   });
 
+  it("gives every blow a place on screen — nobody hits the air", () => {
+    // The owner's verdict on the last cut, and the rule this gate exists for: a
+    // number used to appear over a fighter standing alone in an empty half of
+    // the arena, because damage came off a clock and had nothing to do with
+    // where anyone was. Every hit now carries the point it landed on, and the
+    // renderer marks it there.
+    const result = run("compass", ["bodyguard"]);
+    const blows = result.events.filter((e) => e.type === "hit" || e.type === "crit");
+    expect(blows.length, "nobody hit anybody").toBeGreaterThan(8);
+    const placeless = blows.filter((e) => e.atX === undefined || e.atY === undefined);
+    expect(
+      placeless.length,
+      `${placeless.length} blows landed nowhere in particular (first at frame ${placeless[0]?.frame})`,
+    ).toBe(0);
+    // And the place has to be inside the arena, or the mark is drawn off screen.
+    for (const e of blows) {
+      expect(e.atX!).toBeGreaterThanOrEqual(0);
+      expect(e.atX!).toBeLessThanOrEqual(1);
+      expect(e.atY!).toBeGreaterThanOrEqual(0);
+      expect(e.atY!).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("makes the signature do the damage it is on screen for", () => {
+    // A signature took over the whole frame for 1.4s and moved nobody's health.
+    // The reference's one signature deals essentially all of the damage a viewer
+    // watches arrive, so ours has to land something.
+    const result = run("compass", ["bodyguard"]);
+    const casts = result.events.filter((e) => e.type === "signature");
+    expect(casts.length, "nobody cast anything").toBeGreaterThan(0);
+    for (const cast of casts) {
+      const landed = result.events.filter(
+        (e) =>
+          (e.type === "hit" || e.type === "crit") &&
+          e.actorId === cast.actorId &&
+          e.frame > cast.frame &&
+          e.frame <= cast.frame + Math.ceil(1.6 * FPS),
+      );
+      expect(landed.length, `a signature at frame ${cast.frame} dealt nothing`).toBeGreaterThan(0);
+    }
+  });
+
   it("pushes the two apart — they never sit inside each other", () => {
     // The owner's first complaint about the last cut: the two figures walked
     // through each other. They collide now, and this is the gate on it.
