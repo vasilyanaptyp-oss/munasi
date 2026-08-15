@@ -31,6 +31,15 @@ import { MAX_FRAMES, TICKS_PER_FRAME, TICKS_PER_SECOND } from "./types.js";
  * 100% winrate, which makes both balance and drama impossible.
  */
 export const DAMAGE_VARIANCE = 0.35;
+
+/**
+ * Seconds between a signature being cast and its damage landing.
+ *
+ * Exported because the renderer has to fly the effect across in exactly this
+ * time: the thing a viewer sees arrive and the tick the health drops have to be
+ * the same moment, or the ability reads as decoration again.
+ */
+export const SIGNATURE_LEAD_SECONDS = 0.35;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
 const DERIVED_MINION_ATTACK_SPEED = 0.9;
@@ -383,7 +392,7 @@ export function simulate(
   const SIGNATURE_PULSES = 1;
   /** Damage per pulse, as a share of the caster's attack. Solved by bisection. */
   const SIGNATURE_PULSE_SHARE = 1.33;
-  const SIGNATURE_FIRST_TICK = Math.round(0.35 * TICKS_PER_SECOND);
+  const SIGNATURE_FIRST_TICK = Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
   const SIGNATURE_PULSE_GAP = Math.round(0.5 * TICKS_PER_SECOND);
   const pulses: { atTick: number; side: Side }[] = [];
 

@@ -609,6 +609,13 @@ export function renderGauntletFrame(
     );
     return ability ? (ability.type as "magnetic_north" | "nobody_moves") : null;
   };
+  // Both ends of the effect come from this frame's layout, so it stays attached
+  // to two fighters who are still moving.
+  const positionOf = (id: string): { x: number; y: number } | null => {
+    if (id === snap.challenger.id) return layout.challenger.centre;
+    if (id === snap.opponent.id) return layout.opponent.centre;
+    return null;
+  };
   drawSignatures(
     ctx,
     result.events,
@@ -616,6 +623,8 @@ export function renderGauntletFrame(
     { x: layout.arena.x, y: layout.arena.y, side: layout.arena.w, border },
     { width: WIDTH, height: HEIGHT },
     kindOf,
+    positionOf,
+    layout.opponent.sprite.h,
   );
 
   drawOverlay(ctx, hud.metrics, layout.camera);

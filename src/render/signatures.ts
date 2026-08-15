@@ -1,27 +1,42 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import type { MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
+import { SIGNATURE_LEAD_SECONDS } from "../sim/simulate.js";
 import { GAUNTLET_COLORS as C } from "./gauntletTheme.js";
 import { strokedText } from "./frame.js";
-import { font } from "./theme.js";
+
 
 /**
- * The signature abilities, drawn across the whole arena.
+ * The signature abilities.
  *
- * This is the part that makes the format watchable, and the part this project
- * did not have. In the reference an ability is not a number over a head — it is
- * hundreds of particle arcs, or a blast that fills the square, or a compass rose
- * over everything. A character is a photo plus one effect you can see from
- * across the room.
+ * **An ability has to show who is attacking and what is hitting whom.** These
+ * used to be effects painted across the middle of the arena — a compass rose
+ * over everything, a white flash over the frame — with no connection to either
+ * fighter. The owner's verdict was that you could not tell what was attacking,
+ * and that was fair: the effect started nowhere, went nowhere, and the damage
+ * appeared somewhere else entirely.
  *
- * Both of these seize *movement*, which in a game whose entire picture is two
- * figures bouncing is the strongest thing an ability can do.
+ * So both are built the same way now, which is the way the reference builds its
+ * one ability:
+ *
+ *   1. it **starts on its owner** — a ring winds up around the caster, so the
+ *      character and the effect are visibly the same thing;
+ *   2. it **travels** across the arena, in view, in a straight readable line;
+ *   3. it **arrives on the victim** on the exact frame the damage lands, where
+ *      the impact mark and the number are already drawn.
+ *
+ * The arrival is synced to `SIGNATURE_LEAD_SECONDS` from the simulation rather
+ * than to a number chosen here. If the two ever drift apart the effect lands
+ * before or after the health drops, and the ability goes back to being
+ * decoration that happens near a fight.
  */
 
 type Ctx = SKRSContext2D;
 
 /** Frames each effect plays for. */
 export const SIGNATURE_FRAMES = Math.round(FPS * 1.4);
+/** Frames from the cast to the moment it bites. Matched to the simulation. */
+export const SIGNATURE_TRAVEL_FRAMES = Math.round(FPS * SIGNATURE_LEAD_SECONDS);
 
 export interface ArenaBox {
   x: number;
@@ -30,128 +45,228 @@ export interface ArenaBox {
   border: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** Ease-out, so the thing leaves fast and settles onto its target. */
+function ease(t: number): number {
+  return 1 - Math.pow(1 - t, 2.2);
+}
+
+/** The wind-up ring on the caster: this is who is attacking. */
+function casterRing(ctx: Ctx, from: Point, age: number, scale: number, colour: string): void {
+  const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+  if (t >= 1) return;
+  ctx.save();
+  ctx.globalAlpha = 0.85 * (1 - t);
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(4, scale * 0.02);
+  ctx.beginPath();
+  // Collapses inward as the shot builds, so it reads as gathering rather than
+  // as another expanding blast.
+  ctx.arc(from.x, from.y, scale * (0.55 - 0.3 * t), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * MAGNETIC NORTH — Compass Guy.
  *
- * A compass rose fills the arena, the needle spins and slams onto the heading
- * everyone else has just been pointed at.
+ * The rose is **on him**, not on the arena, and its needle swings round and
+ * points at the other fighter. A charge then runs out along that needle and
+ * into them. Needle points at you, bolt arrives, your health drops.
  */
-function magneticNorth(ctx: Ctx, arena: ArenaBox, age: number, heading: number, width: number): void {
+function magneticNorth(
+  ctx: Ctx,
+  from: Point,
+  to: Point,
+  age: number,
+  scale: number,
+  width: number,
+  arena: ArenaBox,
+  slot: number,
+): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
-  const cx = arena.x + arena.side / 2;
-  const cy = arena.y + arena.side / 2;
-  const inner = arena.side - arena.border * 2;
-  const radius = inner * 0.46;
-  // Fades in fast, holds, then goes; the needle lands two-thirds of the way in.
-  const alpha = t < 0.12 ? t / 0.12 : t > 0.75 ? Math.max(0, (1 - t) / 0.25) : 1;
+  const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+  const alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
+  const radius = scale * 0.62;
+  const heading = Math.atan2(to.y - from.y, to.x - from.x);
 
   ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
-  ctx.translate(cx, cy);
+  ctx.globalAlpha = alpha * 0.95;
+  ctx.translate(from.x, from.y);
 
-  // Two rings and the tick marks.
+  // Rings and ticks, sized to the man rather than to the square.
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = Math.max(3, inner * 0.008);
-  for (const r of [radius, radius * 0.78]) {
+  ctx.lineWidth = Math.max(3, radius * 0.035);
+  for (const r of [radius, radius * 0.76]) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.lineWidth = Math.max(2, inner * 0.005);
-  for (let i = 0; i < 32; i += 1) {
-    const a = (i / 32) * Math.PI * 2;
-    const long = i % 8 === 0;
+  ctx.lineWidth = Math.max(2, radius * 0.022);
+  for (let i = 0; i < 24; i += 1) {
+    const a = (i / 24) * Math.PI * 2;
+    const long = i % 6 === 0;
     ctx.beginPath();
     ctx.moveTo(Math.cos(a) * radius, Math.sin(a) * radius);
-    ctx.lineTo(Math.cos(a) * radius * (long ? 0.82 : 0.9), Math.sin(a) * radius * (long ? 0.82 : 0.9));
+    ctx.lineTo(Math.cos(a) * radius * (long ? 0.8 : 0.89), Math.sin(a) * radius * (long ? 0.8 : 0.89));
     ctx.stroke();
   }
 
-  // N E S W.
-  const letter = Math.round(inner * 0.075);
-  ctx.font = font(letter);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const marks: [string, number][] = [["N", -Math.PI / 2], ["E", 0], ["S", Math.PI / 2], ["W", Math.PI]];
-  for (const [text, a] of marks) {
-    strokedText(ctx, text, Math.cos(a) * radius * 0.66, Math.sin(a) * radius * 0.66, letter, "#ffffff", 6);
-  }
-
-  // The needle: spins hard, then settles on the heading it handed out.
-  const spins = 4;
-  const settle = Math.min(1, t / 0.66);
-  const eased = 1 - Math.pow(1 - settle, 3);
-  const angle = heading + (1 - eased) * Math.PI * 2 * spins;
+  // The needle spins up and locks onto the opponent by the time the bolt goes.
+  const eased = ease(travel);
+  const angle = heading + (1 - eased) * Math.PI * 2 * 3;
+  ctx.save();
   ctx.rotate(angle);
-  const len = radius * 0.72;
+  const len = radius * 0.92;
   for (const [dir, colour] of [[1, "#ed1e2a"], [-1, "#ffffff"]] as const) {
     ctx.beginPath();
     ctx.moveTo(len * dir, 0);
-    ctx.lineTo(-len * 0.06 * dir, -inner * 0.035);
-    ctx.lineTo(-len * 0.06 * dir, inner * 0.035);
+    ctx.lineTo(-len * 0.08 * dir, -radius * 0.11);
+    ctx.lineTo(-len * 0.08 * dir, radius * 0.11);
     ctx.closePath();
     ctx.fillStyle = colour;
     ctx.fill();
-    ctx.lineWidth = Math.max(2, inner * 0.004);
+    ctx.lineWidth = Math.max(2, radius * 0.018);
     ctx.strokeStyle = C.outline;
     ctx.stroke();
   }
   ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const label = Math.round(inner * 0.062);
-  // Centred on the frame, not the arena: the arena slides and gets cropped, and
-  // a name that runs off the edge is the one thing the overlay may never do.
-  strokedText(ctx, "MAGNETIC NORTH", width / 2, arena.y + arena.border + inner * 0.09, label, "#ffe45c", 8);
   ctx.restore();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
+
+  // The charge itself, running from him to them along the needle's line.
+  if (travel > 0.25) {
+    const p = ease((travel - 0.25) / 0.75);
+    const bx = from.x + (to.x - from.x) * p;
+    const by = from.y + (to.y - from.y) * p;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // A tail back toward the caster keeps the line of the attack readable.
+    const tail = 0.22;
+    const grad = ctx.createLinearGradient(
+      from.x + (to.x - from.x) * Math.max(0, p - tail),
+      from.y + (to.y - from.y) * Math.max(0, p - tail),
+      bx,
+      by,
+    );
+    grad.addColorStop(0, "rgba(237,30,42,0)");
+    grad.addColorStop(1, "#ed1e2a");
+    ctx.strokeStyle = grad;
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(5, scale * 0.075);
+    ctx.beginPath();
+    ctx.moveTo(
+      from.x + (to.x - from.x) * Math.max(0, p - tail),
+      from.y + (to.y - from.y) * Math.max(0, p - tail),
+    );
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(bx, by, scale * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  label(ctx, "MAGNETIC NORTH", alpha, width, arena, "#ffe45c", slot);
 }
 
 /**
  * NOBODY MOVES — Bodyguard Guy.
  *
- * A white flash swallows the frame, and when it clears the other fighter is
- * standing still. The stillness is the effect; the flash is how you notice it.
+ * A ring goes out **from him** and stops whatever it reaches. The freeze is the
+ * effect; the ring is how a viewer sees where it came from and who it caught.
+ * It used to be a white flash over the whole frame, which is the least specific
+ * thing a picture can do.
  */
-function nobodyMoves(ctx: Ctx, arena: ArenaBox, age: number, width: number, height: number): void {
+function nobodyMoves(
+  ctx: Ctx,
+  from: Point,
+  to: Point,
+  age: number,
+  scale: number,
+  width: number,
+  arena: ArenaBox,
+  slot: number,
+): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
-  const inner = arena.side - arena.border * 2;
+  const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+  const alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
+  const reach = Math.hypot(to.x - from.x, to.y - from.y);
 
-  // The flash is short and covers everything; the rest of the effect is the
-  // frozen fighter, which needs the screen back to be readable.
-  const flash = t < 0.22 ? 1 - t / 0.22 : 0;
-  if (flash > 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Three rings chasing each other out to exactly the victim's distance, so the
+  // wave visibly *arrives* rather than washing over everything.
+  for (const lag of [0, 0.18, 0.36]) {
+    const p = ease(Math.max(0, Math.min(1, (travel - lag) / (1 - lag))));
+    if (p <= 0) continue;
+    ctx.globalAlpha = alpha * (1 - p) * (lag === 0 ? 1 : 0.55);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(4, scale * 0.06 * (1 - p * 0.6));
+    ctx.beginPath();
+    ctx.arc(from.x, from.y, reach * p, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // The moment it lands: a hard collar snapping shut on the victim.
+  if (travel >= 1) {
+    const hold = Math.min(1, (age - SIGNATURE_TRAVEL_FRAMES) / (SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES));
     ctx.save();
-    ctx.globalAlpha = flash;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = alpha * (1 - hold * 0.5);
+    ctx.strokeStyle = "#0d0d0d";
+    ctx.lineWidth = Math.max(5, scale * 0.09);
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, scale * (0.75 + hold * 0.1), 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
-  const alpha = t < 0.1 ? t / 0.1 : t > 0.8 ? Math.max(0, (1 - t) / 0.2) : 1;
+  label(ctx, "NOBODY MOVES", alpha, width, arena, "#ffffff", slot);
+}
+
+/**
+ * The ability's name, held to the frame so it never runs off the edge.
+ *
+ * `slot` stacks simultaneous casts. The cooldowns are 5s and 6s against a 1.4s
+ * animation, so two signatures overlapping is ordinary, and both names used to
+ * be printed at the same spot — one video had "MAGNETIC NORTH" and "NOBODY
+ * MOVES" struck through each other into unreadable pulp.
+ */
+function label(
+  ctx: Ctx,
+  text: string,
+  alpha: number,
+  width: number,
+  arena: ArenaBox,
+  colour: string,
+  slot: number,
+): void {
+  const inner = arena.side - arena.border * 2;
   ctx.save();
   ctx.globalAlpha = alpha;
-
-  // Two hard bars closing on the arena, the visual of everything being held.
-  const bar = inner * 0.055;
-  const squeeze = Math.min(1, t / 0.35);
-  ctx.fillStyle = "#0d0d0d";
-  ctx.fillRect(0, arena.y + arena.border + inner * 0.5 * squeeze - bar / 2, width, bar);
-
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const label = Math.round(inner * 0.075);
-  strokedText(ctx, "NOBODY MOVES", width / 2, arena.y + arena.border + inner * 0.5 * squeeze, label, "#ffffff", 9);
+  const size = Math.round(inner * 0.058);
+  const y = arena.y + arena.border + inner * 0.08 + slot * size * 1.35;
+  strokedText(ctx, text, width / 2, y, size, colour, 8);
   ctx.restore();
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
 
-/** Draws whichever signature is playing on this frame, if any. */
+/**
+ * Draws whichever signature is playing on this frame.
+ *
+ * `positionOf` gives a fighter's centre on screen *this* frame, so the effect
+ * tracks both ends as they keep bouncing. An ability drawn between two stale
+ * positions detaches from its owner within a few frames, which is most of what
+ * made these read as unattached to anybody.
+ */
 export function drawSignatures(
   ctx: Ctx,
   events: MatchEvent[],
@@ -159,13 +274,26 @@ export function drawSignatures(
   arena: ArenaBox,
   size: { width: number; height: number },
   kindOf: (actorId: string) => "magnetic_north" | "nobody_moves" | null,
+  positionOf: (id: string) => Point | null,
+  fighterScale: number,
 ): void {
+  let slot = 0;
   for (const event of events) {
     if (event.type !== "signature") continue;
     const age = frame - event.frame;
     if (age < 0 || age >= SIGNATURE_FRAMES) continue;
     const kind = kindOf(event.actorId);
-    if (kind === "magnetic_north") magneticNorth(ctx, arena, age, event.value, size.width);
-    else if (kind === "nobody_moves") nobodyMoves(ctx, arena, age, size.width, size.height);
+    if (kind === null) continue;
+    const from = positionOf(event.actorId);
+    const to = positionOf(event.targetId);
+    if (!from || !to) continue;
+
+    casterRing(ctx, from, age, fighterScale, kind === "magnetic_north" ? "#ed1e2a" : "#ffffff");
+    if (kind === "magnetic_north") {
+      magneticNorth(ctx, from, to, age, fighterScale, size.width, arena, slot);
+    } else {
+      nobodyMoves(ctx, from, to, age, fighterScale, size.width, arena, slot);
+    }
+    slot += 1;
   }
 }

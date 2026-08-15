@@ -15,10 +15,10 @@
       "durationSeconds": 28.4,
       "frames": 852,
       "winnerId": "compass",
-      "sizeBytes": 10527016,
-      "generatedAt": "2026-08-15T12:48:36.655Z",
+      "sizeBytes": 9263789,
+      "generatedAt": "2026-08-15T13:42:15.498Z",
       "provenance": {
-        "commit": "6c6bf26955f5cca018824cc029d05fd2731ecd0a",
+        "commit": "5dd85723b42dac0dffa7717aea8ca55b0b1613c2",
         "dirty": true,
         "rosterHash": "07af42d655fdf925",
         "seedsSearched": 300,
