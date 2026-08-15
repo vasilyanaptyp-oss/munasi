@@ -238,6 +238,7 @@ describe("generate", () => {
     const summary = await generate({
       count: 1,
       seeds: 8,
+      seedStart: 0,
       outDir,
       workers: 2,
       matchupSample: 4,
@@ -293,6 +294,7 @@ describe("generate", () => {
     const summary = await generate({
       count: 2,
       seeds: 8,
+      seedStart: 0,
       outDir,
       workers: 2,
       matchupSample: 4,
@@ -333,6 +335,7 @@ describe("generate", () => {
     const summary = await generate({
       count: 5,
       seeds: 4,
+      seedStart: 0,
       outDir,
       workers: 1,
       matchupSample: 4,

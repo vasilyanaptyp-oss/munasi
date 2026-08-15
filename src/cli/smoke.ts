@@ -98,6 +98,7 @@ async function main(): Promise<void> {
     const summary = await generate({
       count: 1,
       seeds,
+      seedStart: 0,
       outDir,
       workers: 4,
       matchupSample: 40,

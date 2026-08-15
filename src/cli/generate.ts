@@ -41,6 +41,17 @@ export interface GenerateOptions {
   count: number;
   /** Seeds searched per matchup when hunting for drama. */
   seeds: number;
+  /**
+   * First seed of the searched window.
+   *
+   * The search has always supported a start; nothing exposed it. Without it the
+   * window is always `0..seeds`, so the same matchup yields the same video no
+   * matter what `--seeds` is set to — widening the window rarely dislodges the
+   * incumbent. On a two-fighter roster, where there is exactly one matchup,
+   * that means one video is all you can ever cut. Moving the window is how you
+   * get a different fight.
+   */
+  seedStart: number;
   outDir: string;
   workers: number;
   /** Matches per pair when ranking matchups by evenness. */
@@ -93,6 +104,7 @@ export function parseArgs(argv: string[]): GenerateOptions {
   return {
     count: Math.floor(number("count", 10)),
     seeds: Math.floor(number("seeds", 500)),
+    seedStart: Math.floor(number("start", 1) - 1),
     outDir: flag("out") ?? join(process.cwd(), "out"),
     workers: Math.floor(number("workers", defaultWorkerCount())),
     matchupSample: Math.floor(number("sample", 40)),
@@ -166,7 +178,7 @@ async function generateOne(
       winnerId: best.result.winnerId,
       sizeBytes: exported.sizeBytes,
       generatedAt: new Date().toISOString(),
-      provenance: provenance({ seedsSearched: options.seeds }),
+      provenance: provenance({ seedsSearched: options.seeds, seedStart: options.seedStart }),
       ...(window
         ? {
             coldOpen: {
@@ -210,7 +222,12 @@ async function generateGauntlet(
   bar.update(0, 1);
 
   const config = buildGauntlet(challenger, members);
-  const best = findBestGauntlet(config, { count: options.seeds, rules: GAUNTLET_RULES, outcome });
+  const best = findBestGauntlet(config, {
+    count: options.seeds,
+    start: options.seedStart,
+    rules: GAUNTLET_RULES,
+    outcome,
+  });
   const result: GauntletResult = best.result;
 
   const window = options.coldOpen ? findGauntletColdOpen(result) : null;
@@ -255,7 +272,7 @@ async function generateGauntlet(
       winnerId: result.challengerWon ? challenger.id : (result.rounds.at(-1)?.opponentId ?? null),
       sizeBytes: exported.sizeBytes,
       generatedAt: new Date().toISOString(),
-      provenance: provenance({ seedsSearched: options.seeds, wantedOutcome: outcome }),
+      provenance: provenance({ seedsSearched: options.seeds, seedStart: options.seedStart, wantedOutcome: outcome }),
       gauntlet: {
         challengerId: challenger.id,
         teamIds: members.map((m) => m.id),

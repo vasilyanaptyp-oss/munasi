@@ -32,6 +32,8 @@ export interface Provenance {
   rosterHash: string;
   /** Seeds searched, and the ending the search was asked for. */
   seedsSearched: number;
+  /** First seed of the searched window. Absent means it started at 0. */
+  seedStart?: number;
   wantedOutcome?: "cleared" | "stopped";
   /** Everything the simulation and the frame plan read that is not in the row already. */
   constants: {
@@ -70,6 +72,7 @@ function rosterHash(): string {
 
 export interface ProvenanceInput {
   seedsSearched: number;
+  seedStart?: number;
   wantedOutcome?: "cleared" | "stopped";
 }
 
@@ -81,6 +84,9 @@ export function provenance(input: ProvenanceInput): Provenance {
     dirty: status !== null && status !== "",
     rosterHash: rosterHash(),
     seedsSearched: input.seedsSearched,
+    // Only recorded when it is not the default: a row saying nothing means the
+    // window began at 0, which is what every row written before this said.
+    ...(input.seedStart ? { seedStart: input.seedStart } : {}),
     ...(input.wantedOutcome === undefined ? {} : { wantedOutcome: input.wantedOutcome }),
     constants: {
       tuning: { tempo: GAUNTLET_TUNING.tempo, challengerPower: GAUNTLET_TUNING.challengerPower },

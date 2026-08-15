@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "compass-vs-bodyguard-52.mp4",
+      "file": "compass-vs-bodyguard-1002.mp4",
       "fighters": [
         "compass",
         "bodyguard"
@@ -10,18 +10,19 @@
         "COMPASS GUY",
         "OPPONENT"
       ],
-      "seed": 52,
+      "seed": 1002,
       "dramaScore": 69.6,
       "durationSeconds": 30.93,
       "frames": 928,
       "winnerId": "compass",
-      "sizeBytes": 9293215,
-      "generatedAt": "2026-08-15T09:35:59.934Z",
+      "sizeBytes": 9795980,
+      "generatedAt": "2026-08-15T09:54:04.218Z",
       "provenance": {
-        "commit": "4b35858754f280835edfb11d8c108a908ec3a5bc",
+        "commit": "29f5a10c2f47a662616a55f0a37d00875decd477",
         "dirty": true,
         "rosterHash": "18f391d471f433b0",
         "seedsSearched": 300,
+        "seedStart": 899,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
@@ -49,16 +50,16 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          26
+          25
         ]
       },
       "coldOpen": {
-        "startFrame": 17,
-        "endFrame": 47,
+        "startFrame": 223,
+        "endFrame": 253,
         "reason": "damage_burst",
-        "damage": 492,
+        "damage": 487,
         "leadChanges": 1,
-        "why": "biggest damage burst: 492 at 0.6s"
+        "why": "biggest damage burst: 487 at 7.4s"
       }
     }
   ]
