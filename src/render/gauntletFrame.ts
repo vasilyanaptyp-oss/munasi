@@ -81,8 +81,25 @@ function plusPath(ctx: Ctx, w: number, h: number, stem: number, barW: number, ba
 }
 
 /**
- * HP as a plus sign that fills bottom-up: white while healthy, red once past
- * halfway, with the current HP printed across the bar.
+ * HP as a plus that drains from the top: white while healthy, the empty part
+ * dark grey, with the number written straight onto it.
+ *
+ * All of this is the reference's, isolated from its frames at native
+ * resolution:
+ *
+ * - the plus is white and the drained part is dark grey. **There is no red.**
+ *   Ours turned red under half HP, which is invented;
+ * - the number sits **directly on the plus** and runs nearly its full width.
+ *   There is no plate, no box, nothing behind it. Ours filled a rectangle across
+ *   the whole crossbar, which covered the plus's arms and left a box on a stick;
+ * - the digits are grey where the plus is still white and near-white where the
+ *   drain has reached them.
+ *
+ * The plate existed to dodge one real problem: the fill line crosses the arm
+ * around half HP, so a single digit colour is wrong for part of that band. It is
+ * handled the way it has to be handled without a plate — the colour is chosen
+ * from the fill at the arm, and the digits carry a thin keyline in the opposite
+ * tone so they still read while the line is passing through them.
  */
 function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   const { stem, barWidth, barHeight } = HP_WIDGET;
@@ -102,7 +119,7 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   plusPath(ctx, w, h, stem, barWidth, barHeight);
   ctx.clip();
   const fillHeight = h * share;
-  ctx.fillStyle = share > HP_WIDGET.hurtBelow ? C.hpHealthy : C.hpHurt;
+  ctx.fillStyle = C.hpHealthy;
   ctx.fillRect(-w, h / 2 - fillHeight, w * 2, fillHeight);
   ctx.restore();
 
@@ -112,27 +129,32 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   ctx.stroke();
 
   const barTop = -h / 2 + h * 0.24;
+  const barMiddle = barTop + barHeight / 2;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  let size = Math.round(barHeight * 0.86);
+  // Sized against the whole plus, not the arm: in the reference the number is
+  // as wide as the shape and overhangs the arm on both sides.
+  let size = Math.round(h * 0.34);
   const label = String(Math.max(0, Math.round(hp)));
   ctx.font = font(size);
-  while (ctx.measureText(label).width > barWidth * 0.86 && size > 12) {
+  while (ctx.measureText(label).width > w * 0.88 && size > 12) {
     size -= 1;
     ctx.font = font(size);
   }
 
-  // The digits get a plate of their own rather than taking their colour from
-  // how full the widget is. Switching between dark-on-light and light-on-dark
-  // works only if the fill is uniform behind the number, and it never is: the
-  // fill line crosses the crossbar somewhere around half HP, which put dark
-  // digits half on white and half on the empty grey.
-  ctx.fillStyle = C.hpPlate;
-  ctx.fillRect(-barWidth / 2, barTop, barWidth, barHeight);
-  // A hairline, not the usual heavy keyline: that exists to hold light text off
-  // a light background, and these digits are dark on white. At the old weight
-  // the outline ate the strokes of the digits and every number read as a blob.
-  strokedText(ctx, label, 0, barTop + barHeight / 2, size, C.hpDigits, 2);
+  // Is the drain past the digits yet? The fill grows from the bottom, so the
+  // arm's middle is white while `h/2 - fillHeight` is above it.
+  const onWhite = h / 2 - fillHeight < barMiddle;
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(2, Math.round(size * 0.09));
+  ctx.strokeStyle = onWhite ? "#ffffff" : C.hpEmpty;
+  ctx.strokeText(label, 0, barMiddle);
+  ctx.fillStyle = onWhite ? C.hpDigitsOnLight : C.hpDigitsOnDark;
+  ctx.fillText(label, 0, barMiddle);
+  ctx.restore();
+
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.restore();
@@ -157,9 +179,10 @@ export function drawHpWidgetForTest(ctx: Ctx, share: number): Rect {
     h: HP_WIDGET.height,
   };
   drawHpWidget(ctx, rect, Math.round(1400 * share), 1400);
-  // Mirrors the plate `drawHpWidget` fills, in canvas coordinates.
+  // The arm the digits are written on. There is no plate any more — the number
+  // goes straight onto the plus — so the gate reads the band the digits occupy.
   return {
-    name: "hpDigitPlate",
+    name: "hpDigitBand",
     x: rect.x + rect.w / 2 - HP_WIDGET.barWidth / 2,
     y: rect.y + rect.h * 0.24,
     w: HP_WIDGET.barWidth,

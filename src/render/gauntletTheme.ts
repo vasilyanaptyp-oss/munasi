@@ -41,17 +41,21 @@ export const GAUNTLET_COLORS = {
   /** Victory card plate: lighter than the field, never a blackout. */
   cardPlate: "#0d6f97",
   /**
-   * Constant plate under the HP digits, and the digits themselves.
+   * HP digits. **There is no plate.**
    *
-   * White plate, dark digits — the reference's way round. It was a black plate
-   * with white digits, which turned the one white shape above each fighter into
-   * a black box on a stick and read nothing like the format. The plate still
-   * exists, and for the original reason: the fill line crosses the crossbar
-   * somewhere around half HP, so digits taking their colour from the fill would
-   * sit half on white and half on the empty grey.
+   * The reference writes the number straight onto the plus — no box, no plate,
+   * nothing behind it — and lets it run nearly the full width of the shape. Ours
+   * drew a filled rectangle across the whole crossbar and put the digits in
+   * that, which hid the plus's arms completely and turned the one white shape
+   * above each fighter into a box on a stick. That is the thing the owner has
+   * now circled in two separate screenshots.
+   *
+   * The colour flips with what is behind it, which is what the reference does:
+   * grey digits while that part of the plus is still white, near-white once the
+   * drain has passed them.
    */
-  hpPlate: "#ffffff",
-  hpDigits: "#3f4448",
+  hpDigitsOnLight: "#8a8a8a",
+  hpDigitsOnDark: "#e9ecec",
 } as const;
 
 /** Fractions of frame width or height. See the note above on which are measured. */
@@ -70,16 +74,19 @@ const F = {
   groundNear: 0.84,
   groundFar: 0.66,
   /**
-   * The HP plus. Measured off the reference at full resolution rather than
-   * chosen: on a 576x1024 frame the plus occupies 85x75px, so it is **wider than
-   * it is tall** (h/w = 0.88) with a stem a third of its width. Ours was
-   * 140x161 — h/w = 1.15, half again as tall in proportion — which is what
-   * reads as a stretched crucifix rather than the reference's chunky plus.
+   * The HP plus, measured off the reference at native resolution by isolating
+   * the shape itself — not eyeballed off a scaled crop, which is how this got
+   * written down wrong twice.
+   *
+   * It is **78x78px on a 576x1024 frame: exactly square**, with a stem 31% of
+   * the width and an arm 31% of the height. A symmetric plus. It was 140x161
+   * here (h/w 1.15, a stretched crucifix), then 160x141 (h/w 0.88, squat) on my
+   * own bad measurement. Square is the answer.
    */
   hpWidgetWidth: 0.148, // of frame width
-  hpWidgetAspect: 0.88, // height over width
-  hpStemWidth: 0.33, // of the widget width
-  hpBarHeight: 0.36, // of the widget height
+  hpWidgetAspect: 1.0, // height over width — square, measured
+  hpStemWidth: 0.31, // of the widget width
+  hpBarHeight: 0.31, // of the widget height
   captionCap: 0.033, // of frame height
   /**
    * Where the overlay sits relative to the arena — not relative to the screen.
