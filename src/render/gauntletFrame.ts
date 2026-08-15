@@ -59,8 +59,11 @@ function plusPath(ctx: Ctx, w: number, h: number, stem: number, barW: number, ba
   const halfBarW = barW / 2;
   const top = -h / 2;
   const bottom = h / 2;
-  // The crossbar sits a little above the middle, as in the reference.
-  const barTop = top + h * 0.24;
+  // The arm is **centred**. Measured across the reference's frames: 33-36% of
+  // the shape above the arm and 36-38% below it, on every plus in every frame.
+  // It sat at 24% above and 45% below here, and a long bottom leg is exactly
+  // what makes a plus read as a crucifix.
+  const barTop = top + (h - barH) / 2;
   const barBottom = barTop + barH;
   void w;
 
@@ -123,23 +126,40 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   ctx.fillRect(-w, h / 2 - fillHeight, w * 2, fillHeight);
   ctx.restore();
 
+  // A hairline. Measured on the reference: 1px on a 78px plus — 1.3% of its
+  // width. Ours was 5px on a 160px plus, nearly three times heavier in
+  // proportion, and a thick black edge is most of what made the shape look
+  // clumsy next to the reference's.
   plusPath(ctx, w, h, stem, barWidth, barHeight);
-  ctx.lineWidth = Math.max(3, Math.round(WIDTH * 0.005));
+  ctx.lineWidth = Math.max(2, Math.round(w * 0.02));
   ctx.strokeStyle = C.outline;
   ctx.stroke();
 
-  const barTop = -h / 2 + h * 0.24;
+  const barTop = -h / 2 + (h - barHeight) / 2;
   const barMiddle = barTop + barHeight / 2;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   // Sized against the whole plus, not the arm: in the reference the number is
   // as wide as the shape and overhangs the arm on both sides.
-  let size = Math.round(h * 0.34);
+  //
+  // **Regular weight, not bold.** Every other piece of text in this format is
+  // heavy — the title, the caption, the damage numbers — and the HP number is
+  // the one that is not: in the reference it is a thin, wide-set grey figure
+  // sitting quietly on the plus. Ours was the same bold face as the title and
+  // read as a blunt slab.
+  // Measured off the reference's own digits: a two-digit number inks 32% of the
+  // plus's width at a cap height 26% of its height, so a four-digit one lands
+  // near 70% of the width with clear air either side. Ours ran to 86% and
+  // crowded the arm edge to edge. The width bound is the one that bites — the
+  // vendored face is wider per digit than the reference's, and given the choice
+  // between matching its cap height and matching its fit, the fit is what reads
+  // as tidy.
+  let size = Math.round(h * 0.3);
   const label = String(Math.max(0, Math.round(hp)));
-  ctx.font = font(size);
-  while (ctx.measureText(label).width > w * 0.88 && size > 12) {
+  ctx.font = font(size, "normal");
+  while (ctx.measureText(label).width > w * 0.72 && size > 12) {
     size -= 1;
-    ctx.font = font(size);
+    ctx.font = font(size, "normal");
   }
 
   // Is the drain past the digits yet? The fill grows from the bottom, so the
@@ -148,7 +168,11 @@ function drawHpWidget(ctx: Ctx, rect: Rect, hp: number, maxHp: number): void {
   ctx.save();
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
-  ctx.lineWidth = Math.max(2, Math.round(size * 0.09));
+  // The halo is the *background's* colour, not a dark keyline: it is invisible
+  // while the number sits on one uniform tone and only does anything in the band
+  // where the drain line runs through the digits. Thin, because at the old
+  // weight it thickened the glyphs into the slab this is meant to undo.
+  ctx.lineWidth = Math.max(2, Math.round(size * 0.05));
   ctx.strokeStyle = onWhite ? "#ffffff" : C.hpEmpty;
   ctx.strokeText(label, 0, barMiddle);
   ctx.fillStyle = onWhite ? C.hpDigitsOnLight : C.hpDigitsOnDark;
