@@ -18,7 +18,12 @@ import type { Ability } from "../sim/types.js";
  * Design rules for adding a fighter:
  * - drop a photo on a white background into `assets/fighters/source/` and run
  *   `pnpm cutout`; the name of the file is the sprite id;
- * - `maxHp` between 1000 and 1400, `attackSpeed` 0.75-1.45;
+ * - **`maxHp` is 1000 for everyone.** The reference gives every fighter the same
+ *   1000 and it is right to: two plusses over two heads are read against each
+ *   other constantly, and if the numbers start from different places the viewer
+ *   cannot tell who is ahead without doing arithmetic. Difference belongs in
+ *   attack, speed and crits, which are legible as *behaviour*;
+ * - `attackSpeed` 0.75-1.45;
  * - `critChance` 0.22-0.38 with `critMult` 2.3-3.0. Fat crits are most of what
  *   keeps the outcome uncertain;
  * - and the part that matters: give it **one ability you can draw across the
@@ -58,7 +63,7 @@ export const ROSTER: FighterSpec[] = [
     faction: "left",
     name: "COMPASS GUY",
     spriteId: "compass-guy",
-    maxHp: 1020,
+    maxHp: 1000,
     attackSpeed: 1.15,
     critChance: 0.32,
     critMult: 2.6,
@@ -87,7 +92,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9373,
+    fieldScale: 0.9344,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -96,12 +101,12 @@ export const ROSTER: FighterSpec[] = [
     faction: "right",
     name: "BODYGUARD GUY",
     spriteId: "bodyguard-guy",
-    maxHp: 1148,
+    maxHp: 1000,
     attackSpeed: 0.85,
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0402,
+    fieldScale: 1.0442,
   },
 
   /*
@@ -118,14 +123,14 @@ export const ROSTER: FighterSpec[] = [
     faction: "left",
     name: "BOXER GUY",
     spriteId: "boxer-guy",
-    maxHp: 1080,
+    maxHp: 1000,
     attackSpeed: 1.05,
     critChance: 0.34,
     critMult: 2.7,
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
-    fieldScale: 0.9627,
+    fieldScale: 0.9495,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -133,11 +138,11 @@ export const ROSTER: FighterSpec[] = [
     faction: "right",
     name: "GLASSES GUY",
     spriteId: "glasses-guy",
-    maxHp: 1120,
+    maxHp: 1000,
     attackSpeed: 0.95,
     critChance: 0.28,
     critMult: 2.8,
     abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
-    fieldScale: 0.9593,
+    fieldScale: 0.9718,
   },
 ];

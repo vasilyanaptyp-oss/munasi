@@ -318,21 +318,27 @@ function drawImpacts(
       ctx.globalAlpha = alpha;
       ctx.lineCap = "round";
 
-      // **A burst, not a grid.** This drew four red slashes across two pale
-      // horizontal speed lines, and crossed lines in two colours read as
-      // noughts and crosses scribbled between the numbers rather than as a
-      // blow. Now it is spokes from one centre, none of them crossing another,
-      // in the same yellow as the number they belong to — one hit, one colour.
+      // **A scuff, not a sparkle.** Two goes at this were wrong in opposite
+      // directions: first four red slashes laid across two pale speed lines,
+      // which crossed into noughts and crosses; then six spokes evenly round a
+      // centre, which is the exact recipe for a cartoon sun. Both are shapes the
+      // eye names instead of reading.
+      //
+      // The reference marks a blow with a few short slashes going roughly one
+      // way, like something was dragged across. So: three strokes, fanned
+      // within a narrow arc, unequal, offset from the centre — nothing radiates,
+      // nothing crosses, and there is no symmetry to resolve into a star.
       ctx.strokeStyle = C.damageText;
       ctx.lineWidth = Math.max(4, WIDTH * 0.009);
-      const spokes = 6;
-      for (let i = 0; i < spokes; i += 1) {
-        const a = (i / spokes) * Math.PI * 2;
-        const inner = reach * 0.38;
-        const outer = reach * (i % 2 === 0 ? 1 : 0.72);
+      const slashes: [number, number, number][] = [
+        [-0.35, -0.55, 1.0],
+        [0.05, 0.1, 0.78],
+        [0.4, 0.7, 0.6],
+      ];
+      for (const [ox, oy, len] of slashes) {
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
-        ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+        ctx.moveTo(ox * reach, oy * reach - len * reach * 0.5);
+        ctx.lineTo(ox * reach + reach * 0.28, oy * reach + len * reach * 0.5);
         ctx.stroke();
       }
       ctx.restore();

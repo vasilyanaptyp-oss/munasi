@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "boxer-vs-glasses-296.mp4",
+      "file": "boxer-vs-glasses-50.mp4",
       "fighters": [
         "boxer",
         "glasses"
@@ -10,17 +10,17 @@
         "BOXER GUY",
         "OPPONENT"
       ],
-      "seed": 296,
-      "dramaScore": 69.6,
-      "durationSeconds": 27.73,
-      "frames": 832,
+      "seed": 50,
+      "dramaScore": 69.5,
+      "durationSeconds": 28.27,
+      "frames": 848,
       "winnerId": "boxer",
-      "sizeBytes": 8066060,
-      "generatedAt": "2026-08-15T18:15:35.154Z",
+      "sizeBytes": 7974647,
+      "generatedAt": "2026-08-15T18:52:36.128Z",
       "provenance": {
-        "commit": "237fa8234d013bbd8e4e25fd2b1111763be23477",
+        "commit": "a0507920faa86d55496b585adea89034a58594cb",
         "dirty": true,
-        "rosterHash": "4feaab3f5e84d232",
+        "rosterHash": "c04f366dc807f9d7",
         "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {
@@ -49,20 +49,20 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          22
+          26
         ]
       },
       "coldOpen": {
         "startFrame": 432,
         "endFrame": 462,
-        "reason": "damage_burst",
-        "damage": 414,
+        "reason": "lead_change",
+        "damage": 304,
         "leadChanges": 1,
-        "why": "biggest damage burst: 414 at 14.4s"
+        "why": "lead changed 1x at 14.4s (304 damage in the window)"
       }
     },
     {
-      "file": "boxer-vs-bodyguard-280.mp4",
+      "file": "boxer-vs-bodyguard-40.mp4",
       "fighters": [
         "boxer",
         "bodyguard"
@@ -71,17 +71,17 @@
         "BOXER GUY",
         "OPPONENT"
       ],
-      "seed": 280,
-      "dramaScore": 69.6,
+      "seed": 40,
+      "dramaScore": 69.5,
       "durationSeconds": 28.4,
       "frames": 852,
       "winnerId": "boxer",
-      "sizeBytes": 8520668,
-      "generatedAt": "2026-08-15T18:16:24.943Z",
+      "sizeBytes": 7727993,
+      "generatedAt": "2026-08-15T18:53:28.467Z",
       "provenance": {
-        "commit": "237fa8234d013bbd8e4e25fd2b1111763be23477",
+        "commit": "a0507920faa86d55496b585adea89034a58594cb",
         "dirty": true,
-        "rosterHash": "4feaab3f5e84d232",
+        "rosterHash": "c04f366dc807f9d7",
         "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {
@@ -110,20 +110,20 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          23
+          25
         ]
       },
       "coldOpen": {
-        "startFrame": 132,
-        "endFrame": 162,
-        "reason": "damage_burst",
-        "damage": 314,
-        "leadChanges": 0,
-        "why": "biggest damage burst: 314 at 4.4s"
+        "startFrame": 162,
+        "endFrame": 192,
+        "reason": "lead_change",
+        "damage": 172,
+        "leadChanges": 1,
+        "why": "lead changed 1x at 5.4s (172 damage in the window)"
       }
     },
     {
-      "file": "compass-vs-glasses-239.mp4",
+      "file": "compass-vs-glasses-13.mp4",
       "fighters": [
         "compass",
         "glasses"
@@ -132,17 +132,17 @@
         "COMPASS GUY",
         "OPPONENT"
       ],
-      "seed": 239,
+      "seed": 13,
       "dramaScore": 69.5,
-      "durationSeconds": 33.4,
-      "frames": 1002,
+      "durationSeconds": 27.4,
+      "frames": 822,
       "winnerId": "glasses",
-      "sizeBytes": 11437686,
-      "generatedAt": "2026-08-15T18:17:25.063Z",
+      "sizeBytes": 8752903,
+      "generatedAt": "2026-08-15T18:54:22.484Z",
       "provenance": {
-        "commit": "237fa8234d013bbd8e4e25fd2b1111763be23477",
+        "commit": "a0507920faa86d55496b585adea89034a58594cb",
         "dirty": true,
-        "rosterHash": "4feaab3f5e84d232",
+        "rosterHash": "c04f366dc807f9d7",
         "seedsSearched": 300,
         "wantedOutcome": "stopped",
         "constants": {
@@ -175,12 +175,12 @@
         ]
       },
       "coldOpen": {
-        "startFrame": 162,
-        "endFrame": 192,
+        "startFrame": 312,
+        "endFrame": 342,
         "reason": "lead_change",
-        "damage": 217,
+        "damage": 248,
         "leadChanges": 1,
-        "why": "lead changed 1x at 5.4s (217 damage in the window)"
+        "why": "lead changed 1x at 10.4s (248 damage in the window)"
       }
     }
   ]

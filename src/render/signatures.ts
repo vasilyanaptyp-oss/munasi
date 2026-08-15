@@ -303,29 +303,35 @@ function nobodyMoves(
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  // Three rings chasing each other out to exactly the victim's distance, so the
-  // wave visibly *arrives* rather than washing over everything.
-  for (const lag of [0, 0.18, 0.36]) {
+  ctx.lineCap = "round";
+  // **One thin ring, in the same yellow as everything else.**
+  //
+  // This drew three white rings racing out to the victim's distance and then a
+  // near-black collar around him, both scaled off that distance — so when the
+  // pair was far apart the screen filled with enormous dark circles that read as
+  // damage to the video rather than as an ability. Sized to the fighter now, not
+  // to the gap, and hairline rather than a band.
+  ctx.strokeStyle = C.damageText;
+  for (const lag of [0, 0.22]) {
     const p = ease(Math.max(0, Math.min(1, (travel - lag) / (1 - lag))));
     if (p <= 0) continue;
-    ctx.globalAlpha = alpha * (1 - p) * (lag === 0 ? 1 : 0.55);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = Math.max(4, scale * 0.06 * (1 - p * 0.6));
+    ctx.globalAlpha = alpha * (1 - p) * (lag === 0 ? 0.9 : 0.45);
+    ctx.lineWidth = Math.max(3, scale * 0.022);
     ctx.beginPath();
     ctx.arc(from.x, from.y, reach * p, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 
-  // The moment it lands: a hard collar snapping shut on the victim.
+  // The moment it lands: a ring closing on the victim, sized to him.
   if (travel >= 1) {
     const hold = Math.min(1, (age - SIGNATURE_TRAVEL_FRAMES) / (SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES));
     ctx.save();
-    ctx.globalAlpha = alpha * (1 - hold * 0.5);
-    ctx.strokeStyle = "#0d0d0d";
-    ctx.lineWidth = Math.max(5, scale * 0.09);
+    ctx.globalAlpha = alpha * (1 - hold * 0.6);
+    ctx.strokeStyle = C.damageText;
+    ctx.lineWidth = Math.max(3, scale * 0.03);
     ctx.beginPath();
-    ctx.arc(to.x, to.y, scale * (0.75 + hold * 0.1), 0, Math.PI * 2);
+    ctx.arc(to.x, to.y, scale * (0.62 - hold * 0.08), 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
