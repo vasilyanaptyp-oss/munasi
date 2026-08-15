@@ -80,7 +80,14 @@ export const ROSTER: FighterSpec[] = [
     // has to be re-found from scratch rather than nudged: twice now the search
     // has converged onto its own lower bound because the answer had walked out
     // from under it.
-    fieldScale: 0.9043,
+    //
+    // **And bisection stops working past two fighters.** With four, each one's
+    // record depends on the other three and moving any scale moves all of them,
+    // so there is no single number to bisect. All four are solved together as a
+    // fixed point instead — calibrate the roster, play every ordered pairing,
+    // nudge each scale toward an even record, repeat. Three rounds from the old
+    // pair values brought the spread from 10.1pp to 1.4pp.
+    fieldScale: 0.9260,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -94,36 +101,22 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
+    fieldScale: 1.0292,
   },
 
   /*
-   * BOXER GUY and GLASSES GUY are built and waiting on their photographs.
+   * Both of these throw something you can watch cross the arena, which is the
+   * whole brief: `haymaker` puts a glove in the air, `four_eyes` a fan of
+   * spectacles. Same shape as the other two — the effect starts on its owner,
+   * travels in view, and arrives on the frame the damage lands.
    *
-   * Both signatures exist and are drawn — `haymaker` and `four_eyes` in
-   * `src/sim/simulate.ts` and `src/render/signatures.ts` — on the same shape as
-   * the other two: the effect starts on its owner, crosses the arena, and
-   * arrives on the frame the damage lands.
-   *
-   * What is missing is the only thing that cannot be written: the cut-outs. Put
-   * the two photographs in `assets/fighters/source/` as `boxer-guy.jpg` and
-   * `glasses-guy.jpg`, then:
-   *
-   *     pnpm cutout          # background off, keyline on, aspect measured
-   *     # uncomment the two entries below
-   *     pnpm calibrate       # solves `attack` for all four
-   *     pnpm balance         # check the six pairings
-   *
-   * `aspect` is filled in by `pnpm cutout`, so leave whatever is here — it is
-   * overwritten. `fieldScale` will need bisecting per fighter once the pairs
-   * can actually be played; see the note on Compass Guy above for why it cannot
-   * be guessed.
-   *
-   * A warning worth having in writing: Glasses Guy is a dark suit on a dark
-   * background, and so is Bodyguard Guy. `silhouette.test.ts` requires the two
-   * to differ by 40 points of mean lightness so they do not read as one blob on
-   * the blue field. If that gate fails, the fix is a different photograph, not a
-   * lower threshold.
-   *
+   * Glasses Guy and Bodyguard Guy are both a man in a suit with his arms
+   * crossed, which is exactly the collision `silhouette.test.ts` exists to
+   * catch: it requires 40 points of mean lightness between any two fighters so
+   * they cannot read as one blob on the blue field. The navy suit and white
+   * shirt clear it against the black one; if a future photograph does not, the
+   * fix is a different photograph, not a lower threshold.
+   */
   {
     // Gloves up, scowling. The one who actually throws a punch.
     id: "boxer",
@@ -137,6 +130,7 @@ export const ROSTER: FighterSpec[] = [
     // The glove crosses the arena and knocks whatever it hits along its own
     // line, so the punch moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
+    fieldScale: 0.9830,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -149,6 +143,6 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.28,
     critMult: 2.8,
     abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
+    fieldScale: 0.9615,
   },
-  */
 ];

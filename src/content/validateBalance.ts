@@ -3,6 +3,7 @@ import type { Fighter } from "../sim/types.js";
 import { isMain } from "../util/main.js";
 import { BALANCE_MAX, BALANCE_MIN, evaluateRoster, type BalanceReport } from "./balance.js";
 import { loadFighters } from "./index.js";
+import { GAUNTLET_RULES } from "./teams.js";
 
 const RED = "[31m";
 const GREEN = "[32m";
@@ -84,7 +85,14 @@ function main(): void {
   const roster = loadFighters();
   console.log(`Validating ${roster.length} fighters, ${sample} matches per pair...\n`);
   const started = Date.now();
-  const report = evaluateRoster(roster, { sample });
+  // **The rules the videos are made with, not the bare duel.**
+  //
+  // `evaluateRoster` has always taken rules; this caller never passed any, so
+  // the gate scored a game nothing ships: full damage variance, one swing per
+  // cooldown, no opening head start. Against the shipped rules the same roster
+  // reads 49-51% and against the bare duel 34-62%, because they are different
+  // games — and the one worth gating is the one that becomes an mp4.
+  const report = evaluateRoster(roster, { sample, rules: GAUNTLET_RULES });
 
   printMatrix(roster, report);
   printSummary(report);

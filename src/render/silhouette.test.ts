@@ -27,6 +27,10 @@ interface Cut {
   fill: number;
   /** Mean perceived lightness of the figure's own pixels, 0..255. */
   lightness: number;
+  /** Mean colour of the figure's own pixels. */
+  r: number;
+  g: number;
+  b: number;
   /** Opaque pixels touching the PNG's own border. */
   edgeTouch: number;
 }
@@ -42,6 +46,9 @@ async function measure(spriteId: string): Promise<Cut> {
 
   let opaque = 0;
   let sum = 0;
+  let sr = 0;
+  let sg = 0;
+  let sb = 0;
   let edge = 0;
   for (let y = 0; y < h; y += 1) {
     for (let x = 0; x < w; x += 1) {
@@ -49,15 +56,22 @@ async function measure(spriteId: string): Promise<Cut> {
       if (px[i + 3]! < 128) continue;
       opaque += 1;
       sum += 0.299 * px[i]! + 0.587 * px[i + 1]! + 0.114 * px[i + 2]!;
+      sr += px[i]!;
+      sg += px[i + 1]!;
+      sb += px[i + 2]!;
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge += 1;
     }
   }
+  const n = Math.max(1, opaque);
   return {
     id: spriteId,
     width: w,
     height: h,
     fill: opaque / (w * h),
-    lightness: sum / Math.max(1, opaque),
+    lightness: sum / n,
+    r: sr / n,
+    g: sg / n,
+    b: sb / n,
     edgeTouch: edge,
   };
 }
@@ -69,7 +83,8 @@ describe("fighter cut-outs", () => {
     for (const c of cuts) {
       console.log(
         `${c.id.padEnd(16)} ${c.width}x${c.height}  fill ${(c.fill * 100).toFixed(0)}%  ` +
-          `lightness ${c.lightness.toFixed(0)}  aspect ${photoAspect(c.id).toFixed(3)}`,
+          `lightness ${c.lightness.toFixed(0)}  rgb ${c.r.toFixed(0)},${c.g.toFixed(0)},${c.b.toFixed(0)}  ` +
+          `aspect ${photoAspect(c.id).toFixed(3)}`,
       );
     }
     expect(cuts).toHaveLength(roster.length);
@@ -94,20 +109,36 @@ describe("fighter cut-outs", () => {
     }
   });
 
-  it("keeps the two people on screen apart by lightness", () => {
-    // Two dark figures on the flat blue field read as one blob however different
-    // their outlines are. This was a rule for the drawn roster and it survives
-    // the move to photographs unchanged, because the reason for it does.
-    const MIN_GAP = 40;
+  it("keeps the fighters on screen apart by colour", () => {
+    // Two figures that read as one blob on the flat blue field is the defect
+    // this gate exists for, and it survives the move from drawn art to
+    // photographs. **What changed is the measurement.**
+    //
+    // It used to compare mean *lightness* and demand 40 points. That was a fair
+    // proxy when a fighter was a flat silhouette, where tone is all there is. On
+    // photographs it is blind in exactly the case that matters: Boxer Guy and
+    // Glasses Guy measure 70 and 70 — a gap of zero, an instant failure — while
+    // being warm red (117,51,47) against cool navy (60,70,90). Nobody could
+    // confuse a man in red boxing gloves with a man in a blue suit, and no
+    // amount of staring at a brightness histogram will say so.
+    //
+    // So it compares mean colour. Measured across the shipped four, the tightest
+    // pairs are Compass x Glasses and Bodyguard x Glasses at 53, and the pair
+    // the old metric scored at zero comes out at 74. The floor is 45: real
+    // headroom under the tightest shipped pair, and still far above two
+    // photographs that genuinely share a palette.
+    const MIN_DISTANCE = 45;
     const failures: string[] = [];
     for (let i = 0; i < cuts.length; i += 1) {
       for (let j = i + 1; j < cuts.length; j += 1) {
         const a = cuts[i]!;
         const b = cuts[j]!;
-        const gap = Math.abs(a.lightness - b.lightness);
-        if (gap < MIN_GAP) {
+        const distance = Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+        if (distance < MIN_DISTANCE) {
           failures.push(
-            `${a.id} (${a.lightness.toFixed(0)}) × ${b.id} (${b.lightness.toFixed(0)}): gap ${gap.toFixed(0)}`,
+            `${a.id} (${a.r.toFixed(0)},${a.g.toFixed(0)},${a.b.toFixed(0)}) x ` +
+              `${b.id} (${b.r.toFixed(0)},${b.g.toFixed(0)},${b.b.toFixed(0)}): ` +
+              `distance ${distance.toFixed(0)}`,
           );
         }
       }

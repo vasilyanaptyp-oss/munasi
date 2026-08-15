@@ -1,29 +1,150 @@
 {
   "entries": [
     {
-      "file": "compass-vs-bodyguard-1004.mp4",
+      "file": "boxer-vs-glasses-257.mp4",
+      "fighters": [
+        "boxer",
+        "glasses"
+      ],
+      "fighterNames": [
+        "BOXER GUY",
+        "OPPONENT"
+      ],
+      "seed": 257,
+      "dramaScore": 69.5,
+      "durationSeconds": 33.4,
+      "frames": 1002,
+      "winnerId": "boxer",
+      "sizeBytes": 9686226,
+      "generatedAt": "2026-08-15T17:48:54.934Z",
+      "provenance": {
+        "commit": "593f0d2b26e2e2d49729d64e68edb86c26736894",
+        "dirty": true,
+        "rosterHash": "558a6e7acc6f3867",
+        "seedsSearched": 300,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          26
+        ]
+      },
+      "coldOpen": {
+        "startFrame": 310,
+        "endFrame": 340,
+        "reason": "damage_burst",
+        "damage": 521,
+        "leadChanges": 1,
+        "why": "biggest damage burst: 521 at 10.3s"
+      }
+    },
+    {
+      "file": "boxer-vs-bodyguard-46.mp4",
+      "fighters": [
+        "boxer",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "BOXER GUY",
+        "OPPONENT"
+      ],
+      "seed": 46,
+      "dramaScore": 69.5,
+      "durationSeconds": 32.63,
+      "frames": 979,
+      "winnerId": "boxer",
+      "sizeBytes": 9025316,
+      "generatedAt": "2026-08-15T17:49:50.193Z",
+      "provenance": {
+        "commit": "593f0d2b26e2e2d49729d64e68edb86c26736894",
+        "dirty": true,
+        "rosterHash": "558a6e7acc6f3867",
+        "seedsSearched": 300,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.03,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          25
+        ]
+      },
+      "coldOpen": {
+        "startFrame": 689,
+        "endFrame": 719,
+        "reason": "damage_burst",
+        "damage": 352,
+        "leadChanges": 0,
+        "why": "biggest damage burst: 352 at 23.0s"
+      }
+    },
+    {
+      "file": "compass-vs-glasses-157.mp4",
       "fighters": [
         "compass",
-        "bodyguard"
+        "glasses"
       ],
       "fighterNames": [
         "COMPASS GUY",
         "OPPONENT"
       ],
-      "seed": 1004,
-      "dramaScore": 69.5,
-      "durationSeconds": 28.4,
-      "frames": 852,
-      "winnerId": "compass",
-      "sizeBytes": 9263789,
-      "generatedAt": "2026-08-15T13:42:15.498Z",
+      "seed": 157,
+      "dramaScore": 69.6,
+      "durationSeconds": 27.9,
+      "frames": 837,
+      "winnerId": "glasses",
+      "sizeBytes": 8224098,
+      "generatedAt": "2026-08-15T17:50:40.120Z",
       "provenance": {
-        "commit": "5dd85723b42dac0dffa7717aea8ca55b0b1613c2",
+        "commit": "593f0d2b26e2e2d49729d64e68edb86c26736894",
         "dirty": true,
-        "rosterHash": "07af42d655fdf925",
+        "rosterHash": "558a6e7acc6f3867",
         "seedsSearched": 300,
-        "seedStart": 899,
-        "wantedOutcome": "cleared",
+        "wantedOutcome": "stopped",
         "constants": {
           "tuning": {
             "tempo": 1.03,
@@ -45,21 +166,21 @@
       "gauntlet": {
         "challengerId": "compass",
         "teamIds": [
-          "bodyguard"
+          "glasses"
         ],
-        "cleared": true,
+        "cleared": false,
         "decidedInRound": 1,
         "hpByRound": [
-          23
+          0
         ]
       },
       "coldOpen": {
-        "startFrame": 363,
-        "endFrame": 393,
-        "reason": "damage_burst",
-        "damage": 577,
+        "startFrame": 371,
+        "endFrame": 401,
+        "reason": "lead_change",
+        "damage": 311,
         "leadChanges": 1,
-        "why": "biggest damage burst: 577 at 12.1s"
+        "why": "lead changed 1x at 12.4s (311 damage in the window)"
       }
     }
   ]

@@ -134,14 +134,24 @@ describe("gauntlet drama", () => {
 
 describe("teams from factions", () => {
   it("splits the roster in half", () => {
-    expect(byFaction("left", roster)).toHaveLength(1);
-    expect(byFaction("right", roster)).toHaveLength(1);
+    // Counted as a relationship, not a literal. This asserted 1 and 1, so
+    // adding a fighter broke it — which is a test pinning the roster's size
+    // rather than the rule that every fighter is on exactly one side.
+    const left = byFaction("left", roster);
+    const right = byFaction("right", roster);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBeGreaterThan(0);
+    expect(left.length + right.length).toBe(roster.length);
+    expect(left.some((f) => right.some((r) => r.id === f.id))).toBe(false);
   });
 
-  it("enumerates every worker against every trio of bosses", () => {
+  it("enumerates every fighter on one side against every fighter on the other", () => {
     const matchups = gauntletMatchups(roster);
     expect(combinations([1, 2, 3, 4, 5, 6], 3)).toHaveLength(20);
-    expect(matchups).toHaveLength(1);
+    // One opponent per run, so the count is simply left x right.
+    expect(matchups).toHaveLength(
+      byFaction("left", roster).length * byFaction("right", roster).length,
+    );
     for (const m of matchups) {
       expect(m.members).toHaveLength(1);
       expect(new Set(m.members.map((x) => x.id)).size).toBe(1);

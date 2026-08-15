@@ -5,7 +5,7 @@
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1020,
-    "attack": 19.9,
+    "attack": 20.4,
     "attackSpeed": 1.15,
     "critChance": 0.32,
     "critMult": 2.6,
@@ -23,7 +23,7 @@
     "spriteId": "bodyguard-guy",
     "aspect": 0.6286,
     "maxHp": 1148,
-    "attack": 22.5,
+    "attack": 23.2,
     "attackSpeed": 0.85,
     "critChance": 0.24,
     "critMult": 2.9,
@@ -33,6 +33,42 @@
         "cooldown": 6,
         "power": 0,
         "duration": 1.4
+      }
+    ]
+  },
+  {
+    "id": "boxer",
+    "name": "BOXER GUY",
+    "spriteId": "boxer-guy",
+    "aspect": 0.5455,
+    "maxHp": 1080,
+    "attack": 19.1,
+    "attackSpeed": 1.05,
+    "critChance": 0.34,
+    "critMult": 2.7,
+    "abilities": [
+      {
+        "type": "haymaker",
+        "cooldown": 5,
+        "power": 0
+      }
+    ]
+  },
+  {
+    "id": "glasses",
+    "name": "GLASSES GUY",
+    "spriteId": "glasses-guy",
+    "aspect": 0.8357,
+    "maxHp": 1120,
+    "attack": 22.1,
+    "attackSpeed": 0.95,
+    "critChance": 0.28,
+    "critMult": 2.8,
+    "abilities": [
+      {
+        "type": "four_eyes",
+        "cooldown": 6,
+        "power": 0
       }
     ]
   }
