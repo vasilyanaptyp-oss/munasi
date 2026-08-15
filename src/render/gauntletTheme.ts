@@ -68,7 +68,21 @@ export const GAUNTLET_COLORS = {
 
 /** Fractions of frame width or height. See the note above on which are measured. */
 const F = {
-  arenaSide: 0.92, // square side, of frame width
+  /**
+   * The arena is **wider than the frame**, and that is measured, not a choice.
+   *
+   * Across all 721 reference frames the square's outer border is 613px tall on
+   * a 576x1024 frame — 1.064 of the frame's width — and **both side walls are
+   * never on screen at the same time in any frame**. The square overhangs and
+   * the edge crops it.
+   *
+   * This sat at 0.92 with a note calling the reference's 1.064 impractical
+   * because it "runs the square off both edges and leaves one wall permanently
+   * off screen". That is a description of the format, not an objection to it.
+   * At 0.92 the map read small and the fight looked like it was happening in a
+   * box in the middle of the screen.
+   */
+  arenaSide: 1.064, // square side, of frame width — measured
   arenaTop: 0.295, // of frame height
   border: 0.032, // of frame width
   /**

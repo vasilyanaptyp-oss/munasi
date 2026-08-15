@@ -380,11 +380,11 @@ export function simulate(
    * at best, against the reference's 1.20s between blows, and its own worst gap
    * of 4.87s. The pulses fill exactly the stretches where nobody is touching.
    */
-  const SIGNATURE_PULSES = 3;
+  const SIGNATURE_PULSES = 1;
   /** Damage per pulse, as a share of the caster's attack. Solved by bisection. */
-  const SIGNATURE_PULSE_SHARE = 0.62;
+  const SIGNATURE_PULSE_SHARE = 1.33;
   const SIGNATURE_FIRST_TICK = Math.round(0.35 * TICKS_PER_SECOND);
-  const SIGNATURE_PULSE_GAP = Math.round(0.3 * TICKS_PER_SECOND);
+  const SIGNATURE_PULSE_GAP = Math.round(0.5 * TICKS_PER_SECOND);
   const pulses: { atTick: number; side: Side }[] = [];
 
   const scheduleSignature = (state: FighterState): void => {

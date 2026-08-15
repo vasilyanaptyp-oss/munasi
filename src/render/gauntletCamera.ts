@@ -1,6 +1,6 @@
 import type { GauntletResult } from "../sim/gauntlet.js";
 import { FIGHTER_HALF_HEIGHT } from "../sim/movement.js";
-import { ARENA } from "./gauntletTheme.js";
+import { ARENA, HP_WIDGET } from "./gauntletTheme.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 
 /**
@@ -97,6 +97,47 @@ export function worldToScreen(x: number, y: number, camera: CameraFrame): { x: n
   };
 }
 
+/**
+ * The band of camera translations that keeps both fighters — and the HP plus
+ * over each — fully inside the frame.
+ *
+ * Returns an inverted band (`lo > hi`) when the pair is too far apart to fit,
+ * which the caller reads as "no constraint": at that point holding one of them
+ * on screen would mean shoving the other off, and the follow is the better
+ * behaviour.
+ */
+function keepBoth(snap: GauntletResult["snapshots"][number]): {
+  loX: number;
+  hiX: number;
+  loY: number;
+  hiY: number;
+} {
+  const inner = ARENA.inner;
+  const halfH = (FIGHTER_HEIGHT_UNITS * inner.h) / 2;
+  // The widest thing over a fighter is the plus, not the photo.
+  const halfW = Math.max((FIGHTER_HEIGHT_UNITS * inner.h) / 2, HP_WIDGET.width / 2);
+  const above = halfH + HP_WIDGET.height + Math.round(WIDTH * 0.02);
+
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const who of [snap.challenger, snap.opponent]) {
+    const cx = inner.x + who.x * inner.w;
+    const cy = inner.y + who.y * inner.h;
+    left = Math.min(left, cx - halfW);
+    right = Math.max(right, cx + halfW);
+    top = Math.min(top, cy - above);
+    bottom = Math.max(bottom, cy + halfH);
+  }
+  return {
+    loX: -left,
+    hiX: WIDTH - right,
+    loY: -top,
+    hiY: HEIGHT - bottom,
+  };
+}
+
 const cache = new WeakMap<GauntletResult, CameraTrack>();
 
 export function cameraTrack(result: GauntletResult): CameraTrack {
@@ -122,6 +163,27 @@ export function cameraTrack(result: GauntletResult): CameraTrack {
     dy += (targetY - dy) * PAN_LERP;
     dx = Math.max(-maxX, Math.min(maxX, dx));
     dy = Math.max(-maxY, Math.min(maxY, dy));
+
+    // **Never lose a fighter off the edge.**
+    //
+    // The arena is wider than the frame — that is the format — so the camera can
+    // put a wall off screen, and with it whoever is standing near it. Losing a
+    // figure is one thing; losing the HP number over their head is another, and
+    // it is the number the whole fight is read from. So the pan is held to a
+    // window that keeps both figures, and the plus above each of them, inside
+    // the frame. Within that window it still follows the pair and still runs the
+    // arena's walls off the edge.
+    // When the band inverts the pair is wider than the frame — they are on
+    // opposite walls of an arena that is itself frame-width — and no pan holds
+    // both whole. Split the difference rather than dropping the rule: a sliver
+    // off each figure beats losing one of them off the edge entirely.
+    const span = keepBoth(snap);
+    dx = span.loX <= span.hiX
+      ? Math.max(span.loX, Math.min(span.hiX, dx))
+      : (span.loX + span.hiX) / 2;
+    dy = span.loY <= span.hiY
+      ? Math.max(span.loY, Math.min(span.hiY, dy))
+      : (span.loY + span.hiY) / 2;
 
     frames.push({ dx, dy });
   }

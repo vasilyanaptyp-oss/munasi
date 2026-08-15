@@ -58,24 +58,29 @@ export const ROSTER: FighterSpec[] = [
     faction: "left",
     name: "COMPASS GUY",
     spriteId: "compass-guy",
-    maxHp: 1200,
+    maxHp: 1020,
     attackSpeed: 1.15,
     critChance: 0.32,
     critMult: 2.6,
-    abilities: [{ type: "magnetic_north", cooldown: 7, power: 0 }],
+    abilities: [{ type: "magnetic_north", cooldown: 5, power: 0 }],
     // Solved, not guessed. The calibrator evens each fighter against a reference
     // dummy, which does not make a *pair* even: without this Compass Guy took
     // 66% of the fights. Bisected through the real calibration — change the
     // scale, re-run the whole calibrator, play 300 gauntlets, read the winrate —
-    // until the pair sits on 50. Lands at 49.8% over 400 gauntlets.
+    // until the pair sits on 50. Lands at 50.0% over 400 gauntlets.
     //
-    // Re-bisected on every change to how damage happens, because every one of
-    // them moved the pair: `attackRate` 3 -> 0.35 (26/74), pickups off (43/57),
-    // and now damage landing on contact instead of on a clock (39/61). Note
-    // that the calibrator itself plays matches, so a combat change moves the
-    // calibration *and* the pair, and the bracket has to be re-found rather
-    // than nudged.
-    fieldScale: 0.9733,
+    // Re-bisected on every change to how damage happens or how often it can,
+    // because every one of them moved the pair: `attackRate` 3 -> 0.35 (26/74),
+    // pickups off (43/57), damage landing on contact instead of on a clock
+    // (39/61), and the tempo pass — slower fighters, one pulse per cast, shorter
+    // cooldowns, less HP — which moved it again.
+    //
+    // **The calibrator plays matches, so it moves too.** Anything touching
+    // movement or combat shifts the calibration *and* the pair, and the bracket
+    // has to be re-found from scratch rather than nudged: twice now the search
+    // has converged onto its own lower bound because the answer had walked out
+    // from under it.
+    fieldScale: 0.9043,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -84,10 +89,10 @@ export const ROSTER: FighterSpec[] = [
     faction: "right",
     name: "BODYGUARD GUY",
     spriteId: "bodyguard-guy",
-    maxHp: 1350,
+    maxHp: 1148,
     attackSpeed: 0.85,
     critChance: 0.24,
     critMult: 2.9,
-    abilities: [{ type: "nobody_moves", cooldown: 9, power: 0, duration: 1.4 }],
+    abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
   },
 ];

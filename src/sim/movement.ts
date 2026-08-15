@@ -27,10 +27,16 @@ import type { Rng } from "./rng.js";
  *
  * This is a contract with the renderer, not a hint: the simulation keeps a
  * fighter's centre far enough from the wall that a figure of this size stays
- * inside, and the renderer draws it at exactly this size. Measured off the
- * reference, a fighter is a bit over a third of the arena tall.
+ * inside, and the renderer draws it at exactly this size.
+ *
+ * Measured off the reference: a fighter stands 20-35% of the arena's height,
+ * so 0.15 here (30% of the arena) sits in the middle of that. It was 0.18 — 36%
+ * of the arena, above the reference's whole range — and since the arena has
+ * just grown to its measured size, keeping it there would have scaled the
+ * fighters up with it and left the map looking exactly as small as before. A
+ * bigger map is a bigger *gap between the figures*, not a bigger everything.
  */
-export const FIGHTER_HALF_HEIGHT = 0.18;
+export const FIGHTER_HALF_HEIGHT = 0.15;
 
 /**
  * Margin the bounce box carries beyond the figure itself.
@@ -42,9 +48,16 @@ export const FIGHTER_HALF_HEIGHT = 0.18;
  */
 const KEYLINE_MARGIN = 0.012;
 
-/** Units per tick. The reference crosses its arena in roughly four seconds. */
-const SPEED_MIN = 0.00780;
-const SPEED_MAX = 0.01260;
+/**
+ * Units per tick.
+ *
+ * Set by sweeping speed against how often the two actually meet, because
+ * meeting is what deals damage now. Too slow and the video has dead stretches
+ * with nobody touching; the reference never goes longer than 4.87s without a
+ * blow, and at the old speed ours ran to 7.6s.
+ */
+const SPEED_MIN = 0.00663;
+const SPEED_MAX = 0.01071;
 
 export interface MovementState {
   x: number;
