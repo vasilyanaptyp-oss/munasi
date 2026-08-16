@@ -198,7 +198,24 @@ export function simulate(
     // Multiplied, never rounded: at the default 1 this has to be bit-identical
     // to the old expression or every 1v1 replay changes.
     attackCooldown: ticksPerAttack(base.attackSpeed) * (rules.openingCooldown ?? 1),
-    abilityCooldowns: base.abilities.map((ab) => ab.cooldown * TICKS_PER_SECOND),
+    /**
+     * **Abilities open short too.**
+     *
+     * They used to start on a full cooldown, so the first signature landed five
+     * or six seconds in — and since a signature is one of only two things that
+     * deal damage, a fight whose pair had not happened to run into each other
+     * yet opened on five seconds of two people flying around with nothing
+     * happening. Measured on the gate's own matchup: first event at 5.00s, first
+     * damage at 5.37s, which is past the 5.0s the reference never exceeds *in
+     * the middle of a fight*, let alone at the front of one.
+     *
+     * The reference's ability is running from its first frame — the note track
+     * is already streaming and already taking health off. Same opening share as
+     * the attack schedule, so the two stay in step.
+     */
+    abilityCooldowns: base.abilities.map(
+      (ab) => ab.cooldown * TICKS_PER_SECOND * (rules.openingCooldown ?? 1),
+    ),
     buffs: [],
     speedBuffs: [],
     minions: [],

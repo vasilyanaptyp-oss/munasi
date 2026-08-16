@@ -282,6 +282,49 @@ describe("movement", () => {
     expect(turns, "never turns around").toBeGreaterThanOrEqual(1);
   });
 
+  it("bounces in two dimensions, not along one line", () => {
+    // The gate above only ever looked at x, and that is exactly how this got
+    // out: a fighter sliding left and right along a single line passes every
+    // one of "does it move", "does it cross the arena", "does it turn around".
+    //
+    // What it was: the heading takes a small random wobble on each wall bounce,
+    // and a flat heading only ever reaches the side walls — which reflect vx and
+    // leave vy alone. So flat is absorbing: the wobble walks in and never walks
+    // back out. Measured on a shipped video, our two were moving at |vx| 0.0147
+    // per frame against |vy| 0.0016. Traced the same way off the reference, its
+    // two run 0.0082 against 0.0114 — more vertical than horizontal, because the
+    // arena is wider than the frame and up-and-down is the travel you can see.
+    //
+    // So the gate is the ratio, over every matchup, with a band loose enough to
+    // hold the reference's own 1.39 comfortably.
+    for (const matchup of gauntletMatchups(roster, 1)) {
+      const result = findBestGauntlet(
+        buildGauntlet(matchup.challenger, matchup.members),
+        { count: 20, rules: GAUNTLET_RULES },
+      ).result;
+      for (const who of ["challenger", "opponent"] as const) {
+        const steps = result.snapshots
+          .slice(1)
+          .map((snap, i) => {
+            const prev = result.snapshots[i]!;
+            return {
+              dx: Math.abs(snap[who].x - prev[who].x),
+              dy: Math.abs(snap[who].y - prev[who].y),
+            };
+          });
+        const median = (values: number[]): number =>
+          [...values].sort((a, b) => a - b)[values.length >> 1] ?? 0;
+        const vx = median(steps.map((s) => s.dx));
+        const vy = median(steps.map((s) => s.dy));
+        const label = `${matchup.challenger.id} vs ${matchup.members[0]!.id} (${who})`;
+        expect(vy / vx, `${label}: travels along one line, |vx| ${vx.toFixed(4)} |vy| ${vy.toFixed(4)}`)
+          .toBeGreaterThan(0.35);
+        expect(vy / vx, `${label}: travels along one line, |vx| ${vx.toFixed(4)} |vy| ${vy.toFixed(4)}`)
+          .toBeLessThan(2.9);
+      }
+    }
+  });
+
   it("replays identically — movement is on the same seeded streams", () => {
     const a = run("compass", ["bodyguard"]);
     const b = run("compass", ["bodyguard"]);

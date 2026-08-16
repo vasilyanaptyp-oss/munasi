@@ -97,7 +97,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9344,
+    fieldScale: 0.9294,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -111,7 +111,7 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0442,
+    fieldScale: 1.0247,
   },
 
   /*
@@ -135,7 +135,7 @@ export const ROSTER: FighterSpec[] = [
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
-    fieldScale: 0.9495,
+    fieldScale: 0.9647,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -148,6 +148,6 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.28,
     critMult: 2.8,
     abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
-    fieldScale: 0.9718,
+    fieldScale: 0.9793,
   },
 ];

@@ -55,9 +55,14 @@ const KEYLINE_MARGIN = 0.012;
  * meeting is what deals damage now. Too slow and the video has dead stretches
  * with nobody touching; the reference never goes longer than 4.87s without a
  * blow, and at the old speed ours ran to 7.6s.
+ *
+ * Trimmed 10% once the trajectories were traced in both: the reference's
+ * fighters move a median 0.0146 of the arena per video frame, ours 0.0163. That
+ * gap is small on its own, but two figures crossing faster meet more often, and
+ * the pace of a fight is how often they meet.
  */
-const SPEED_MIN = 0.00663;
-const SPEED_MAX = 0.01071;
+const SPEED_MIN = 0.00597;
+const SPEED_MAX = 0.00964;
 
 export interface MovementState {
   x: number;
@@ -91,6 +96,37 @@ function keepInside(state: MovementState): void {
 }
 
 /**
+ * How far a heading must stay from the axes, as a share of a quarter turn.
+ *
+ * A fighter travelling nearly horizontally only ever reaches the side walls, and
+ * a side wall reflects `vx` and leaves `vy` alone — so once a heading is flat it
+ * has no way back. The wobble on each bounce is a random walk with a wall at
+ * neither end, and flat is where it ends up: **measured on a shipped video, our
+ * fighters were moving at |vx| 0.0147 against |vy| 0.0016 per frame, which is a
+ * figure sliding left and right along one line.** The reference's are the other
+ * way round, 0.0082 against 0.0114 — more vertical than horizontal, because the
+ * arena is wider than the frame and up-and-down is the travel you can see.
+ *
+ * `initialMovement` already refused to *start* on a flat heading. The band has
+ * to hold for the whole fight, not just the first tick.
+ */
+const HEADING_MIN = 0.22;
+const HEADING_MAX = 0.78;
+
+/**
+ * Nearest heading to `heading` that is not within the flat or vertical band.
+ *
+ * Works on the angle inside its own quadrant, so all four are treated alike and
+ * a reflection off any wall keeps its direction.
+ */
+function steerHeading(heading: number): number {
+  const quarter = Math.PI / 2;
+  const inQuadrant = ((heading % quarter) + quarter) % quarter;
+  const clamped = clamp(inQuadrant, HEADING_MIN * quarter, HEADING_MAX * quarter);
+  return heading + (clamped - inQuadrant);
+}
+
+/**
  * Starting corner, heading and speed.
  *
  * `aspect` is width over height of the fighter's cut-out, so a wide figure gets
@@ -106,8 +142,8 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
 
   // A heading that is never near-vertical or near-horizontal: a fighter that
   // only slides up and down never crosses the arena, and the crossing is the
-  // whole point.
-  const quarter = rng.range(0.22, 0.78) * (Math.PI / 2);
+  // whole point. `steerHeading` holds this for the rest of the fight.
+  const quarter = rng.range(HEADING_MIN, HEADING_MAX) * (Math.PI / 2);
   const speed = rng.range(SPEED_MIN, SPEED_MAX);
   const towards = side === "a" ? 1 : -1;
   return {
@@ -162,11 +198,13 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
   }
 
   // A hair of drift on every bounce, so a fight never settles into a loop that
-  // retraces the same diagonal for thirty seconds.
+  // retraces the same diagonal for thirty seconds — steered back out of the
+  // flat and vertical bands afterwards, because the drift on its own is a random
+  // walk that ends against a wall it cannot leave. See `steerHeading`.
   if (state.x === left || state.x === right || state.y === top || state.y === bottom) {
     const wobble = input.rng.range(-0.06, 0.06);
     const speed = Math.hypot(state.vx, state.vy);
-    const heading = Math.atan2(state.vy, state.vx) + wobble;
+    const heading = steerHeading(Math.atan2(state.vy, state.vx) + wobble);
     state.vx = Math.cos(heading) * speed;
     state.vy = Math.sin(heading) * speed;
   }
@@ -270,7 +308,21 @@ export function resolveCollision(
       b.vy = swap;
     }
   }
+  // An exchange trades one component and leaves the other, so two fighters who
+  // meet often can hand each other a flat heading the same way the wall wobble
+  // used to. Same band, same reason.
+  steer(a);
+  steer(b);
   return contact;
+}
+
+/** Re-aims a velocity out of the flat and vertical bands, keeping its speed. */
+function steer(state: MovementState): void {
+  const speed = Math.hypot(state.vx, state.vy);
+  if (speed === 0) return;
+  const heading = steerHeading(Math.atan2(state.vy, state.vx));
+  state.vx = Math.cos(heading) * speed;
+  state.vy = Math.sin(heading) * speed;
 }
 
 /**
