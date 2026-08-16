@@ -2,42 +2,44 @@ import type { SKRSContext2D } from "@napi-rs/canvas";
 import { GAUNTLET_COLORS as C } from "./gauntletTheme.js";
 
 /**
- * The drawing kit the signature abilities are built from.
+ * The kit the signature abilities are built from.
  *
- * The effects were four one-off sketches: a flat stroke here, a circle there,
- * each written inline and each looking like it. What separates a drawn effect
- * from a designed one is not the shape — it is that every shape is built the
- * same way, out of the same few parts:
+ * **Re-derived from the reference channel's own abilities**, at full resolution,
+ * after two attempts that were wrong in the same way. What the reference draws
+ * when a character uses its signature:
  *
- * - **A halo under a core.** One flat line on a flat blue field reads as a line.
- *   The same line drawn wide and dim underneath and thin and bright on top reads
- *   as light. Everything bright here is drawn twice.
- * - **A dark keyline on anything solid**, exactly as the format outlines its
- *   fighters in white and its HP plus in black. A bright yellow shape with no
- *   edge dissolves into the blue at thumbnail size.
- * - **Taper.** Blunt round caps read as pipes. A stroke that narrows along its
- *   length reads as speed, and it is what the reference's own marks do.
- * - **Perspective on impacts.** A shockwave is an ellipse squashed along the
- *   axis it travelled in, not a circle. A circle reads as a hoop lying on the
- *   screen; an ellipse reads as a wave leaving the point it was struck at.
- * - **Directional debris, never radial.** Sparks go in a cone the way the blow
- *   was going. Anything evenly spaced around a centre is a cartoon sun, which
- *   this project has already shipped once.
+ * - *Fireworks Guy* — **actual fireworks**. Two hundred small dots strung along
+ *   arcing trails, bright green and hot orange, filling half the square, with a
+ *   shell visibly climbing before it opens.
+ * - *Exploding Guy* — **a fireball**: orange and yellow with dark smoke at its
+ *   edges, a third of the arena across.
+ * - *Time Traveler Guy* — an alarm clock and a bundle of dynamite in his hands,
+ *   and a **red seven-segment countdown on a black panel** under him.
+ * - *Guitar Guy* — five **coloured fret pads**, stacks of flat coloured discs
+ *   piling up on them, and columns of coloured light shooting out of them.
  *
- * All of it is deterministic: the only randomness is `hash01`, seeded from the
- * event, so the same frame draws the same pixels forever.
+ * Three things follow, and all three are the opposite of what was here:
+ *
+ * 1. **An ability is a nameable object, not an abstract flourish.** A viewer
+ *    says "fireworks", "an explosion", "a clock". Ours were rings, streaks and
+ *    sparks — the same three shapes four times over, and nothing you could name.
+ * 2. **Each one has its own colours.** Green, orange, red-on-black, five fret
+ *    colours at once. The single-yellow rule is real but it belongs to the
+ *    *damage numbers*, which are yellow in every reference frame. It was applied
+ *    to the effects too, and that is what made four characters look like one.
+ * 3. **Solid shapes and quantity.** Flat fills with hard edges, and where there
+ *    are particles there are *hundreds* of them. Halos under thin strokes are a
+ *    motion-graphics idiom; this format is a cut-out collage.
+ *
+ * Everything here is deterministic — the only randomness is `hash01`, seeded off
+ * the event — so a frame renders the same pixels forever.
  */
 
 type Ctx = SKRSContext2D;
 
-/** The one colour the whole hit language is in. */
-export const FX_COLOUR = C.damageText;
-/** The hottest moment of an effect — a white core inside the yellow. */
-export const FX_CORE = "#fffdf0";
-
 /** Deterministic 0..1 from a seed string and an index. */
 export function hash01(seed: string, index: number): number {
-  let h = 0x811c9dc5 ^ index;
+  let h = 0x811c9dc5 ^ Math.imul(index + 1, 0x9e3779b1);
   for (let i = 0; i < seed.length; i += 1) {
     h ^= seed.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
@@ -57,85 +59,41 @@ export function easeOut(t: number): number {
   return 1 - Math.pow(1 - t, 2.2);
 }
 
-/** Ease-in: gathers slowly, then goes. Used for wind-ups. */
-export function easeIn(t: number): number {
-  return t * t;
-}
-
 export function clamp01(t: number): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
 
 /**
- * Strokes a path as light: a wide dim halo, then the crisp bright line, then an
- * optional white core down the middle of it.
+ * Fills a shape and rings it in the format's own black keyline.
  *
- * `path` is called once per pass, so it must only describe geometry.
+ * Every solid thing in this format carries an edge — the fighters are cut out
+ * and traced in white, the HP plus is traced in black. A flat fill with no edge
+ * is the one thing that reads as pasted on rather than drawn in.
  */
-export function glowStroke(
-  ctx: Ctx,
-  path: () => void,
-  options: {
-    width: number;
-    alpha: number;
-    colour?: string;
-    /** How much wider the halo is than the core. */
-    halo?: number;
-    /** Draw a white-hot centre line at this share of the core's width. */
-    core?: number;
-  },
-): void {
-  const colour = options.colour ?? FX_COLOUR;
-  const halo = options.halo ?? 3.4;
-  ctx.save();
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  ctx.globalAlpha = options.alpha * 0.22;
-  ctx.strokeStyle = colour;
-  ctx.lineWidth = options.width * halo;
-  path();
-  ctx.stroke();
-
-  ctx.globalAlpha = options.alpha;
-  ctx.lineWidth = options.width;
-  path();
-  ctx.stroke();
-
-  if (options.core !== undefined && options.core > 0) {
-    ctx.globalAlpha = options.alpha;
-    ctx.strokeStyle = FX_CORE;
-    ctx.lineWidth = options.width * options.core;
-    path();
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-/** Fills a shape with a dark keyline round it, the way the format outlines everything. */
 export function keyedFill(
   ctx: Ctx,
   path: () => void,
-  options: { fill: string; alpha: number; keyline: number },
+  options: { fill: string; alpha?: number; keyline?: number; keylineColour?: string },
 ): void {
   ctx.save();
-  ctx.globalAlpha = options.alpha;
+  ctx.globalAlpha = options.alpha ?? 1;
   ctx.lineJoin = "round";
   path();
   ctx.fillStyle = options.fill;
   ctx.fill();
-  if (options.keyline > 0) {
+  if (options.keyline !== undefined && options.keyline > 0) {
     ctx.lineWidth = options.keyline;
-    ctx.strokeStyle = C.outline;
+    ctx.strokeStyle = options.keylineColour ?? C.outline;
     ctx.stroke();
   }
   ctx.restore();
 }
 
 /**
- * A stroke that narrows from `wStart` to `wEnd` — drawn as a quad, because a
- * canvas line has one width for its whole length and a constant-width streak is
- * the single thing that most makes an effect look drawn rather than moving.
+ * A stroke that narrows from `wStart` to `wEnd`, drawn as a quad.
+ *
+ * A canvas line has one width for its whole length, and a constant-width streak
+ * is the thing that most makes a moving object look pasted.
  */
 export function taper(
   ctx: Ctx,
@@ -145,119 +103,268 @@ export function taper(
   by: number,
   wStart: number,
   wEnd: number,
-  options: { alpha: number; colour?: string; halo?: boolean },
+  options: { alpha?: number; colour: string; keyline?: number },
 ): void {
   const angle = Math.atan2(by - ay, bx - ax) + Math.PI / 2;
   const nx = Math.cos(angle);
   const ny = Math.sin(angle);
-  const shape = (grow: number): void => {
-    const s = wStart / 2 + grow;
-    const e = wEnd / 2 + grow;
-    ctx.beginPath();
-    ctx.moveTo(ax + nx * s, ay + ny * s);
-    ctx.lineTo(bx + nx * e, by + ny * e);
-    ctx.lineTo(bx - nx * e, by - ny * e);
-    ctx.lineTo(ax - nx * s, ay - ny * s);
-    ctx.closePath();
-  };
+  keyedFill(
+    ctx,
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(ax + nx * (wStart / 2), ay + ny * (wStart / 2));
+      ctx.lineTo(bx + nx * (wEnd / 2), by + ny * (wEnd / 2));
+      ctx.lineTo(bx - nx * (wEnd / 2), by - ny * (wEnd / 2));
+      ctx.lineTo(ax - nx * (wStart / 2), ay - ny * (wStart / 2));
+      ctx.closePath();
+    },
+    {
+      fill: options.colour,
+      ...(options.alpha === undefined ? {} : { alpha: options.alpha }),
+      ...(options.keyline === undefined ? {} : { keyline: options.keyline }),
+    },
+  );
+}
+
+/**
+ * A firework: dozens of trails of small dots, thrown outward and falling.
+ *
+ * This is the reference's densest effect and the one that most separates its
+ * abilities from ours — it is not three sparks, it is a couple of hundred dots
+ * strung along arcs. `t` runs 0..1 over the burst's life; the dots slow, drop
+ * and shrink as it goes.
+ */
+export function firework(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  options: {
+    t: number;
+    reach: number;
+    trails: number;
+    perTrail: number;
+    colours: string[];
+    seed: string;
+    /** 0 = a full sphere, smaller values aim it into a cone. */
+    spread?: number;
+    heading?: number;
+    dot?: number;
+    gravity?: number;
+  },
+): void {
+  const t = clamp01(options.t);
+  if (t <= 0 || t >= 1) return;
+  const spread = options.spread ?? Math.PI;
+  const heading = options.heading ?? 0;
+  const dot = options.dot ?? options.reach * 0.022;
+  const gravity = options.gravity ?? 0.55;
+  const fade = t > 0.55 ? Math.max(0, (1 - t) / 0.45) : 1;
+
   ctx.save();
-  const colour = options.colour ?? FX_COLOUR;
-  if (options.halo !== false) {
-    ctx.globalAlpha = options.alpha * 0.16;
+  for (let i = 0; i < options.trails; i += 1) {
+    const angle = heading + jitter(options.seed, i, spread);
+    const speed = 0.55 + hash01(options.seed, i + 200) * 0.65;
+    const colour = options.colours[i % options.colours.length]!;
     ctx.fillStyle = colour;
-    shape(Math.max(wStart, wEnd) * 0.55);
-    ctx.fill();
+    for (let k = 0; k < options.perTrail; k += 1) {
+      // Each dot on a trail is a little further behind the head, so the trail
+      // stretches as it flies and bunches as it dies.
+      const lag = (k / options.perTrail) * 0.42;
+      const p = t - lag;
+      if (p <= 0) continue;
+      const travel = easeOut(p) * options.reach * speed;
+      const px = x + Math.cos(angle) * travel;
+      const py = y + Math.sin(angle) * travel + gravity * options.reach * p * p;
+      ctx.globalAlpha = fade * (1 - k / (options.perTrail + 1)) * 0.95;
+      ctx.beginPath();
+      ctx.arc(px, py, dot * (1 - k / (options.perTrail * 1.6)), 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-  ctx.globalAlpha = options.alpha;
-  ctx.fillStyle = colour;
-  shape(0);
-  ctx.fill();
   ctx.restore();
 }
 
 /**
- * A shockwave: an ellipse squashed along the axis it came in on, expanding and
- * thinning. Two trailing echoes behind the leading edge give it a body.
+ * The comic impact star — the shape the reference itself draws over a fighter
+ * on a big hit. A jagged ring of alternating long and short points, filled in
+ * bands from the outside in, keylined black.
  */
-export function shockRing(
+export function spikeStar(
   ctx: Ctx,
   x: number,
   y: number,
-  angle: number,
-  radius: number,
-  options: { squash?: number; width: number; alpha: number; colour?: string; echoes?: number },
+  options: {
+    radius: number;
+    points: number;
+    inner: number;
+    rotation: number;
+    bands: string[];
+    seed: string;
+    alpha?: number;
+    keyline?: number;
+  },
 ): void {
-  const squash = options.squash ?? 0.62;
-  const echoes = options.echoes ?? 2;
+  const trace = (scale: number): void => {
+    ctx.beginPath();
+    for (let i = 0; i < options.points * 2; i += 1) {
+      // Ragged, not a tidy cog: each long point gets its own length.
+      const long = i % 2 === 0;
+      const wobble = long ? 0.78 + hash01(options.seed, i) * 0.42 : 1;
+      const r = options.radius * scale * (long ? wobble : options.inner);
+      const a = options.rotation + (i / (options.points * 2)) * Math.PI * 2;
+      const px = x + Math.cos(a) * r;
+      const py = y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  };
+  options.bands.forEach((colour, i) => {
+    keyedFill(ctx, () => trace(1 - i * (0.9 / options.bands.length)), {
+      fill: colour,
+      ...(options.alpha === undefined ? {} : { alpha: options.alpha }),
+      ...(i === 0 && options.keyline !== undefined ? { keyline: options.keyline } : {}),
+    });
+  });
+}
+
+/**
+ * Hazard tape: a band of diagonal stripes wrapped round an ellipse.
+ *
+ * Nameable on sight, which is the whole point — "this one has been cordoned
+ * off" is a thing a picture can say in one frame, where a thin ring is not.
+ */
+export function stripedRing(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  options: {
+    rx: number;
+    ry: number;
+    band: number;
+    stripes: number;
+    phase: number;
+    colours: [string, string];
+    alpha?: number;
+    /** Draw only this share of the ring, from the top, for the closing beat. */
+    sweep?: number;
+  },
+): void {
+  const sweep = clamp01(options.sweep ?? 1);
+  if (sweep <= 0) return;
   ctx.save();
+  ctx.globalAlpha = options.alpha ?? 1;
   ctx.translate(x, y);
-  ctx.rotate(angle);
-  for (let i = 0; i <= echoes; i += 1) {
-    const back = i * 0.16;
-    const r = radius * (1 - back);
-    if (r <= 0) continue;
-    glowStroke(
+  const steps = options.stripes * 2;
+  for (let i = 0; i < steps; i += 1) {
+    const a0 = -Math.PI / 2 + (i / steps) * Math.PI * 2 * sweep;
+    const a1 = -Math.PI / 2 + ((i + 1.02) / steps) * Math.PI * 2 * sweep;
+    ctx.fillStyle = options.colours[(i + options.phase) % 2 === 0 ? 0 : 1]!;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, options.rx + options.band / 2, options.ry + options.band / 2, 0, a0, a1);
+    ctx.ellipse(0, 0, options.rx - options.band / 2, options.ry - options.band / 2, 0, a1, a0, true);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // One keyline round the whole band rather than round every stripe.
+  ctx.strokeStyle = C.outline;
+  ctx.lineWidth = Math.max(2, options.band * 0.14);
+  for (const r of [1, -1]) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, options.rx + (r * options.band) / 2, options.ry + (r * options.band) / 2, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * sweep);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Broken glass: hard-edged triangular shards flying outward, each with a bright
+ * facet down one side so they read as glass rather than as confetti.
+ */
+export function shardBurst(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  options: {
+    t: number;
+    reach: number;
+    count: number;
+    size: number;
+    heading: number;
+    spread: number;
+    seed: string;
+    colours: [string, string];
+  },
+): void {
+  const t = clamp01(options.t);
+  if (t <= 0 || t >= 1) return;
+  const fade = t > 0.5 ? Math.max(0, (1 - t) / 0.5) : 1;
+  for (let i = 0; i < options.count; i += 1) {
+    const a = options.heading + jitter(options.seed, i, options.spread);
+    const travel = easeOut(t) * options.reach * (0.45 + hash01(options.seed, i + 60) * 0.9);
+    const px = x + Math.cos(a) * travel;
+    const py = y + Math.sin(a) * travel + options.reach * 0.35 * t * t;
+    const size = options.size * (0.55 + hash01(options.seed, i + 120) * 0.9);
+    const spin = a + t * (2 + hash01(options.seed, i + 180) * 5);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(spin);
+    keyedFill(
       ctx,
       () => {
         ctx.beginPath();
-        ctx.ellipse(0, 0, r * squash, r, 0, 0, Math.PI * 2);
+        ctx.moveTo(size, 0);
+        ctx.lineTo(-size * 0.55, size * 0.62);
+        ctx.lineTo(-size * 0.35, -size * 0.5);
+        ctx.closePath();
       },
-      {
-        width: options.width * (1 - i * 0.35),
-        alpha: options.alpha * (i === 0 ? 1 : 0.4 / i),
-        ...(options.colour === undefined ? {} : { colour: options.colour }),
-      },
+      { fill: options.colours[0]!, alpha: fade, keyline: Math.max(1.5, size * 0.1) },
     );
+    keyedFill(
+      ctx,
+      () => {
+        ctx.beginPath();
+        ctx.moveTo(size * 0.8, 0);
+        ctx.lineTo(-size * 0.3, size * 0.3);
+        ctx.lineTo(-size * 0.2, -size * 0.2);
+        ctx.closePath();
+      },
+      { fill: options.colours[1]!, alpha: fade * 0.9 },
+    );
+    ctx.restore();
   }
+}
+
+/** A four-pointed glint — the "this is glass / this is metal" mark. */
+export function glint(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  options: { radius: number; alpha: number; colour: string; rotation?: number },
+): void {
+  const r = options.radius;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(options.rotation ?? 0);
+  keyedFill(
+    ctx,
+    () => {
+      ctx.beginPath();
+      ctx.moveTo(0, -r);
+      ctx.quadraticCurveTo(r * 0.14, -r * 0.14, r, 0);
+      ctx.quadraticCurveTo(r * 0.14, r * 0.14, 0, r);
+      ctx.quadraticCurveTo(-r * 0.14, r * 0.14, -r, 0);
+      ctx.quadraticCurveTo(-r * 0.14, -r * 0.14, 0, -r);
+      ctx.closePath();
+    },
+    { fill: options.colour, alpha: options.alpha },
+  );
   ctx.restore();
 }
 
 /**
- * Debris thrown **the way the blow was going**: a handful of tapered shards in
- * a cone, unequal lengths, seeded so they are the same shards every render.
- */
-export function sparkCone(
-  ctx: Ctx,
-  x: number,
-  y: number,
-  angle: number,
-  options: {
-    spread: number;
-    count: number;
-    near: number;
-    far: number;
-    width: number;
-    alpha: number;
-    seed: string;
-    colour?: string;
-  },
-): void {
-  for (let i = 0; i < options.count; i += 1) {
-    const a = angle + jitter(options.seed, i, options.spread);
-    const near = options.near * (0.8 + hash01(options.seed, i + 40) * 0.5);
-    const far = near + (options.far - options.near) * (0.5 + hash01(options.seed, i + 80) * 0.8);
-    taper(
-      ctx,
-      x + Math.cos(a) * near,
-      y + Math.sin(a) * near,
-      x + Math.cos(a) * far,
-      y + Math.sin(a) * far,
-      options.width,
-      options.width * 0.12,
-      {
-        alpha: options.alpha,
-        ...(options.colour === undefined ? {} : { colour: options.colour }),
-      },
-    );
-  }
-}
-
-/**
- * A prop in flight, with motion blur: the same sprite stamped a few times along
- * where it has just been, dimmest and smallest at the back.
- *
- * A single crisp copy of a photograph sliding across the screen reads as a
- * sticker being dragged. The ghosts are what make it read as thrown.
+ * A prop in flight, with motion blur: the sprite stamped a few times along where
+ * it has just been, dimmest and smallest at the back, over a tapered streak.
  */
 export function flyingSprite(
   ctx: Ctx,
@@ -265,23 +372,18 @@ export function flyingSprite(
   options: {
     x: number;
     y: number;
-    /** Unit vector the thing is travelling along, for the ghosts and the streak. */
     dx: number;
     dy: number;
     width: number;
     height: number;
     rotation: number;
-    spin: number;
     alpha: number;
-    /** How far back the ghosts trail, in pixels. */
     trail: number;
+    colour: string;
     ghosts?: number;
   },
 ): void {
   const ghosts = options.ghosts ?? 3;
-  // The streak first, so the prop sits on top of its own light. Long and thin,
-  // pinched to nothing at the back: a short fat wedge reads as a torch beam,
-  // which is what this was.
   taper(
     ctx,
     options.x - options.dx * options.trail * 2.4,
@@ -289,20 +391,18 @@ export function flyingSprite(
     options.x - options.dx * options.width * 0.25,
     options.y - options.dy * options.width * 0.25,
     0,
-    options.width * 0.16,
-    { alpha: options.alpha * 0.6 },
+    options.width * 0.2,
+    { alpha: options.alpha * 0.7, colour: options.colour },
   );
 
   for (let i = ghosts; i >= 0; i -= 1) {
-    // Spread wide and dropped fast, so they read as one object moving rather
-    // than as a stack of copies of it.
     const back = (i / ghosts) * options.trail * 1.25;
     const fade = i === 0 ? 1 : 0.1 / i;
     const scale = 1 - i * 0.1;
     ctx.save();
     ctx.globalAlpha = options.alpha * fade;
     ctx.translate(options.x - options.dx * back, options.y - options.dy * back);
-    ctx.rotate(options.rotation - options.spin * i * 0.35);
+    ctx.rotate(options.rotation - i * 0.18);
     ctx.drawImage(
       sprite,
       (-options.width * scale) / 2,
@@ -311,49 +411,5 @@ export function flyingSprite(
       options.height * scale,
     );
     ctx.restore();
-  }
-}
-
-/**
- * The wind-up on the caster: a ring that gathers inward and tightens, with two
- * short arcs sweeping round it.
- *
- * Every ability opens on this, so a viewer always knows which of the two
- * figures the next thing on screen belongs to.
- */
-export function casterCharge(
-  ctx: Ctx,
-  x: number,
-  y: number,
-  t: number,
-  scale: number,
-  seed: string,
-): void {
-  if (t >= 1) return;
-  const gather = easeIn(t);
-  const radius = scale * (0.78 - 0.34 * gather);
-  const alpha = 0.9 * (1 - t * 0.35);
-
-  glowStroke(
-    ctx,
-    () => {
-      ctx.beginPath();
-      ctx.ellipse(x, y, radius * 0.82, radius, 0, 0, Math.PI * 2);
-    },
-    { width: Math.max(2.5, scale * 0.016 * (1 + gather)), alpha: alpha * 0.55 },
-  );
-
-  // Two arcs sweeping round the ring, so the gather has motion in it rather
-  // than being a circle that quietly changes size.
-  for (let i = 0; i < 2; i += 1) {
-    const spin = gather * Math.PI * 2.4 + i * Math.PI + hash01(seed, i) * Math.PI;
-    glowStroke(
-      ctx,
-      () => {
-        ctx.beginPath();
-        ctx.ellipse(x, y, radius * 0.82, radius, 0, spin, spin + 0.85);
-      },
-      { width: Math.max(3, scale * 0.03), alpha, core: 0.3 },
-    );
   }
 }
