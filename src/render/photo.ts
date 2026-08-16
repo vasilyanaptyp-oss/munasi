@@ -114,6 +114,27 @@ export interface DrawPhotoOptions {
   flash?: number;
   /** 0..1 death fade. */
   fade?: number;
+  /**
+   * **The ability treatments — all of them done to the photograph itself.**
+   *
+   * There is no illustration anywhere in this format, so an ability that wants
+   * to be seen has to be seen *on the cut-outs*, which are the only material
+   * there is. A boxer who is charging grows and smears; a man who has just been
+   * hit by one is knocked crooked; a man being dragged leaves copies of himself
+   * behind him; a man who has been stopped goes pale and still.
+   *
+   * - `scale` — multiplier about the centre. Bigger reads as coming at you.
+   * - `rotation` — radians about the centre. A figure knocked off true.
+   * - `smear` — how far back to trail copies of the photo, in pixels, along
+   *   `smearAngle`. This is the picture repeated, not a drawn motion line.
+   * - `wash` — 0..1 toward a flat white silhouette. Held short of 1 it reads as
+   *   bleached and frozen rather than as the full hit flash.
+   */
+  scale?: number;
+  rotation?: number;
+  smear?: number;
+  smearAngle?: number;
+  wash?: number;
 }
 
 /**
@@ -167,23 +188,54 @@ export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPho
   lc.fillRect(0, 0, bw, bh);
   lc.restore();
 
-  const left = x - w / 2 - pad;
-  const top = y - h / 2 - pad;
+  const alive = options.fade !== undefined ? 1 - options.fade : 1;
+  const scale = options.scale ?? 1;
+  const rotation = options.rotation ?? 0;
+  const smear = options.smear ?? 0;
+
   ctx.save();
-  if (options.fade !== undefined && options.fade > 0) ctx.globalAlpha = 1 - options.fade;
-  for (const [dx, dy] of OFFSETS) {
-    ctx.drawImage(layer, 0, 0, bw, bh, left + dx * PHOTO_OUTLINE, top + dy * PHOTO_OUTLINE, bw, bh);
+  // Everything below is drawn in the figure's own frame, so scale and rotation
+  // happen about its centre rather than about the arena's origin.
+  ctx.translate(x, y);
+  if (rotation !== 0) ctx.rotate(rotation);
+  if (scale !== 1) ctx.scale(scale, scale);
+
+  const drawKeyed = (ox: number, oy: number, alpha: number): void => {
+    ctx.globalAlpha = alpha;
+    for (const [dx, dy] of OFFSETS) {
+      ctx.drawImage(
+        layer,
+        0,
+        0,
+        bw,
+        bh,
+        ox - w / 2 - pad + dx * PHOTO_OUTLINE,
+        oy - h / 2 - pad + dy * PHOTO_OUTLINE,
+        bw,
+        bh,
+      );
+    }
+    ctx.drawImage(image, ox - w / 2, oy - h / 2, w, h);
+  };
+
+  // The smear: the photograph itself, repeated back along where it came from.
+  if (smear > 0) {
+    const angle = options.smearAngle ?? 0;
+    for (let i = 3; i >= 1; i -= 1) {
+      const back = (i / 3) * smear;
+      drawKeyed(-Math.cos(angle) * back, -Math.sin(angle) * back, alive * (0.26 / i));
+    }
   }
 
-  // Then the photo itself over the keyline.
-  ctx.drawImage(image, x - w / 2, y - h / 2, w, h);
+  drawKeyed(0, 0, alive);
 
   // A hit turns the figure into a solid white silhouette, exactly as in the
-  // reference — it reads at thumbnail size where a tint does not.
-  const flash = options.flash ?? 0;
-  if (flash > 0) {
-    ctx.globalAlpha = (options.fade !== undefined ? 1 - options.fade : 1) * flash;
-    ctx.drawImage(layer, pad, pad, w, h, x - w / 2, y - h / 2, w, h);
+  // reference — it reads at thumbnail size where a tint does not. `wash` is the
+  // same stamp held part-way, for a figure that has been stopped rather than hit.
+  const white = Math.max(options.flash ?? 0, options.wash ?? 0);
+  if (white > 0) {
+    ctx.globalAlpha = alive * white;
+    ctx.drawImage(layer, pad, pad, w, h, -w / 2, -h / 2, w, h);
   }
   ctx.restore();
 }

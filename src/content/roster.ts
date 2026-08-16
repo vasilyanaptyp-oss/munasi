@@ -28,7 +28,12 @@ import type { Ability } from "../sim/types.js";
  *   other constantly, and if the numbers start from different places the viewer
  *   cannot tell who is ahead without doing arithmetic. Difference belongs in
  *   attack, speed and crits, which are legible as *behaviour*;
- * - `attackSpeed` 0.75-1.45;
+ * - `attackSpeed` 0.45-1.45. The floor came down from 0.75 when style moved into
+ *   `meleeShare`: a boxer whose whole identity is that his punch is the biggest
+ *   number in the video can only have that if he lands few of them, because the
+ *   total damage a fighter puts out over a match is fixed by the other one's
+ *   health. He swings at 0.5 and hits for 71-91 where he used to swing at 1.05
+ *   and hit for 36-45;
  * - `critChance` 0.22-0.38 with `critMult` 2.3-3.0. Fat crits are most of what
  *   keeps the outcome uncertain;
  * - and the part that matters: give it **one ability you can draw across the
@@ -104,7 +109,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9943,
+    fieldScale: 0.9936,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -118,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0543,
+    fieldScale: 1.0540,
   },
 
   /*
@@ -136,7 +141,13 @@ export const ROSTER: FighterSpec[] = [
     name: "Boxer Guy",
     spriteId: "boxer-guy",
     maxHp: 1000,
-    attackSpeed: 1.05,
+    // **Few, heavy punches.** He swung as often as everyone else and so his
+    // numbers came out the same size as everyone else's — 36-45 against a man
+    // who does not fight back with his hands at all. A boxer's blow has to be
+    // the biggest ordinary number in the video, and the only way to buy that
+    // is to land fewer of them: the total a fighter puts out over a match is
+    // fixed by the other one's health.
+    attackSpeed: 0.5,
     critChance: 0.34,
     critMult: 2.7,
     /**
@@ -145,11 +156,11 @@ export const ROSTER: FighterSpec[] = [
      * true here: every fighter dealt the same contact damage and the boxer was
      * distinguishable only by an effect nobody could read.
      */
-    meleeShare: 1.9,
+    meleeShare: 3.0,
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
-    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.8 }],
-    fieldScale: 0.9720,
+    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 1.8 }],
+    fieldScale: 0.9694,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -180,6 +191,6 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 7, power: 0, hitShare: 2.9 },
       { type: "four_eyes", cooldown: 14, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 0.9794,
+    fieldScale: 0.9822,
   },
 ];

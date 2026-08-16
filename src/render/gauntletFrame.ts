@@ -22,7 +22,7 @@ import {
 } from "./gauntletLayout.js";
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
 import { drawPhoto } from "./photo.js";
-import { drawSignatures, SIGNATURE_KINDS, type SignatureKind } from "./signatures.js";
+import { drawSignatures, photoTreatment, SIGNATURE_KINDS, type SignatureKind } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
@@ -376,6 +376,20 @@ export function renderGauntletFrame(
     layout.arena.h - border,
   );
 
+  // Straight off the event: a fighter can carry more than one signature — the
+  // glasses man has his throw and his volley — and looking it up by owner and
+  // taking the first drew his ult every time he threw a single pair.
+  const kindOf = (event: { ability?: string }): SignatureKind | null =>
+    event.ability !== undefined && SIGNATURE_KINDS.has(event.ability as never)
+      ? (event.ability as SignatureKind)
+      : null;
+
+  const positionOf = (id: string): { x: number; y: number } | null => {
+    if (id === snap.challenger.id) return layout.challenger.centre;
+    if (id === snap.opponent.id) return layout.opponent.centre;
+    return null;
+  };
+
   const sides = [
     {
       state: snap.challenger,
@@ -425,12 +439,32 @@ export function renderGauntletFrame(
     // what animates is where it is, not what it is doing.
     void size;
     void facing;
+    // **The ability is done to the photograph.** There is no illustration in
+    // this format, so the charge, the knock, the drag and the freeze are all
+    // handled on the cut-out itself — see `photoTreatment`.
+    const treat = photoTreatment(
+      result.events,
+      frame,
+      kindOf,
+      state.id,
+      (event) => {
+        const a = positionOf(event.actorId);
+        const b = positionOf(event.targetId);
+        return a && b ? Math.atan2(b.y - a.y, b.x - a.x) : 0;
+      },
+      place.sprite.h,
+    );
     drawPhoto(ctx, fighter.spriteId, {
       x: place.sprite.x + place.sprite.w / 2,
       y: place.sprite.y + place.sprite.h / 2,
       w: place.sprite.w,
       h: place.sprite.h,
       flash: vis.flash,
+      scale: treat.scale,
+      rotation: treat.rotation,
+      smear: treat.smear,
+      smearAngle: treat.smearAngle,
+      wash: treat.wash,
       // **The loser goes, he does not turn into a ghost.** The reference's last
       // frames have one fighter in the arena and nothing where the other was;
       // ours held the beaten man at 15% opacity for the rest of the video, a
@@ -457,20 +491,8 @@ export function renderGauntletFrame(
 
   // Signatures go over the fighters and under the overlay: they are the scene's
   // biggest moment, but the title still has to be readable through one.
-  // Straight off the event: a fighter can carry more than one signature — the
-  // glasses man has his throw and his volley — and looking it up by owner and
-  // taking the first drew his ult every time he threw a single pair.
-  const kindOf = (event: { ability?: string }): SignatureKind | null =>
-    event.ability !== undefined && SIGNATURE_KINDS.has(event.ability as never)
-      ? (event.ability as SignatureKind)
-      : null;
   // Both ends of the effect come from this frame's layout, so it stays attached
   // to two fighters who are still moving.
-  const positionOf = (id: string): { x: number; y: number } | null => {
-    if (id === snap.challenger.id) return layout.challenger.centre;
-    if (id === snap.opponent.id) return layout.opponent.centre;
-    return null;
-  };
   drawSignatures(
     ctx,
     result.events,

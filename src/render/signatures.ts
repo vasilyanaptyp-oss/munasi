@@ -3,6 +3,7 @@ import type { AbilityType, MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { SIGNATURE_LEAD_SECONDS, SIGNATURE_PULSE_SECONDS } from "../sim/simulate.js";
 import { hasProp, propImage } from "./photo.js";
+import { font } from "./theme.js";
 
 /**
  * The signature abilities.
@@ -159,6 +160,94 @@ function placedProp(
   ctx.restore();
 }
 
+
+/**
+ * The two graphic devices the reference channel uses for an ability, copied from
+ * it rather than invented here.
+ *
+ * Measured off "Detective Guy vs Camera Guy" and "Detective Guy vs Exploding
+ * Guy" at full resolution:
+ *
+ * - **A flat translucent cone.** Camera Guy's flash is a plain red triangle from
+ *   his lens across half the square, about half opacity, no outline, no
+ *   gradient, no particles. It is the biggest thing in those frames and it is
+ *   also the simplest.
+ * - **A band of hazard tape.** Detective Guy stretches yellow "DO NOT CROSS"
+ *   tape diagonally across the arena — a strip with a black edge and the words
+ *   repeated along it, clipped by the walls, held for seconds at a time.
+ *
+ * Both are big flat objects, which is the opposite of the rings, sparks and
+ * stars that were rejected three times. Neither is illustration: one is a shape
+ * with alpha, the other is a strip with lettering on it.
+ */
+
+/** Sampled off the reference's tape: gold band, black lettering. */
+const TAPE_GOLD = "#f2c40a";
+/** Sampled off the reference's camera cone, before it is laid over the field. */
+const CONE_RED = "#d81f11";
+
+/** A plain translucent wedge from one fighter toward the other. */
+function cone(
+  ctx: Ctx,
+  from: Point,
+  to: Point,
+  reach: number,
+  spread: number,
+  alpha: number,
+  colour: string,
+): void {
+  const heading = Math.atan2(to.y - from.y, to.x - from.x);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(from.x + Math.cos(heading - spread) * reach, from.y + Math.sin(heading - spread) * reach);
+  ctx.lineTo(from.x + Math.cos(heading + spread) * reach, from.y + Math.sin(heading + spread) * reach);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * A strip of hazard tape laid across the whole arena at an angle, with the words
+ * repeated along it — the reference's own device, and the reason it reads as
+ * "this one has been cordoned off" instead of as a coloured line.
+ */
+function hazardTape(
+  ctx: Ctx,
+  arena: ArenaBox,
+  through: Point,
+  angle: number,
+  band: number,
+  alpha: number,
+): void {
+  const span = arena.side * 1.6;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(through.x, through.y);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = TAPE_GOLD;
+  ctx.fillRect(-span, -band / 2, span * 2, band);
+  ctx.fillStyle = "#1b1b1b";
+  ctx.fillRect(-span, -band / 2, span * 2, Math.max(2, band * 0.08));
+  ctx.fillRect(-span, band / 2 - Math.max(2, band * 0.08), span * 2, Math.max(2, band * 0.08));
+
+  ctx.fillStyle = "#1b1b1b";
+  ctx.font = font(Math.round(band * 0.42), "bold");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // Spaced off the lettering's own width, not off the band: at a fixed step the
+  // words ran into each other and read as one long smear of capitals.
+  const label = "DO NOT CROSS";
+  const step = ctx.measureText(label).width * 1.75;
+  for (let x = -span; x < span; x += step) ctx.fillText(label, x, 0);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
+}
+
 /**
  * Draws whichever signature is playing on this frame — which, for an ability
  * with no picture behind it, is nothing.
@@ -194,11 +283,42 @@ export function drawSignatures(
     if (age < 0 || age >= SIGNATURE_FRAMES) continue;
     const kind = kindOf(event);
     if (kind === null) continue;
-    const spec = ABILITY_PROPS[kind];
-    if (!hasProp(spec.prop)) continue;
     const from = positionOf(event.actorId);
     const to = positionOf(event.targetId);
     if (!from || !to) continue;
+
+    // The reference's own two devices — see the note above `cone`.
+    if (kind === "nobody_moves") {
+      // Taped off. Three strips across the square, swung in as the hold lands
+      // and held while it lasts.
+      const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+      const since = Math.max(0, (age - SIGNATURE_TRAVEL_FRAMES) / TAIL_FRAMES);
+      const alpha = Math.min(1, t) * Math.max(0, 1 - since * 0.7);
+      const band = fighterScale * 0.2;
+      for (let i = 0; i < 3; i += 1) {
+        const lean = -0.62 + i * 0.42;
+        hazardTape(
+          ctx,
+          arena,
+          { x: to.x, y: to.y + (i - 1) * fighterScale * 0.75 },
+          lean,
+          band,
+          alpha * (i === 1 ? 1 : 0.9),
+        );
+      }
+      continue;
+    }
+    if (kind === "magnetic_north") {
+      // A flat wedge from him to the other man, the way the reference's camera
+      // throws its flash: one colour, half opacity, no edge and no detail.
+      const t = Math.min(1, age / SIGNATURE_FRAMES);
+      const reach = Math.hypot(to.x - from.x, to.y - from.y) * (0.4 + easeOut(Math.min(1, age / SIGNATURE_TRAVEL_FRAMES)) * 0.85);
+      cone(ctx, from, to, reach, 0.3, 0.5 * Math.max(0, 1 - Math.max(0, t - 0.6) / 0.4), CONE_RED);
+      continue;
+    }
+
+    const spec = ABILITY_PROPS[kind];
+    if (!hasProp(spec.prop)) continue;
 
     const sprite = propImage(spec.prop);
     const width = fighterScale * spec.size;
@@ -254,6 +374,87 @@ export function drawSignatures(
     }
   }
   ctx.restore();
+}
+
+/**
+ * What an ability does **to the photographs**, which is the only material this
+ * format has.
+ *
+ * There is no illustration anywhere in these videos, so an ability that wants to
+ * be seen has to be seen on the cut-outs themselves. Every one of these is the
+ * picture handled — grown, turned, repeated, bleached — and not a line drawn
+ * near it:
+ *
+ * - `HAYMAKER` — the boxer **grows and smears** as he charges, so he comes at
+ *   the other man out of the screen; on arrival the victim is **knocked
+ *   crooked** and squashed, and rights himself over the next half second.
+ * - `MAGNETIC NORTH` — the man being pulled **leaves copies of himself** along
+ *   the line he is being dragged down, for as long as the needle holds him.
+ * - `NOBODY MOVES` — whoever is caught goes **pale and still**, the photograph
+ *   bleached most of the way to a white silhouette while the hold lasts.
+ * - the thrown spectacles do their own work; the fighters are left alone.
+ */
+export interface PhotoTreatment {
+  scale: number;
+  rotation: number;
+  smear: number;
+  smearAngle: number;
+  wash: number;
+}
+
+const NO_TREATMENT: PhotoTreatment = { scale: 1, rotation: 0, smear: 0, smearAngle: 0, wash: 0 };
+
+/**
+ * The treatment for one fighter on one frame, from every signature in flight.
+ *
+ * Pure in `(events, frame)` like everything else in the render: the same frame
+ * handles the same photograph the same way, forever.
+ */
+export function photoTreatment(
+  events: MatchEvent[],
+  frame: number,
+  kindOf: (event: MatchEvent) => SignatureKind | null,
+  fighterId: string,
+  headingOf: (event: MatchEvent) => number,
+  scale: number,
+): PhotoTreatment {
+  let out = { ...NO_TREATMENT };
+  for (const event of events) {
+    if (event.type !== "signature") continue;
+    const age = frame - event.frame;
+    if (age < 0 || age >= SIGNATURE_FRAMES) continue;
+    const kind = kindOf(event);
+    if (kind === null) continue;
+    const caster = event.actorId === fighterId;
+    const victim = event.targetId === fighterId;
+    if (!caster && !victim) continue;
+    const heading = headingOf(event);
+    const since = (age - SIGNATURE_TRAVEL_FRAMES) / TAIL_FRAMES;
+
+    if (kind === "haymaker" && caster) {
+      // The charge: he swells and smears until the punch lands, then drops back.
+      const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+      const settle = age <= SIGNATURE_TRAVEL_FRAMES ? 1 : Math.max(0, 1 - since * 3);
+      out.scale = Math.max(out.scale, 1 + 0.34 * easeOut(t) * settle);
+      out.smear = Math.max(out.smear, scale * 0.55 * t * settle);
+      out.smearAngle = heading;
+    }
+    if (kind === "haymaker" && victim && age >= SIGNATURE_TRAVEL_FRAMES) {
+      // Knocked off true, and squashed, righting himself over half a second.
+      const decay = Math.max(0, 1 - since * 1.6);
+      out.rotation += 0.3 * decay * Math.sin(since * 9 + 1);
+      out.scale *= 1 - 0.1 * decay;
+    }
+    if (kind === "magnetic_north" && victim) {
+      const t = Math.min(1, age / SIGNATURE_FRAMES);
+      out.smear = Math.max(out.smear, scale * 0.7 * Math.sin(t * Math.PI));
+      out.smearAngle = heading;
+    }
+    if (kind === "nobody_moves" && victim && age >= SIGNATURE_TRAVEL_FRAMES) {
+      out.wash = Math.max(out.wash, 0.55 * Math.max(0, 1 - since * 0.5));
+    }
+  }
+  return out;
 }
 
 /** Ability types that have a signature moment at all. */

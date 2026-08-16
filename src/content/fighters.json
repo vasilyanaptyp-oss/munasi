@@ -42,17 +42,17 @@
     "spriteId": "boxer-guy",
     "aspect": 0.5455,
     "maxHp": 1000,
-    "attack": 6.8,
-    "attackSpeed": 1.05,
+    "attack": 9.2,
+    "attackSpeed": 0.5,
     "critChance": 0.34,
     "critMult": 2.7,
-    "meleeShare": 1.9,
+    "meleeShare": 3,
     "abilities": [
       {
         "type": "haymaker",
         "cooldown": 5,
         "power": 0,
-        "hitShare": 2.8
+        "hitShare": 1.8
       }
     ]
   },

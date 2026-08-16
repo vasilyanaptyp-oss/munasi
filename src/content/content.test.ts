@@ -56,7 +56,7 @@ describe("roster loading", () => {
     for (const fighter of roster) {
       expect(fighter.maxHp).toBeGreaterThanOrEqual(1000);
       expect(fighter.maxHp).toBeLessThanOrEqual(1400);
-      expect(fighter.attackSpeed).toBeGreaterThanOrEqual(0.75);
+      expect(fighter.attackSpeed).toBeGreaterThanOrEqual(0.45);
       expect(fighter.attackSpeed).toBeLessThanOrEqual(1.45);
       expect(fighter.critChance).toBeGreaterThanOrEqual(0.2);
       expect(fighter.critChance).toBeLessThanOrEqual(0.4);
