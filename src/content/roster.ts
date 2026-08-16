@@ -5,6 +5,11 @@ import type { Ability } from "../sim/types.js";
  * fighter's `attack` is *derived* from these by `calibrate.ts` — see the notes
  * there for why it is solved for rather than written by hand.
  *
+ * **Names are Title Case, not caps.** All four references write the title as
+ * "Guitar Guy vs / Blind Guy" — capitalised, not shouted. Ours were stored
+ * uppercase and the title came out as a block of capitals, which is the loudest
+ * possible reading of the one piece of text the format keeps quiet.
+ *
  * **A fighter is a photo and one big ability.** That is the whole design, taken
  * from the reference channel: a cut-out on a flat blue field, outlined in white,
  * bouncing around the arena, and one signature effect that takes over the
@@ -61,7 +66,7 @@ export const ROSTER: FighterSpec[] = [
     // ability points everyone else somewhere they did not want to go.
     id: "compass",
     faction: "left",
-    name: "COMPASS GUY",
+    name: "Compass Guy",
     spriteId: "compass-guy",
     maxHp: 1000,
     attackSpeed: 1.15,
@@ -99,7 +104,7 @@ export const ROSTER: FighterSpec[] = [
     // him; his ability stops the arena dead for a beat.
     id: "bodyguard",
     faction: "right",
-    name: "BODYGUARD GUY",
+    name: "Bodyguard Guy",
     spriteId: "bodyguard-guy",
     maxHp: 1000,
     attackSpeed: 0.85,
@@ -121,7 +126,7 @@ export const ROSTER: FighterSpec[] = [
     // Gloves up, scowling. The one who actually throws a punch.
     id: "boxer",
     faction: "left",
-    name: "BOXER GUY",
+    name: "Boxer Guy",
     spriteId: "boxer-guy",
     maxHp: 1000,
     attackSpeed: 1.05,
@@ -136,7 +141,7 @@ export const ROSTER: FighterSpec[] = [
     // Reads the room, then throws his glasses at it.
     id: "glasses",
     faction: "right",
-    name: "GLASSES GUY",
+    name: "Glasses Guy",
     spriteId: "glasses-guy",
     maxHp: 1000,
     attackSpeed: 0.95,

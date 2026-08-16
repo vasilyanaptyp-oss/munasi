@@ -10,7 +10,6 @@ import {
 import { buildRenderIndex, eventsAt, strokedText, type RenderIndex } from "./frame.js";
 import type { PlannedFrame } from "./framePlan.js";
 import {
-  ARENA_RECT,
   CAPTION,
   DAMAGE_NUMBER_FRAMES,
   gauntletFrameLayout,
@@ -18,7 +17,6 @@ import {
   MINION_OUTLINE,
   numberJitter,
   numberText,
-  victoryCardLayout,
   type GauntletFrameLayout,
   type HudMetrics,
   type Rect,
@@ -300,6 +298,18 @@ function drawImpacts(
   frame: number,
   cam: { dx: number; dy: number },
 ): void {
+  // Inside the walls, like everything else the fight draws — see the note in
+  // `drawSignatures`. A blow landed against a wall used to scuff the blue field
+  // outside the square.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(
+    ARENA.inner.x + cam.dx,
+    ARENA.inner.y + cam.dy,
+    ARENA.inner.w,
+    ARENA.inner.h,
+  );
+  ctx.clip();
   for (let back = IMPACT_FRAMES; back >= 0; back -= 1) {
     const f = frame - back;
     if (f < 0) continue;
@@ -344,6 +354,7 @@ function drawImpacts(
       ctx.restore();
     }
   }
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
@@ -400,76 +411,6 @@ function drawDamageNumbers(
   }
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-}
-
-/**
- * Cold-open / cut badge, in the gap between the arena and the caption so it
- * never lands on the HUD or on a fighter.
- */
-function drawBadge(ctx: Ctx, text: string, accent: string, cam: { dx: number; dy: number }): void {
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const size = Math.round(HEIGHT * 0.026);
-  ctx.font = font(size);
-  const w = ctx.measureText(text).width + size * 1.6;
-  const h = size * 1.7;
-  // Rides the camera like the rest of the scene, so it keeps its place under the
-  // arena instead of drifting across it.
-  const x = WIDTH / 2 - w / 2 + cam.dx;
-  const y = ARENA_RECT.y + ARENA_RECT.h + Math.round(HEIGHT * 0.03) + cam.dy;
-
-  ctx.fillStyle = "rgba(5,18,26,0.82)";
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = accent;
-  ctx.fillRect(x, y, Math.round(WIDTH * 0.008), h);
-  strokedText(ctx, text, x + w / 2, y + h / 2, size, accent, 6);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-}
-
-function drawVictoryBanner(ctx: Ctx, result: GauntletResult, cam: { dx: number; dy: number }): void {
-  const card = victoryCardLayout(result);
-
-  // A plate, not a blackout. The old card dimmed the whole frame to 34%
-  // brightness, which hid the winner and both HP widgets at the exact moment
-  // the viewer wants to read them. It rides the camera with the rest of the
-  // scene, so it holds its place under the caption instead of drifting.
-  ctx.fillStyle = C.cardPlate;
-  ctx.fillRect(card.plate.x + cam.dx, card.plate.y + cam.dy, card.plate.w, card.plate.h);
-  ctx.lineWidth = Math.max(4, Math.round(WIDTH * 0.006));
-  ctx.strokeStyle = C.outline;
-  ctx.strokeRect(
-    card.plate.x + cam.dx + ctx.lineWidth / 2,
-    card.plate.y + cam.dy + ctx.lineWidth / 2,
-    card.plate.w - ctx.lineWidth,
-    card.plate.h - ctx.lineWidth,
-  );
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const line of card.lines) {
-    strokedText(
-      ctx,
-      line.text,
-      line.rect.x + line.rect.w / 2 + cam.dx,
-      line.rect.y + line.rect.h / 2 + cam.dy,
-      line.size,
-      line.accent ? (result.challengerWon ? C.hpHealthy : C.hpHurt) : C.ink,
-      Math.round(line.size * 0.16),
-    );
-  }
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-}
-
-/** Ring drawn round the winner's HP widget, so the eye lands on the number. */
-function markWinner(ctx: Ctx, rect: Rect, won: boolean): void {
-  ctx.save();
-  ctx.strokeStyle = won ? C.hpHealthy : C.hpHurt;
-  ctx.lineWidth = Math.max(4, Math.round(WIDTH * 0.007));
-  const pad = Math.round(WIDTH * 0.012);
-  ctx.strokeRect(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2);
-  ctx.restore();
 }
 
 export interface GauntletFrameOptions {
@@ -576,10 +517,23 @@ export function renderGauntletFrame(
       w: place.sprite.w,
       h: place.sprite.h,
       flash: vis.flash,
-      ...(vis.death === undefined ? {} : { fade: vis.death * 0.85 }),
+      // **The loser goes, he does not turn into a ghost.** The reference's last
+      // frames have one fighter in the arena and nothing where the other was;
+      // ours held the beaten man at 15% opacity for the rest of the video, a
+      // pale figure standing under a plus reading 0. Fading all the way out is
+      // both the reference's behaviour and the readable one.
+      ...(vis.death === undefined ? {} : { fade: vis.death }),
     });
 
-    drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
+    // The plus goes with its fighter. Left drawing, it hung on as a dark plus
+    // reading 0 over an empty patch of arena for the rest of the video — the
+    // widget belongs to a figure that is no longer there.
+    if (vis.death < 1) {
+      ctx.save();
+      ctx.globalAlpha = 1 - vis.death;
+      drawHpWidget(ctx, place.hp, state.hp, state.maxHp);
+      ctx.restore();
+    }
   }
 
   // Under the numbers, over the fighters: the mark is the cause, the number
@@ -609,7 +563,6 @@ export function renderGauntletFrame(
     result.events,
     frame,
     { x: layout.arena.x, y: layout.arena.y, side: layout.arena.w, border },
-    { width: WIDTH, height: HEIGHT },
     kindOf,
     positionOf,
     layout.opponent.sprite.h,
@@ -617,17 +570,20 @@ export function renderGauntletFrame(
 
   drawOverlay(ctx, hud.metrics, layout.camera);
 
+  // **The overlay is the title and the caption. That is all of it.**
+  //
+  // What used to be here as well, and is not in any of the four references:
+  // a closing card reading "<winner> WINS / 25 HP LEFT" on a plate, a white
+  // rectangle drawn round the winner's plus, and two badges for the cold open.
+  // On the frames the owner compared they were the whole bottom of the shot —
+  // the card's second line was cut in half by the frame edge, and the ring
+  // round the plus, which by then had drifted above the arena wall, read as a
+  // selection box someone had left on. The reference ends the way it runs: the
+  // loser is gone, the winner is still bouncing, nothing else appears.
   const planned = options.planned;
-  if (planned?.coldOpenLabel !== undefined) drawBadge(ctx, planned.coldOpenLabel, C.critText, layout.camera);
-  if (planned?.startLabel !== undefined) drawBadge(ctx, planned.startLabel, C.hpHealthy, layout.camera);
   if (planned?.flash !== undefined && planned.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(1, planned.flash).toFixed(3)})`;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  }
-  if (options.victoryOverlay || planned?.victoryOverlay) {
-    const winner = result.challengerWon ? layout.challenger : layout.opponent;
-    markWinner(ctx, winner.hp, result.challengerWon);
-    drawVictoryBanner(ctx, result, layout.camera);
   }
 
   return canvas.toBuffer("image/png");

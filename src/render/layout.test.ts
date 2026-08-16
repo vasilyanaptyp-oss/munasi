@@ -11,11 +11,10 @@ import {
   gauntletFrameLayout,
   hudLayout,
   intersects,
-  victoryCardLayout,
   type Rect,
 } from "./gauntletLayout.js";
 import { drawHpWidgetForTest } from "./gauntletFrame.js";
-import { GAUNTLET_COLORS, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
+import { ARENA, GAUNTLET_COLORS, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
 import { HEIGHT, WIDTH } from "./theme.js";
 import { FPS } from "../sim/types.js";
 
@@ -60,15 +59,14 @@ function auditFrames(result: GauntletResult, plan: FramePlan): Violation[] {
   const hud = hudLayout(result);
   const violations: Violation[] = [];
   const minHeight = HEIGHT * MIN_FIGHTER_HEIGHT_SHARE;
-  const card = victoryCardLayout(result);
 
-  for (const [output, planned] of plan.entries()) {
+  for (const planned of plan) {
     const frame = planned.source;
     const layout = gauntletFrameLayout(result, frame, index, hud);
 
     // The arena moves now, so "inside the arena" is measured against where the
     // arena is on *this* frame, not against a constant.
-    const border = layout.arena.w * (35 / 994);
+    const border = layout.arena.w * (ARENA.border / ARENA.side);
     const inner: Rect = {
       name: "arenaInner",
       x: layout.arena.x + border,
@@ -76,21 +74,6 @@ function auditFrames(result: GauntletResult, plan: FramePlan): Violation[] {
       w: layout.arena.w - border * 2,
       h: layout.arena.h - border * 2,
     };
-
-    if (planned.victoryOverlay === true) {
-      if (!contains(FRAME_RECT, card.plate)) {
-        violations.push({ frame: output, rule: "victory card leaves the frame", detail: card.plate.name });
-      }
-      for (const line of card.lines) {
-        if (!contains(card.plate, line.rect)) {
-          violations.push({
-            frame: output,
-            rule: "victory card line leaves the plate",
-            detail: `${line.name} "${line.text}"`,
-          });
-        }
-      }
-    }
 
     // 1. The HUD never collides with itself.
     for (let i = 0; i < layout.hud.length; i += 1) {

@@ -5,14 +5,17 @@ import { HEIGHT, WIDTH } from "./theme.js";
  * or height, then scaled here — the reference is 576x1024 and we render
  * 1080x1920, so nothing is copied in raw pixels.
  *
- * **Not all of these fractions come from the reference**, and it matters which
- * do. Measured off it (`refs/README.md`) and used as measured: the palette, the
- * HP widget's total width and stem, the caption's cap height. Chosen here
- * instead: the arena's side (0.92 against the reference's 1.064, which runs the
- * square off both edges of the frame and leaves one wall permanently off
- * screen), its border (0.032 against 0.042), its top edge, the HP crossbar
- * (0.115 against 0.090, so four digits fit), and both ground lines — the
- * reference has no fixed arena position at all, it pans.
+ * **Nearly all of these fractions are now measured off the reference**, frame by
+ * frame at native resolution: the palette, the arena's side, its border, its
+ * home position and the pan around it, the HP plus and its proportions, the
+ * caption's cap height, and both overlay offsets. The ones still chosen here are
+ * the ground lines and the minion size, neither of which the reference has an
+ * equivalent for.
+ *
+ * Four of them used to be guesses, and each guess was visible in the finished
+ * video: the square sat a fifth of a frame too low, its wall was a quarter too
+ * thin, the plus over each head was 9% too big, and the closing line was half
+ * again the size it should be.
  */
 
 /** Flat fill, no gradient. Measured across four frames at 69-76% of pixels. */
@@ -83,8 +86,28 @@ const F = {
    * box in the middle of the screen.
    */
   arenaSide: 1.064, // square side, of frame width — measured
-  arenaTop: 0.295, // of frame height
-  border: 0.032, // of frame width
+  /**
+   * Where the square sits vertically before the camera moves it.
+   *
+   * Measured across all 721 reference frames: the arena's outer top edge sits
+   * between y=27 and y=270 on a 1024-tall frame, median 154 — 0.150 of the
+   * frame. The home position is the middle of that travel, 0.145.
+   *
+   * It sat at 0.295, which put the square a fifth of the frame too low: the
+   * rendered top ran 0.361 against the reference's 0.150, the caption was
+   * pushed onto the bottom edge of the frame (and the closing line was cut in
+   * half by it), and the whole composition sat on the floor. The travel itself
+   * was already right — 0.225 of the frame against the reference's 0.237 —
+   * so this moves the home, not the pan.
+   */
+  arenaTop: 0.145, // of frame height — measured
+  /**
+   * Wall thickness: 24px on a 576-wide reference frame, in every frame of both
+   * references that show the top wall. Ours was 0.032 — 18px at the same scale,
+   * a quarter thinner, which is most of why the square read as a drawn outline
+   * rather than a wall.
+   */
+  border: 24 / 576, // of frame width — measured
   /**
    * Two ground lines, as shares of the arena's inner height.
    *
@@ -104,12 +127,24 @@ const F = {
    * the width and an arm 31% of the height. A symmetric plus. It was 140x161
    * here (h/w 1.15, a stretched crucifix), then 160x141 (h/w 0.88, squat) on my
    * own bad measurement. Square is the answer.
+   *
+   * Re-measured on the finished video against the reference, by finding the
+   * crossbar automatically in both: the reference's arm is 76px wide and the
+   * shape 76px tall; ours came out 83x85. Nine percent is not much on its own,
+   * but the plus hangs above the head, so an oversized one is the thing that
+   * pushes out over the arena wall and lands on the title.
    */
-  hpWidgetWidth: 0.148, // of frame width
+  hpWidgetWidth: 76 / 576, // of frame width — measured
   hpWidgetAspect: 1.0, // height over width — square, measured
   hpStemWidth: 0.31, // of the widget width
   hpBarHeight: 0.31, // of the widget height
-  captionCap: 0.033, // of frame height
+  /**
+   * Cap height of "Like and Subscribe!", measured as ink: 22px on a 1024-tall
+   * reference frame, and the same 22px in the second reference. Ours inked 34,
+   * half again as big — on the frames the owner compared, the closing line was
+   * the loudest thing in the shot.
+   */
+  captionCap: 22 / 1024, // of frame height — measured as ink
   /**
    * Where the overlay sits relative to the arena — not relative to the screen.
    *
@@ -118,9 +153,14 @@ const F = {
    * title's top edge is 76-77px above the arena's top border. Both hold while
    * the pair of them slides 200-250px around the frame, which is the proof that
    * the overlay and the arena are one rigid scene.
+   *
+   * **Both are distances to the ink**, which is why `hudLayout` anchors on the
+   * text's measured bounding box rather than on a font size. Hanging the block
+   * off a nominal size instead put our title 108px above the arena where the
+   * reference's is 76, and the caption 43px below where the reference's is 32.
    */
   titleAboveArena: 76 / 1024, // of frame height
-  captionBelowArena: 30 / 1024, // of frame height
+  captionBelowArena: 32 / 1024, // of frame height
 } as const;
 
 const side = Math.round(WIDTH * F.arenaSide);
@@ -187,6 +227,9 @@ export const HP_WIDGET = {
   /** Above half HP the fill reads white, below it turns red. */
   hurtBelow: 0.5,
 } as const;
+
+/** Caption ink height as a share of frame height. See `F.captionCap`. */
+export const CAPTION_CAP = F.captionCap;
 
 /** Overlay offsets from the arena, in pixels. See `F.titleAboveArena`. */
 export const HUD_OFFSETS = {

@@ -116,7 +116,25 @@ function keepBoth(snap: GauntletResult["snapshots"][number]): {
   const halfH = (FIGHTER_HEIGHT_UNITS * inner.h) / 2;
   // The widest thing over a fighter is the plus, not the photo.
   const halfW = Math.max((FIGHTER_HEIGHT_UNITS * inner.h) / 2, HP_WIDGET.width / 2);
-  const above = halfH + HP_WIDGET.height + Math.round(WIDTH * 0.02);
+  /**
+   * **Sideways the plus counts; upward it does not.**
+   *
+   * Losing a fighter off the left or right edge loses their number with them,
+   * and there is nothing above or below to read it from — so the horizontal
+   * window reserves the plus's full width.
+   *
+   * Reserving its height as well is what the reference does not do. Measured:
+   * the reference's arena top runs to y=27 on a 1024-tall frame, which puts a
+   * fighter by the top wall high enough that their plus is cut by the frame
+   * edge — it happens and the format tolerates it. Ours reserved the plus, the
+   * gap and half a body above every fighter, and that reservation is a floor
+   * the camera can only satisfy by pushing the whole scene down: with the arena
+   * homed at the reference's 0.145 the rendered median still came out 0.206,
+   * because the clamp kept shoving it back. The number is still readable when
+   * its top is clipped; the composition is not recoverable once the square is
+   * sitting on the bottom of the frame.
+   */
+  const above = halfH;
 
   let left = Infinity;
   let right = -Infinity;

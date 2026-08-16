@@ -3,7 +3,6 @@ import type { MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { SIGNATURE_LEAD_SECONDS } from "../sim/simulate.js";
 import { GAUNTLET_COLORS as C } from "./gauntletTheme.js";
-import { strokedText } from "./frame.js";
 import { propImage } from "./photo.js";
 
 
@@ -30,6 +29,14 @@ import { propImage } from "./photo.js";
  * than to a number chosen here. If the two ever drift apart the effect lands
  * before or after the health drops, and the ability goes back to being
  * decoration that happens near a fight.
+ *
+ * **The ability's name is not written on the frame.** It used to print
+ * "HAYMAKER" and the rest across the top of the arena while the effect played.
+ * No reference does that — the overlay is the title and the caption and nothing
+ * else — and on our own last frames it was the worst thing in the shot: faded
+ * yellow at low alpha over the blue field goes olive, and it landed on the
+ * winner's HP plus. The three-step shape above is what says who is attacking
+ * whom; a caption on top of it was never doing that work.
  */
 
 type Ctx = SKRSContext2D;
@@ -88,9 +95,6 @@ function magneticNorth(
   to: Point,
   age: number,
   scale: number,
-  width: number,
-  arena: ArenaBox,
-  slot: number,
 ): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
   const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
@@ -175,7 +179,6 @@ function magneticNorth(
     ctx.restore();
   }
 
-  label(ctx, "MAGNETIC NORTH", alpha, width, arena, C.damageText, slot);
 }
 
 
@@ -197,9 +200,6 @@ function haymaker(
   to: Point,
   age: number,
   scale: number,
-  width: number,
-  arena: ArenaBox,
-  slot: number,
 ): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
   const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
@@ -225,7 +225,6 @@ function haymaker(
   }
   ctx.restore();
 
-  label(ctx, "HAYMAKER", alpha, width, arena, C.damageText, slot);
 }
 
 /**
@@ -241,9 +240,6 @@ function fourEyes(
   to: Point,
   age: number,
   scale: number,
-  width: number,
-  arena: ArenaBox,
-  slot: number,
 ): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
   const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
@@ -275,7 +271,6 @@ function fourEyes(
   }
   ctx.restore();
 
-  label(ctx, "FOUR EYES", alpha, width, arena, C.damageText, slot);
 }
 
 /**
@@ -292,9 +287,6 @@ function nobodyMoves(
   to: Point,
   age: number,
   scale: number,
-  width: number,
-  arena: ArenaBox,
-  slot: number,
 ): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
   const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
@@ -336,37 +328,6 @@ function nobodyMoves(
     ctx.restore();
   }
 
-  label(ctx, "NOBODY MOVES", alpha, width, arena, C.damageText, slot);
-}
-
-/**
- * The ability's name, held to the frame so it never runs off the edge.
- *
- * `slot` stacks simultaneous casts. The cooldowns are 5s and 6s against a 1.4s
- * animation, so two signatures overlapping is ordinary, and both names used to
- * be printed at the same spot — one video had "MAGNETIC NORTH" and "NOBODY
- * MOVES" struck through each other into unreadable pulp.
- */
-function label(
-  ctx: Ctx,
-  text: string,
-  alpha: number,
-  width: number,
-  arena: ArenaBox,
-  colour: string,
-  slot: number,
-): void {
-  const inner = arena.side - arena.border * 2;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const size = Math.round(inner * 0.058);
-  const y = arena.y + arena.border + inner * 0.08 + slot * size * 1.35;
-  strokedText(ctx, text, width / 2, y, size, colour, 8);
-  ctx.restore();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
 }
 
 /**
@@ -382,12 +343,29 @@ export function drawSignatures(
   events: MatchEvent[],
   frame: number,
   arena: ArenaBox,
-  size: { width: number; height: number },
   kindOf: (actorId: string) => SignatureKind | null,
   positionOf: (id: string) => Point | null,
   fighterScale: number,
 ): void {
-  let slot = 0;
+  // **Everything an ability draws stays inside the arena.**
+  //
+  // The square is the fight's container: in the reference nothing belonging to
+  // the fight is ever drawn on the flat blue outside it — the note track, the
+  // pads and every effect are inside the walls. Ours were not clipped, so a
+  // haymaker aimed at a fighter near the top wall trailed a line up across the
+  // blue and over the title, and a caster ring drawn on someone by the edge
+  // spilled out into the margin. The only thing allowed out is the HP plus,
+  // which the reference lets poke over the top wall too.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(
+    arena.x + arena.border,
+    arena.y + arena.border,
+    arena.side - arena.border * 2,
+    arena.side - arena.border * 2,
+  );
+  ctx.clip();
+
   for (const event of events) {
     if (event.type !== "signature") continue;
     const age = frame - event.frame;
@@ -402,10 +380,10 @@ export function drawSignatures(
     // number. Four abilities in four colours plus a red impact mark and an
     // orange telegraph made a frame no viewer could parse.
     casterRing(ctx, from, age, fighterScale, C.damageText);
-    if (kind === "magnetic_north") magneticNorth(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    else if (kind === "haymaker") haymaker(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    else if (kind === "four_eyes") fourEyes(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    else nobodyMoves(ctx, from, to, age, fighterScale, size.width, arena, slot);
-    slot += 1;
+    if (kind === "magnetic_north") magneticNorth(ctx, from, to, age, fighterScale);
+    else if (kind === "haymaker") haymaker(ctx, from, to, age, fighterScale);
+    else if (kind === "four_eyes") fourEyes(ctx, from, to, age, fighterScale);
+    else nobodyMoves(ctx, from, to, age, fighterScale);
   }
+  ctx.restore();
 }

@@ -83,7 +83,7 @@ describe("roster loading", () => {
   });
 
   it("looks fighters up by id", () => {
-    expect(getFighter("compass", roster).name).toBe("COMPASS GUY");
+    expect(getFighter("compass", roster).name).toBe("Compass Guy");
     expect(() => getFighter("nobody", roster)).toThrow(/unknown fighter/);
   });
 });

@@ -110,9 +110,18 @@ export function parseArgs(argv: string[]): GenerateOptions {
     matchupSample: Math.floor(number("sample", 40)),
     keepFrames: argv.includes("--keep-frames"),
     redo: argv.includes("--redo"),
-    // On by default: the first two seconds decide whether the video is
-    // watched at all. `--no-cold-open` posts the straight cut for comparison.
-    coldOpen: !argv.includes("--no-cold-open"),
+    // **Off by default, because the reference does not do it.** All four
+    // references open on 1000/1000 and play straight through. Ours opened on a
+    // replay of a later moment — so the first thing a viewer saw was two
+    // fighters already down a few hundred HP, then a white flash and the same
+    // fight starting over. The two badges that were supposed to explain it
+    // ("6 SEC LATER", "FROM THE TOP") are overlay furniture the format does not
+    // have, and on the shipped videos they were pushed off the bottom edge of
+    // the frame anyway, so the cut played as an unexplained glitch.
+    //
+    // Kept behind `--cold-open` rather than deleted: it is a real retention
+    // device and both cuts can still be posted and compared on watch time.
+    coldOpen: argv.includes("--cold-open"),
     duel: argv.includes("--duel"),
     ...(flag("pick") === undefined
       ? {}

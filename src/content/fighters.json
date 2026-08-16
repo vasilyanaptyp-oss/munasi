@@ -1,7 +1,7 @@
 [
   {
     "id": "compass",
-    "name": "COMPASS GUY",
+    "name": "Compass Guy",
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1000,
@@ -19,7 +19,7 @@
   },
   {
     "id": "bodyguard",
-    "name": "BODYGUARD GUY",
+    "name": "Bodyguard Guy",
     "spriteId": "bodyguard-guy",
     "aspect": 0.6286,
     "maxHp": 1000,
@@ -38,7 +38,7 @@
   },
   {
     "id": "boxer",
-    "name": "BOXER GUY",
+    "name": "Boxer Guy",
     "spriteId": "boxer-guy",
     "aspect": 0.5455,
     "maxHp": 1000,
@@ -56,7 +56,7 @@
   },
   {
     "id": "glasses",
-    "name": "GLASSES GUY",
+    "name": "Glasses Guy",
     "spriteId": "glasses-guy",
     "aspect": 0.8357,
     "maxHp": 1000,

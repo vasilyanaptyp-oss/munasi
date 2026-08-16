@@ -3,6 +3,7 @@ import { FIGHTER_OUTLINE } from "./drawFighter.js";
 import { eventsAt, type RenderIndex } from "./frame.js";
 import {
   ARENA,
+  CAPTION_CAP,
   GAUNTLET_LAYOUT as L,
   HP_WIDGET,
   HP_WIDGET_SLOTS,
@@ -142,6 +143,54 @@ function textWidth(text: string, size: number): number {
   return ctx.measureText(text).width;
 }
 
+/**
+ * How far the ink rises above the baseline, and how tall it is.
+ *
+ * The reference's overlay offsets are distances to the **ink** — 76px from the
+ * arena's top border to the first pixel of the title, 32px from its bottom
+ * border to the first pixel of the caption. Hanging the blocks off a nominal
+ * font size instead leaves whatever slack the face happens to carry above its
+ * caps, which is how ours ended up 32px too high and 11px too low respectively.
+ */
+function inkBox(text: string, size: number): { ascent: number; height: number } {
+  ensureFonts();
+  const canvas = (measure ??= createCanvas(8, 8));
+  const ctx = canvas.getContext("2d");
+  ctx.font = font(size);
+  const m = ctx.measureText(text);
+  return { ascent: m.actualBoundingBoxAscent, height: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent };
+}
+
+/**
+ * Font size whose ink is `cap` tall. Solved, because the face is vendored and
+ * its caps do not sit where the reference's do.
+ *
+ * `inkOf` maps a size to the ink height being matched — for the caption that is
+ * one line, for the title it is the two-line block from the first line's ascent
+ * to the second's descender. Ratio first, then a short scan either side, because
+ * rounding to whole pixels leaves the ratio step short of the best answer.
+ */
+function solveSize(inkOf: (size: number) => number, cap: number, startSize: number): number {
+  let size = startSize;
+  for (let i = 0; i < 20; i += 1) {
+    const ink = inkOf(size);
+    if (ink === 0) break;
+    const next = Math.max(8, Math.round(size * (cap / ink)));
+    if (next === size) break;
+    size = next;
+  }
+  let best = size;
+  let bestErr = Math.abs(inkOf(size) - cap);
+  for (let s = Math.max(8, size - 4); s <= size + 4; s += 1) {
+    const err = Math.abs(inkOf(s) - cap);
+    if (err < bestErr) {
+      best = s;
+      bestErr = err;
+    }
+  }
+  return best;
+}
+
 /** Shrinks a font until the text fits, mirroring what the renderer does. */
 export function fitText(text: string, startSize: number, maxWidth: number, minSize: number): number {
   let size = startSize;
@@ -164,6 +213,14 @@ export interface HudMetrics {
 
 /** The reference closes every video on this, so we do too. */
 export const CAPTION = "Like and Subscribe!";
+
+/**
+ * Ink height of the whole two-line title, as a share of frame height, and the
+ * spacing between its baselines. Measured: 67-68px on a 1024-tall frame in both
+ * references, on every frame where the title is not clipped.
+ */
+const TITLE_BLOCK_CAP = 67 / 1024;
+const TITLE_LINE_SPACING = 1.18;
 
 /**
  * The overlay: two centred lines above the arena and one below it.
@@ -191,20 +248,33 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   const second = result.team.members[0]?.name ?? "";
   const first = `${result.challenger.name} vs`;
 
-  // One size for both lines, so the title reads as a single block.
+  // One size for both lines, so the title reads as a single block, and the
+  // block is sized by its own ink: top of the first line to the bottom of the
+  // second is 67-68px on a 1024-tall reference frame, in both references.
+  // Sizing off a nominal cap instead put ours at 74.
+  const blockInk = (size: number): number =>
+    Math.round(size * TITLE_LINE_SPACING) + inkBox(first, size).ascent + (inkBox(second, size).height - inkBox(second, size).ascent);
+  const wanted = solveSize(blockInk, HEIGHT * TITLE_BLOCK_CAP, Math.round(HEIGHT * 0.034));
   const titleSize = Math.min(
-    fitText(first, Math.round(HEIGHT * 0.034), room, Math.round(HEIGHT * 0.022)),
-    fitText(second, Math.round(HEIGHT * 0.034), room, Math.round(HEIGHT * 0.022)),
+    fitText(first, wanted, room, Math.round(HEIGHT * 0.022)),
+    fitText(second, wanted, room, Math.round(HEIGHT * 0.022)),
   );
-  const lineHeight = Math.round(titleSize * 1.18);
-  const captionSize = L.captionSize;
+  const lineHeight = Math.round(titleSize * TITLE_LINE_SPACING);
+  // The caption is sized by its ink, not by a nominal cap: the reference's is
+  // 22px tall on a 1024-tall frame and the vendored face does not put its caps
+  // where the reference's face does.
+  const captionSize = solveSize(
+    (size) => inkBox(CAPTION, size).height,
+    HEIGHT * CAPTION_CAP,
+    L.captionSize,
+  );
 
-  // Both blocks hang off the arena's own edges at the measured offsets.
-  const firstTop = ARENA.y - HUD_OFFSETS.titleAbove - titleSize * 1.15;
-  const firstBaseline = firstTop + titleSize;
+  // Both blocks hang off the arena's own edges at the measured offsets, and the
+  // offsets are to the first pixel of ink — see `inkBox`.
+  const firstBaseline = ARENA.y - HUD_OFFSETS.titleAbove + inkBox(first, titleSize).ascent;
   const secondBaseline = firstBaseline + lineHeight;
   const captionBaseline =
-    ARENA.y + ARENA.side + HUD_OFFSETS.captionBelow + captionSize;
+    ARENA.y + ARENA.side + HUD_OFFSETS.captionBelow + inkBox(CAPTION, captionSize).ascent;
 
   const line = (name: string, text: string, baseline: number): Rect => ({
     name,
@@ -438,97 +508,6 @@ export function minionPlacements(
   return out;
 }
 
-export interface VictoryCard {
-  /** Plate behind the text. */
-  plate: Rect;
-  lines: { name: string; text: string; rect: Rect; size: number; accent: boolean }[];
-  /** Which side won, so the renderer can mark the right widget. */
-  winner: "challenger" | "opponent";
-  /** HP the winner finished on. The whole point of the card. */
-  hpLeft: number;
-}
-
-/**
- * The closing card.
- *
- * It replaced a full-frame dark scrim with an unfitted name that ran off both
- * edges of a 1080px frame, held for two seconds, over two HP widgets that both
- * looked like zero. The number that matters is what the winner had left —
- * "cleared it on 8 HP" is the entire drama of a gauntlet — so it gets its own
- * line, and the card is a plate inside the arena rather than a blackout.
- */
-export function victoryCardLayout(result: GauntletResult): VictoryCard {
-  const won = result.challengerWon;
-  const last = result.snapshots[result.durationFrames - 1]!;
-  const hpLeft = Math.max(0, Math.round(won ? last.challenger.hp : last.opponent.hp));
-  const name = won ? result.challenger.name : (result.rounds.at(-1)?.opponentName ?? "");
-
-  // The card lives in the strip under the caption. It used to have the whole
-  // band beneath the arena to itself, but the caption has moved up to the
-  // reference's measured offset — 30px under the arena's bottom border on a
-  // 1024-tall frame — and the two would now sit on top of each other. Over the
-  // arena is not an option either: it covered the winner from the chest down,
-  // which defeats the point of keeping them in shot.
-  const pad = Math.round(WIDTH * 0.02);
-  const room = WIDTH - Math.round(WIDTH * 0.03) * 2 - pad * 2;
-  const caption = hudLayout(result).rects.find((r) => r.name === "caption")!;
-
-  // Both sides can hit zero on the same tick — damage is applied after every
-  // actor has swung, so a mutual kill is a real outcome, not a rounding
-  // artefact. "0 HP LEFT" is true there and reads as a broken card, so that
-  // case gets its own line.
-  const trade = hpLeft <= 0;
-  const hpText = trade ? "BOTH WENT DOWN" : `${hpLeft} HP LEFT`;
-
-  // The strip left under the caption, and everything is sized to fit inside it
-  // rather than assumed to. Two lines: the winner's name and what they finished
-  // on. The "WINNER" headline is gone — the name over an HP count says it, and
-  // the third line no longer fits the band it has to live in.
-  const bandTop = caption.y + caption.h + Math.round(HEIGHT * 0.008);
-  const bandBottom = HEIGHT - Math.round(HEIGHT * 0.012);
-  const band = bandBottom - bandTop;
-
-  const gap = Math.round(HEIGHT * 0.005);
-  // Split the room between the two lines, then let `fitText` narrow each to the
-  // plate's width. Height first: a name that overflows the band is unreadable
-  // in a way a slightly small one is not.
-  const inner = band - pad * 2 - gap;
-  const nameCap = Math.floor((inner * 0.56) / 1.2);
-  const hpCap = Math.floor((inner * 0.44) / 1.2);
-  const nameSize = fitText(name, Math.min(nameCap, Math.round(WIDTH * 0.062)), room, 18);
-  const hpSize = fitText(hpText, Math.min(hpCap, Math.round(WIDTH * 0.048)), room, 16);
-
-  const sizes = [nameSize, hpSize];
-  const texts = [name, hpText];
-  const names = ["victoryName", "victoryHp"];
-  const bodyHeight = sizes.reduce((sum, size) => sum + size * 1.2, 0) + gap * (sizes.length - 1);
-
-  const plateHeight = bodyHeight + pad * 2;
-  const plate: Rect = {
-    name: "victoryPlate",
-    x: Math.round(WIDTH * 0.03),
-    y: Math.round(bandTop + (band - plateHeight) / 2),
-    w: WIDTH - Math.round(WIDTH * 0.03) * 2,
-    h: plateHeight,
-  };
-
-  let y = plate.y + pad;
-  const lines = texts.map((text, i) => {
-    const size = sizes[i]!;
-    const w = textWidth(text, size);
-    const rect: Rect = {
-      name: names[i]!,
-      x: WIDTH / 2 - w / 2,
-      y,
-      w,
-      h: size * 1.2,
-    };
-    y += size * 1.2 + gap;
-    return { name: names[i]!, text, rect, size, accent: i === 1 };
-  });
-
-  return { plate, lines, winner: won ? "challenger" : "opponent", hpLeft };
-}
 
 export interface DamageNumberAnchors {
   /** `outward` points away from the opponent, so numbers clear the faces. */
