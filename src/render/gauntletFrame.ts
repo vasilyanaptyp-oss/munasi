@@ -15,14 +15,12 @@ import {
   gauntletFrameLayout,
   hudLayout,
   MINION_OUTLINE,
-  numberJitter,
   numberText,
   type GauntletFrameLayout,
   type HudMetrics,
   type Rect,
 } from "./gauntletLayout.js";
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
-import { worldToScreen } from "./gauntletCamera.js";
 import { drawPhoto } from "./photo.js";
 import { drawSignatures, SIGNATURE_KINDS, type SignatureKind } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
@@ -272,88 +270,7 @@ function drawOverlay(ctx: Ctx, metrics: HudMetrics, cam: { dx: number; dy: numbe
   ctx.textAlign = "left";
 }
 
-/** Frames an impact mark stays on screen. Measured off the reference: ~9. */
-const IMPACT_FRAMES = 9;
 
-/**
- * The blow itself, drawn where it landed.
- *
- * This is the answer to the video's biggest defect: numbers used to appear over
- * a fighter standing alone in an empty half of the arena, with nothing on screen
- * saying where the damage had come from. Traced through the reference, every hit
- * is marked at the point of contact — a spray of short red slashes, a few pale
- * speed lines across them, and an orange "!" riding just above. The victim
- * flashes white and the number floats off them, but it is this mark that tells a
- * viewer *that two things just met here*.
- *
- * Events carry `atX`/`atY` in arena units, so the mark rides the camera with
- * everything else.
- */
-function drawImpacts(
-  ctx: Ctx,
-  index: RenderIndex,
-  frame: number,
-  cam: { dx: number; dy: number },
-): void {
-  // Inside the walls, like everything else the fight draws — see the note in
-  // `drawSignatures`. A blow landed against a wall used to scuff the blue field
-  // outside the square.
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(
-    ARENA.inner.x + cam.dx,
-    ARENA.inner.y + cam.dy,
-    ARENA.inner.w,
-    ARENA.inner.h,
-  );
-  ctx.clip();
-  for (let back = IMPACT_FRAMES; back >= 0; back -= 1) {
-    const f = frame - back;
-    if (f < 0) continue;
-    for (const event of eventsAt(index, f)) {
-      if (event.type !== "hit" && event.type !== "crit") continue;
-      if (event.atX === undefined || event.atY === undefined) continue;
-      const at = worldToScreen(event.atX, event.atY, cam);
-      const age = back / IMPACT_FRAMES;
-      const alpha = 1 - age;
-      const reach = WIDTH * (event.type === "crit" ? 0.075 : 0.055) * (0.8 + age * 0.5);
-      const spin = numberJitter(`${event.frame}:${event.actorId}:impact`, Math.PI);
-
-      ctx.save();
-      ctx.translate(at.x, at.y);
-      ctx.rotate(spin);
-      ctx.globalAlpha = alpha;
-      ctx.lineCap = "round";
-
-      // **A scuff, not a sparkle.** Two goes at this were wrong in opposite
-      // directions: first four red slashes laid across two pale speed lines,
-      // which crossed into noughts and crosses; then six spokes evenly round a
-      // centre, which is the exact recipe for a cartoon sun. Both are shapes the
-      // eye names instead of reading.
-      //
-      // The reference marks a blow with a few short slashes going roughly one
-      // way, like something was dragged across. So: three strokes, fanned
-      // within a narrow arc, unequal, offset from the centre — nothing radiates,
-      // nothing crosses, and there is no symmetry to resolve into a star.
-      ctx.strokeStyle = C.damageText;
-      ctx.lineWidth = Math.max(4, WIDTH * 0.009);
-      const slashes: [number, number, number][] = [
-        [-0.35, -0.55, 1.0],
-        [0.05, 0.1, 0.78],
-        [0.4, 0.7, 0.6],
-      ];
-      for (const [ox, oy, len] of slashes) {
-        ctx.beginPath();
-        ctx.moveTo(ox * reach, oy * reach - len * reach * 0.5);
-        ctx.lineTo(ox * reach + reach * 0.28, oy * reach + len * reach * 0.5);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
 
 function drawDamageNumbers(
   ctx: Ctx,
@@ -533,9 +450,10 @@ export function renderGauntletFrame(
     }
   }
 
-  // Under the numbers, over the fighters: the mark is the cause, the number
-  // is the readout.
-  drawImpacts(ctx, index, frame, layout.camera);
+  // **No drawn impact mark.** It was three yellow slashes at the point of
+  // contact — illustration, like the ability effects that went with it. What
+  // marks a blow now is what marks it in the reference: the victim flashes to a
+  // solid white silhouette and a yellow number climbs off him.
 
   // Signatures go over the fighters and under the overlay: they are the scene's
   // biggest moment, but the title still has to be readable through one.

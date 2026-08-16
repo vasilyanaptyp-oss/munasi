@@ -57,6 +57,17 @@ const props = new Map<string, Image>(
 );
 
 /** A thrown prop, e.g. the pair of spectacles `FOUR EYES` puts in the air. */
+/**
+ * Is there a picture for this prop?
+ *
+ * An ability whose PNG has not been supplied yet draws nothing at all — see the
+ * note at the top of `signatures.ts`. That is a shippable state, so a missing
+ * file must be a quiet no, not the throw `propImage` gives.
+ */
+export function hasProp(id: string): boolean {
+  return props.has(id);
+}
+
 export function propImage(id: string): Image {
   const image = props.get(id);
   if (!image) throw new Error(`no prop ${id} — expected assets/props/${id}.png`);

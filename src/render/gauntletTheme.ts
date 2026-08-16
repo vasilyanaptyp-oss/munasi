@@ -69,42 +69,6 @@ export const GAUNTLET_COLORS = {
   hpDigitsOnDark: "#e9ecec",
 } as const;
 
-/**
- * **Each ability has its own colours. The damage numbers do not.**
- *
- * Measured off the reference channel's own signatures: Fireworks Guy throws
- * bright green and hot orange, Exploding Guy is an orange-and-yellow fireball
- * with dark smoke, Time Traveler Guy runs red seven-segment digits on a black
- * panel, Guitar Guy's fret pads are green, red, yellow, blue and orange all at
- * once. Every floating number in every one of those frames is the same yellow.
- *
- * The single-colour rule was read off the numbers and then applied to the
- * effects as well, which is what made four characters' abilities look like one
- * character's ability drawn four times.
- */
-export const ABILITY_COLOURS = {
-  /** MAGNETIC NORTH: an actual compass — cream face, red north needle. */
-  compassFace: "#f2ead6",
-  compassRim: "#20262b",
-  compassNorth: "#e0372a",
-  compassSouth: "#f4f6f7",
-  /** The filings it drags, and the pull line. */
-  magnetPull: "#e0372a",
-
-  /** NOBODY MOVES: hazard tape. */
-  tapeRed: "#e0372a",
-  tapeWhite: "#f7f7f4",
-
-  /** HAYMAKER: the comic impact star, filled in bands from the outside in. */
-  impactOuter: "#f2540b",
-  impactMid: "#ffb01f",
-  impactCore: "#fff3b0",
-
-  /** GLASSES: cold glass against the boxer's hot star. */
-  glassEdge: "#bfe9ff",
-  glassFacet: "#ffffff",
-} as const;
-
 /** Fractions of frame width or height. See the note above on which are measured. */
 const F = {
   /**
