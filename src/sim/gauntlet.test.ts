@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
-import { buildGauntlet, combinations, gauntletMatchups, GAUNTLET_RULES, byFaction } from "../content/teams.js";
+import { GAUNTLET_TUNING, buildGauntlet, combinations, gauntletMatchups, GAUNTLET_RULES, byFaction } from "../content/teams.js";
 import { findColdOpen } from "./coldOpen.js";
 import {
   findBestGauntlet,
@@ -169,7 +169,11 @@ describe("teams from factions", () => {
     const plain = getFighter("compass", roster);
     const built = buildGauntlet(plain, [getFighter("bodyguard", roster)]);
     expect(built.challenger.maxHp).toBe(plain.maxHp);
-    expect(built.challenger.attack).toBeGreaterThan(plain.attack);
+    // Scaled, not passed through. Which *way* it scales is `tempo`'s business
+    // and it moves with fight length — this used to assert "greater", which was
+    // only ever true because tempo happened to sit above 1.
+    expect(built.challenger.attack).not.toBe(plain.attack);
+    expect(built.challenger.attack).toBeCloseTo(plain.attack * GAUNTLET_TUNING.tempo, 6);
     expect(built.team.members[0]!.maxHp).toBe(getFighter("bodyguard", roster).maxHp);
   });
 });

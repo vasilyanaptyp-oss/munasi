@@ -43,6 +43,24 @@ export const DAMAGE_VARIANCE = 0.35;
 export const SIGNATURE_LEAD_SECONDS = 0.35;
 
 /**
+ * Seconds between one pulse of a cast and the next.
+ *
+ * Exported for the same reason as the lead: a four-glass volley has to arrive on
+ * the frames its four numbers appear on, so the renderer spaces the objects it
+ * throws by exactly this.
+ */
+export const SIGNATURE_PULSE_SECONDS = 0.22;
+
+/**
+ * Damage one signature pulse deals, as a share of the caster's attack.
+ *
+ * Exported because the calibrator has to solve `attack` from the total damage a
+ * fighter puts out, and for these four fighters most of that total arrives
+ * through here. See `analyticAttack`.
+ */
+export const SIGNATURE_PULSE_SHARE = 1.33;
+
+/**
  * How much faster Boxer Guy travels while closing for `HAYMAKER`.
  *
  * Enough to cross most of a typical gap inside the lead time, so the punch
@@ -415,21 +433,42 @@ export function simulate(
    * at best, against the reference's 1.20s between blows, and its own worst gap
    * of 4.87s. The pulses fill exactly the stretches where nobody is touching.
    */
-  const SIGNATURE_PULSES = 1;
-  /** Damage per pulse, as a share of the caster's attack. Solved by bisection. */
-  const SIGNATURE_PULSE_SHARE = 1.33;
-  const SIGNATURE_FIRST_TICK = Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
-  const SIGNATURE_PULSE_GAP = Math.round(0.5 * TICKS_PER_SECOND);
-  const pulses: { atTick: number; side: Side; knockback: boolean }[] = [];
 
-  const scheduleSignature = (state: FighterState, knockback = false): void => {
-    for (let i = 0; i < SIGNATURE_PULSES; i += 1) {
+  const SIGNATURE_FIRST_TICK = Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
+  /**
+   * Ticks between pulses of one cast.
+   *
+   * Tight enough that a four-glass volley is over inside the effect's own 1.4s
+   * animation: the last of four lands at 1.01s. At the old half-second spacing
+   * the fourth arrived after the glasses had stopped being drawn, so a number
+   * appeared with nothing attached to it.
+   */
+  const SIGNATURE_PULSE_GAP = Math.round(SIGNATURE_PULSE_SECONDS * TICKS_PER_SECOND);
+  const pulses: { atTick: number; side: Side; knockback: boolean; share: number }[] = [];
+
+  /**
+   * Schedules one cast's worth of hits and returns how many there are, so the
+   * caller can put the count in the event and the renderer can draw exactly
+   * that many objects in flight.
+   */
+  const scheduleSignature = (
+    state: FighterState,
+    ability: Ability,
+    knockback = false,
+  ): number => {
+    const range = ability.pulses;
+    const count = range
+      ? Math.round(state.rng.range(range[0], range[1] + 0.999 - 1e-9))
+      : 1;
+    for (let i = 0; i < count; i += 1) {
       pulses.push({
         atTick: tick + SIGNATURE_FIRST_TICK + i * SIGNATURE_PULSE_GAP,
         side: state.side,
         knockback,
+        share: ability.hitShare ?? 1,
       });
     }
+    return count;
   };
 
   const castAbility = (state: FighterState, ability: Ability): void => {
@@ -440,7 +479,7 @@ export function simulate(
       case "magnetic_north": {
         const heading = movementRng[state.side].range(0, Math.PI * 2);
         setHeading(movement[enemy.side], heading);
-        scheduleSignature(state);
+        scheduleSignature(state, ability);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -472,7 +511,7 @@ export function simulate(
           HAYMAKER_DASH,
           tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND),
         );
-        scheduleSignature(state, true);
+        scheduleSignature(state, ability, true);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -490,20 +529,23 @@ export function simulate(
        * arena is the whole gag.
        */
       case "four_eyes": {
-        scheduleSignature(state);
+        // The count is rolled here and carried in the event, so the renderer
+        // throws exactly as many pairs as land. Deriving it separately in the
+        // render layer would let the picture and the health bar disagree.
+        const thrown = scheduleSignature(state, ability);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
           actorId: state.base.id,
           targetId: enemy.base.id,
-          value: 0,
+          value: thrown,
         });
         break;
       }
       // NOBODY MOVES. He lowers the sunglasses and the arena stops.
       case "nobody_moves": {
         movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
-        scheduleSignature(state);
+        scheduleSignature(state, ability);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -634,6 +676,10 @@ export function simulate(
         const isCrit = side.rng.chance(side.base.critChance);
         const raw =
           effectiveAttack(side) *
+          // What this fighter is worth in a collision — see `meleeShare`. The
+          // boxer's is the heaviest number on screen; the man who throws his
+          // glasses barely registers when you bump into him.
+          (side.base.meleeShare ?? 1) *
           (isCrit ? side.base.critMult : 1) *
           comebackMultiplier(side, rubberBand);
         landed.push({ side, dealt: rollDamage(side.rng, raw), crit: isCrit });
@@ -674,6 +720,7 @@ export function simulate(
       const raw =
         effectiveAttack(caster) *
         SIGNATURE_PULSE_SHARE *
+        pulse.share *
         (isCrit ? caster.base.critMult : 1) *
         comebackMultiplier(caster, rubberBand);
       const dealt = damageFighter(victim, rollDamage(caster.rng, raw));

@@ -34,6 +34,15 @@ function parseAbility(raw: unknown, label: string): Ability {
     power: assertNumber(r["power"], `${label}.power`),
   };
   if (r["duration"] !== undefined) ability.duration = assertNumber(r["duration"], `${label}.duration`);
+  if (r["hitShare"] !== undefined) ability.hitShare = assertNumber(r["hitShare"], `${label}.hitShare`);
+  if (r["pulses"] !== undefined) {
+    const p = r["pulses"];
+    if (!Array.isArray(p) || p.length !== 2) throw new Error(`${label}.pulses: expected [min, max]`);
+    const min = assertNumber(p[0], `${label}.pulses[0]`);
+    const max = assertNumber(p[1], `${label}.pulses[1]`);
+    if (min < 1 || max < min) throw new Error(`${label}.pulses: ${min}..${max} is not a range of at least one`);
+    ability.pulses = [min, max];
+  }
   if (r["minion"] !== undefined) {
     const m = r["minion"] as Record<string, unknown>;
     ability.minion = {
@@ -68,11 +77,25 @@ function parseFighter(raw: unknown, index: number): Fighter {
     attackSpeed: assertNumber(r["attackSpeed"], `${label}.attackSpeed`),
     critChance: assertNumber(r["critChance"], `${label}.critChance`),
     critMult: assertNumber(r["critMult"], `${label}.critMult`),
+    ...(r["meleeShare"] === undefined
+      ? {}
+      : { meleeShare: assertNumber(r["meleeShare"], `${label}.meleeShare`) }),
     abilities,
   };
 }
 
-/** Reads and validates the roster. Throws on anything malformed. */
+/**
+ * Reads and validates the roster. Throws on anything malformed.
+ *
+ * **Every field a fighter has must be listed in the parser above.** It builds
+ * its objects field by field rather than spreading, which is the right call for
+ * a file read off disk — but it means a new field is dropped in silence.
+ * `meleeShare`, `pulses` and `hitShare` were all added to the roster, written
+ * correctly into `fighters.json`, used by the calibrator (which reads the spec
+ * directly) — and then thrown away here, so the shipped videos ran on none of
+ * them while every number in the calibration assumed they were live. The boxer
+ * came out of that *weaker* than the man who throws his glasses.
+ */
 export function loadFighters(path = ROSTER_PATH): Fighter[] {
   const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
   if (!Array.isArray(raw)) throw new Error(`${path}: expected an array of fighters`);

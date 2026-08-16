@@ -50,6 +50,13 @@ export interface FighterSpec {
   attackSpeed: number;
   critChance: number;
   critMult: number;
+  /**
+   * How hard this one hits **by running into the other**, relative to everyone
+   * else. See `Fighter.meleeShare` — this is where fighting style lives, and it
+   * is kept out of `attack` because `attack` is solved by the calibrator and
+   * would undo it on the next run.
+   */
+  meleeShare?: number;
   abilities: Ability[];
   /**
    * Manual correction applied on top of the automatic calibration, for a
@@ -97,7 +104,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9294,
+    fieldScale: 0.9961,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -111,7 +118,7 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0247,
+    fieldScale: 1.0516,
   },
 
   /*
@@ -132,10 +139,17 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 1.05,
     critChance: 0.34,
     critMult: 2.7,
+    /**
+     * **He is the one with the heavy hands.** Running into Boxer Guy is the
+     * biggest number in the video — that is what a boxer is, and it was not
+     * true here: every fighter dealt the same contact damage and the boxer was
+     * distinguishable only by an effect nobody could read.
+     */
+    meleeShare: 1.9,
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
-    abilities: [{ type: "haymaker", cooldown: 5, power: 0 }],
-    fieldScale: 0.9647,
+    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.8 }],
+    fieldScale: 0.9755,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -147,7 +161,16 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 0.95,
     critChance: 0.28,
     critMult: 2.8,
-    abilities: [{ type: "four_eyes", cooldown: 6, power: 0 }],
-    fieldScale: 0.9793,
+    /**
+     * **He does not brawl.** Bumping into Glasses Guy barely registers;
+     * everything he is worth comes off the volley. He was hitting exactly as
+     * hard in a collision as the boxer, which left two characters who behaved
+     * identically and differed only in the picture.
+     */
+    meleeShare: 0.35,
+    // Two to four pairs, rolled per cast, each arriving on its own with its own
+    // number. The count is the gag: you watch them land and you can count them.
+    abilities: [{ type: "four_eyes", cooldown: 9, power: 0, pulses: [2, 4] }],
+    fieldScale: 0.9769,
   },
 ];

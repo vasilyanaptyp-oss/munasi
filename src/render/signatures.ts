@@ -1,7 +1,7 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import type { MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
-import { SIGNATURE_LEAD_SECONDS } from "../sim/simulate.js";
+import { SIGNATURE_LEAD_SECONDS, SIGNATURE_PULSE_SECONDS } from "../sim/simulate.js";
 import { GAUNTLET_COLORS as C } from "./gauntletTheme.js";
 import { propImage } from "./photo.js";
 
@@ -45,6 +45,14 @@ type Ctx = SKRSContext2D;
 export const SIGNATURE_FRAMES = Math.round(FPS * 1.4);
 /** Frames from the cast to the moment it bites. Matched to the simulation. */
 export const SIGNATURE_TRAVEL_FRAMES = Math.round(FPS * SIGNATURE_LEAD_SECONDS);
+/**
+ * Frames between one thrown pair of glasses and the next.
+ *
+ * The same gap the simulation spaces a cast's pulses at, so the nth pair lands
+ * on the frame the nth number appears. Drifting apart here is the difference
+ * between a volley and a decoration.
+ */
+export const FOUR_EYES_STAGGER_FRAMES = Math.round(FPS * SIGNATURE_PULSE_SECONDS);
 
 export interface ArenaBox {
   x: number;
@@ -187,12 +195,18 @@ function magneticNorth(
  *
  * **He does not throw anything.** He is a boxer: he closes the distance and
  * hits you from in range. The simulation dashes him at the other man for
- * exactly the lead time, so what this draws is the charge — a trail behind him
- * along the line he is travelling, and the punch landing where he arrives. The
- * blow itself is the impact burst on the victim, which every hit already gets.
+ * exactly the lead time, so this draws the charge and then the punch landing.
  *
- * It used to send a cartoon glove flying across the arena, which is a different
- * character entirely.
+ * It used to draw the charge and stop there — a thin trail streaming off him
+ * and nothing at the far end, so the biggest hit in the video arrived as three
+ * small scuffs identical to the ones a bump gives you. There was no punch on
+ * screen. Now the arrival is its own event: a shockwave arc across the victim,
+ * facing back at the man who threw it, and a fan of heavy strokes carrying on
+ * **in the punch's direction**.
+ *
+ * One-sided on purpose. Anything that radiates evenly from a centre reads as a
+ * cartoon sun — that mistake has been made here once already — and a punch is
+ * not symmetric anyway: it comes from somewhere and it sends you somewhere.
  */
 function haymaker(
   ctx: Ctx,
@@ -207,32 +221,71 @@ function haymaker(
   const heading = Math.atan2(to.y - from.y, to.x - from.x);
   const back = heading + Math.PI;
 
+  // The charge: a trail streaming off him, because it is the man that moved.
+  if (travel < 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha * (1 - travel * 0.35);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = C.damageText;
+    ctx.lineWidth = Math.max(5, scale * 0.05);
+    const reach = scale * (0.8 + travel * 1.4);
+    for (const off of [-0.55, 0, 0.55]) {
+      const nx = Math.cos(back + Math.PI / 2) * scale * 0.32 * off;
+      const ny = Math.sin(back + Math.PI / 2) * scale * 0.32 * off;
+      const len = reach * (off === 0 ? 1 : 0.65);
+      ctx.beginPath();
+      ctx.moveTo(from.x + nx + Math.cos(back) * scale * 0.35, from.y + ny + Math.sin(back) * scale * 0.35);
+      ctx.lineTo(from.x + nx + Math.cos(back) * len, from.y + ny + Math.sin(back) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  // The punch. Runs for the third of a second after it lands, over the frames
+  // where the number is already climbing off the victim.
+  const since = (age - SIGNATURE_TRAVEL_FRAMES) / (SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES);
+  const grow = Math.min(1, since * 3.2);
   ctx.save();
-  ctx.globalAlpha = alpha * (1 - travel * 0.35);
+  ctx.globalAlpha = alpha * Math.max(0, 1 - since);
+  ctx.translate(to.x, to.y);
+  ctx.rotate(heading);
   ctx.lineCap = "round";
-  // The trail streams off him, not off a projectile: it is the man that moved.
   ctx.strokeStyle = C.damageText;
-  ctx.lineWidth = Math.max(4, scale * 0.035);
-  const reach = scale * (0.8 + travel * 1.4);
-  for (const off of [-0.55, 0, 0.55]) {
-    const nx = Math.cos(back + Math.PI / 2) * scale * 0.32 * off;
-    const ny = Math.sin(back + Math.PI / 2) * scale * 0.32 * off;
-    const len = reach * (off === 0 ? 1 : 0.65);
+
+  // Shockwave: an arc across the victim, opening back toward the boxer.
+  ctx.lineWidth = Math.max(6, scale * 0.09) * (1 - since * 0.6);
+  ctx.beginPath();
+  ctx.arc(0, 0, scale * (0.32 + grow * 0.45), Math.PI * 0.62, Math.PI * 1.38);
+  ctx.stroke();
+
+  // And the follow-through, carrying on the way the punch was going.
+  ctx.lineWidth = Math.max(4, scale * 0.055);
+  for (const [spread, len] of [[-0.34, 0.9], [0, 1.15], [0.34, 0.78]] as const) {
+    const a = spread;
+    const near = scale * (0.34 + grow * 0.3);
+    const far = near + scale * len * grow * 0.7;
     ctx.beginPath();
-    ctx.moveTo(from.x + nx + Math.cos(back) * scale * 0.35, from.y + ny + Math.sin(back) * scale * 0.35);
-    ctx.lineTo(from.x + nx + Math.cos(back) * len, from.y + ny + Math.sin(back) * len);
+    ctx.moveTo(Math.cos(a) * near, Math.sin(a) * near);
+    ctx.lineTo(Math.cos(a) * far, Math.sin(a) * far);
     ctx.stroke();
   }
   ctx.restore();
-
 }
 
 /**
  * FOUR EYES — Glasses Guy.
  *
- * He flings a fan of spectacles. They leave him together, spread on the way
- * over, and arrive on the same frame — a scatter rather than one projectile, so
- * the volley reads even when it crosses a busy arena.
+ * **He throws two to four pairs, and the count is the point.** The number is
+ * rolled in the simulation and carried on the event, so what flies across the
+ * arena is exactly what comes off the health bar — you can count the glasses
+ * and count the numbers and get the same answer.
+ *
+ * They leave together and land one after another, spaced by the same gap the
+ * simulation schedules its pulses at, each on its own lane. Before this they
+ * were always three, always arriving on the same frame, and the damage behind
+ * them was a single lump: the picture and the fight were telling different
+ * stories.
  */
 function fourEyes(
   ctx: Ctx,
@@ -240,37 +293,38 @@ function fourEyes(
   to: Point,
   age: number,
   scale: number,
+  count: number,
 ): void {
   const t = Math.min(1, age / SIGNATURE_FRAMES);
-  const travel = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
   const alpha = t > 0.7 ? Math.max(0, (1 - t) / 0.3) : 1;
-  const p = ease(travel);
   const heading = Math.atan2(to.y - from.y, to.x - from.x);
   const across = heading + Math.PI / 2;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  // **The actual pair of spectacles**, not a drawing of one. The owner sent the
-  // image for exactly this, and a photograph's worth of detail spinning across
-  // the arena reads as the character's own prop in a way two ellipses and a
-  // bridge never did.
   const sprite = propImage("glasses");
   const gw = scale * 0.62;
   const gh = (gw * sprite.height) / sprite.width;
-  // Bow out at the midpoint and close again on the target, so the fan is widest
-  // where there is room for it and tightest where it lands.
-  const spread = Math.sin(p * Math.PI) * scale * 0.55;
-  for (const lane of [-1, 0, 1]) {
-    const cx = from.x + (to.x - from.x) * p + Math.cos(across) * spread * lane;
-    const cy = from.y + (to.y - from.y) * p + Math.sin(across) * spread * lane;
+  const thrown = Math.max(1, Math.min(6, Math.round(count)));
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < thrown; i += 1) {
+    // Each pair is on the road for the lead time, starting `i` gaps late — the
+    // same schedule the pulses land on.
+    const travel = (age - i * FOUR_EYES_STAGGER_FRAMES) / SIGNATURE_TRAVEL_FRAMES;
+    if (travel < 0 || travel > 1) continue;
+    const p = ease(travel);
+    // Lanes fan out from the middle: -1, 1, -2, 2 ... so an odd count is
+    // centred and an even one is symmetric.
+    const lane = (Math.floor(i / 2) + 1) * (i % 2 === 0 ? -1 : 1) * (thrown === 1 ? 0 : 1);
+    const spread = Math.sin(p * Math.PI) * scale * 0.34 * lane;
+    const cx = from.x + (to.x - from.x) * p + Math.cos(across) * spread;
+    const cy = from.y + (to.y - from.y) * p + Math.sin(across) * spread;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(heading + travel * Math.PI * 4 * (lane === 0 ? 1 : lane));
+    ctx.rotate(heading + travel * Math.PI * 4 * (lane === 0 ? 1 : Math.sign(lane)));
     ctx.drawImage(sprite, -gw / 2, -gh / 2, gw, gh);
     ctx.restore();
   }
   ctx.restore();
-
 }
 
 /**
@@ -382,7 +436,7 @@ export function drawSignatures(
     casterRing(ctx, from, age, fighterScale, C.damageText);
     if (kind === "magnetic_north") magneticNorth(ctx, from, to, age, fighterScale);
     else if (kind === "haymaker") haymaker(ctx, from, to, age, fighterScale);
-    else if (kind === "four_eyes") fourEyes(ctx, from, to, age, fighterScale);
+    else if (kind === "four_eyes") fourEyes(ctx, from, to, age, fighterScale, event.value);
     else nobodyMoves(ctx, from, to, age, fighterScale);
   }
   ctx.restore();

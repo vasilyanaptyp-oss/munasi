@@ -47,6 +47,26 @@ export interface Ability {
   duration?: number;
   /** `spawn_minion` only: explicit stats instead of the derived ones. */
   minion?: MinionSpec;
+  /**
+   * How many separate hits one cast lands, as `[min, max]` rolled per cast.
+   * Defaults to one.
+   *
+   * This is what makes a thrower a thrower: Glasses Guy's cast is 2-4 pairs of
+   * spectacles, each arriving on its own and each carrying its own number, so
+   * what the viewer counts on screen is what came off the health bar. The rest
+   * cast once and hit once.
+   */
+  pulses?: [number, number];
+  /**
+   * Weight of each of this ability's hits, relative to the standard signature
+   * pulse. Defaults to one.
+   *
+   * A haymaker is supposed to be the hardest thing that happens to you, and it
+   * was landing the *smallest* number in the video: every ability dealt one
+   * standard pulse, so the boxer's big swing came in under his own ordinary
+   * punches. Few and heavy for him; many and light for a man throwing glasses.
+   */
+  hitShare?: number;
 }
 
 export interface Fighter {
@@ -73,6 +93,22 @@ export interface Fighter {
   critChance: number;
   /** Damage multiplier on a crit, e.g. 2 for double damage. */
   critMult: number;
+  /**
+   * Multiplier on the damage this fighter deals **by running into the other
+   * one**, separately from what its ability deals. Defaults to 1.
+   *
+   * This is where a character's fighting style lives, and it is the difference
+   * between two figures that behave the same and two that do not. A boxer hits
+   * you when he reaches you: he is the one with the heavy hands, and his
+   * contact damage should be the biggest number in the video. A man who throws
+   * his glasses across the arena does not brawl — bumping into him should
+   * barely register, and everything he is worth arrives from range.
+   *
+   * Kept apart from `attack` because `attack` is *solved* by the calibrator to
+   * even the fighters out. Folding style into it would have the calibrator undo
+   * the style on its next run.
+   */
+  meleeShare?: number;
   abilities: Ability[];
 }
 

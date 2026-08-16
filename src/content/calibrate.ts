@@ -1,9 +1,10 @@
 import { writeFileSync } from "node:fs";
-import { simulate } from "../sim/simulate.js";
+import { simulate, SIGNATURE_PULSE_SHARE } from "../sim/simulate.js";
 import type { Fighter } from "../sim/types.js";
 import { isMain } from "../util/main.js";
 import { ROSTER, type FighterSpec } from "./roster.js";
 import { ROSTER_PATH } from "./index.js";
+import { GAUNTLET_RULES } from "./teams.js";
 import { spriteAspect } from "./cutout.js";
 
 /**
@@ -37,8 +38,27 @@ const REFERENCE_CRIT_MULT = 2.6;
 
 /** Matches per probe while bisecting, and how many halvings to run. */
 const CALIBRATION_SAMPLE = 200;
-const BISECTION_STEPS = 13;
-const SCALE_RANGE: [number, number] = [0.4, 2.2];
+const BISECTION_STEPS = 15;
+/**
+ * Bracket the bisection searches.
+ *
+ * **Wide, and checked.** A fighter whose style multipliers push the answer
+ * outside this range does not fail loudly — bisection just walks to the nearest
+ * bound and reports it as the answer. That has now happened twice: most recently
+ * `meleeShare 1.9` plus `hitShare 2.8` on Boxer Guy put his answer under 0.4, so
+ * he pinned to the bound and calibrated to an 83.5% winrate against a dummy he
+ * is supposed to split with. `assertBracketed` below turns that into an error
+ * instead of a silently wrong roster.
+ */
+const SCALE_RANGE: [number, number] = [0.08, 3.0];
+
+/** Abilities that deal their damage through signature pulses. */
+const SIGNATURE_ABILITIES = new Set<string>([
+  "magnetic_north",
+  "nobody_moves",
+  "haymaker",
+  "four_eyes",
+]);
 
 /** Fallback minion stats when an ability declares no explicit block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
@@ -92,9 +112,30 @@ export function analyticAttack(spec: FighterSpec): number {
     }
   }
 
+  /**
+   * Everything that scales with `attack`, per second.
+   *
+   * Two routes, and both of them matter now that fighters have a style:
+   * running into the other man (`meleeShare`, gated by `attackSpeed`) and the
+   * signature (`hitShare` and how many pulses it lands, gated by its cooldown).
+   *
+   * Leaving these out is what put Boxer Guy's answer outside the bisection
+   * bracket and left Glasses Guy needing a `fieldScale` of 0.72 to be even —
+   * a correction four times larger than the "few percent" this knob is for.
+   * The closed form is not expected to be exact; it is expected to land close
+   * enough that the bisection converges inside its bracket and `fieldScale` is
+   * left with a nudge rather than the whole job.
+   */
+  let perAttack = (spec.meleeShare ?? 1) * spec.attackSpeed;
+  for (const ability of spec.abilities) {
+    if (!SIGNATURE_ABILITIES.has(ability.type)) continue;
+    const pulses = ability.pulses ? (ability.pulses[0] + ability.pulses[1]) / 2 : 1;
+    perAttack += (SIGNATURE_PULSE_SHARE * (ability.hitShare ?? 1) * pulses) / ability.cooldown;
+  }
+
   const effectiveHp = spec.maxHp + healPerSecond * MIRROR_TTK;
   const critFactor = 1 + spec.critChance * (spec.critMult - 1);
-  return Math.max(1, (POWER / effectiveHp - abilityDps) / (spec.attackSpeed * critFactor * buffFactor));
+  return Math.max(1, (POWER / effectiveHp - abilityDps) / (perAttack * critFactor * buffFactor));
 }
 
 /**
@@ -114,6 +155,9 @@ export function scaleSpec(spec: FighterSpec, attack: number, scale: number): Fig
     attackSpeed: spec.attackSpeed,
     critChance: spec.critChance,
     critMult: spec.critMult,
+    // Style, not power: carried through untouched so the calibrator's search on
+    // `attack` cannot flatten it back out.
+    ...(spec.meleeShare === undefined ? {} : { meleeShare: spec.meleeShare }),
     abilities: spec.abilities.map((ability) => {
       if (ability.minion) {
         return { ...ability, minion: { ...ability.minion, attack: ability.minion.attack * scale } };
@@ -124,12 +168,31 @@ export function scaleSpec(spec: FighterSpec, attack: number, scale: number): Fig
   };
 }
 
-/** Winrate against the reference dummy, sides alternated so position cancels. */
+/**
+ * Winrate against the reference dummy, sides alternated so position cancels.
+ *
+ * **Measured under the rules the videos are actually shot with.** It used to run
+ * a bare duel — no `attackRate`, no shortened opening — and that is a different
+ * game: pacing the basic attack down to a third of its rate leaves contact
+ * damage a third as frequent while abilities stay on their own clock, so the
+ * mix a fighter's damage arrives in shifts completely. A fighter who mostly
+ * punches measured strong there and shipped weak; one who mostly throws
+ * measured weak and shipped strong.
+ *
+ * The symptom was `fieldScale` — the "keep it within a few percent of 1" knob —
+ * being dragged to 1.19 and 0.75 to undo a calibration that had evened the
+ * wrong game. `pnpm balance` was moved onto the shipped rules for exactly this
+ * reason a while back; the calibrator was left behind.
+ */
 export function winRateVsReference(fighter: Fighter, sample = CALIBRATION_SAMPLE): number {
   let wins = 0;
   for (let seed = 0; seed < sample; seed += 1) {
     const swap = seed % 2 === 1;
-    const result = simulate(swap ? { a: REFERENCE, b: fighter } : { a: fighter, b: REFERENCE }, seed);
+    const result = simulate(
+      swap ? { a: REFERENCE, b: fighter } : { a: fighter, b: REFERENCE },
+      seed,
+      GAUNTLET_RULES,
+    );
     if (result.winner === "draw") wins += 0.5;
     else if (swap ? result.winner === "b" : result.winner === "a") wins += 1;
   }
@@ -144,6 +207,23 @@ export interface CalibratedFighter {
   winRate: number;
 }
 
+/**
+ * Fails loudly when the bisection ended against a bound rather than on an
+ * answer. See `SCALE_RANGE` — a pinned search reports the bound as the result
+ * and the fighter ships wildly mis-tuned, which is silent until someone plays
+ * the videos.
+ */
+function assertBracketed(id: string, scale: number): void {
+  const [lo, hi] = SCALE_RANGE;
+  const margin = (hi - lo) * 0.02;
+  if (scale <= lo + margin || scale >= hi - margin) {
+    throw new Error(
+      `calibrate: ${id} solved to ${scale.toFixed(3)}, against the edge of the ` +
+        `[${lo}, ${hi}] bracket — the answer is outside it, so this is a bound, not a solution.`,
+    );
+  }
+}
+
 export function calibrate(specs: FighterSpec[] = ROSTER): CalibratedFighter[] {
   return specs.map((spec) => {
     const attack = analyticAttack(spec);
@@ -153,7 +233,9 @@ export function calibrate(specs: FighterSpec[] = ROSTER): CalibratedFighter[] {
       if (winRateVsReference(scaleSpec(spec, attack, mid)) < 0.5) lo = mid;
       else hi = mid;
     }
-    const scale = ((lo + hi) / 2) * (spec.fieldScale ?? 1);
+    const solved = (lo + hi) / 2;
+    assertBracketed(spec.id, solved);
+    const scale = solved * (spec.fieldScale ?? 1);
     const fighter = scaleSpec(spec, attack, scale);
     return { fighter, scale, winRate: winRateVsReference(fighter, 400) };
   });
@@ -173,6 +255,7 @@ function serialise(fighter: Fighter): unknown {
     attackSpeed: fighter.attackSpeed,
     critChance: fighter.critChance,
     critMult: fighter.critMult,
+    ...(fighter.meleeShare === undefined ? {} : { meleeShare: fighter.meleeShare }),
     abilities: fighter.abilities.map((ability) =>
       ability.minion
         ? { ...ability, minion: { ...ability.minion, attack: Math.round(ability.minion.attack * 10) / 10 } }
