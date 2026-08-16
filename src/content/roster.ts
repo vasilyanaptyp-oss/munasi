@@ -109,7 +109,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9936,
+    fieldScale: 1.0136,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -122,8 +122,10 @@ export const ROSTER: FighterSpec[] = [
     attackSpeed: 0.85,
     critChance: 0.24,
     critMult: 2.9,
-    abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0540,
+    // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
+    // freeze-and-tape he had before was a policeman's job, not his.
+    abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
+    fieldScale: 1.0091,
   },
 
   /*
@@ -160,7 +162,7 @@ export const ROSTER: FighterSpec[] = [
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 1.8 }],
-    fieldScale: 0.9694,
+    fieldScale: 0.9331,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -188,9 +190,9 @@ export const ROSTER: FighterSpec[] = [
      *   cast and carried on the event so exactly as many fly as land.
      */
     abilities: [
-      { type: "glasses_throw", cooldown: 7, power: 0, hitShare: 2.9 },
+      { type: "glasses_throw", cooldown: 9, power: 0, hitShare: 2.9 },
       { type: "four_eyes", cooldown: 14, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 0.9822,
+    fieldScale: 1.0406,
   },
 ];

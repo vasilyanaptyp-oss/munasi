@@ -5,7 +5,7 @@
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1000,
-    "attack": 16.1,
+    "attack": 16.4,
     "attackSpeed": 1.15,
     "critChance": 0.32,
     "critMult": 2.6,
@@ -23,16 +23,16 @@
     "spriteId": "bodyguard-guy",
     "aspect": 0.6286,
     "maxHp": 1000,
-    "attack": 20.7,
+    "attack": 16.3,
     "attackSpeed": 0.85,
     "critChance": 0.24,
     "critMult": 2.9,
     "abilities": [
       {
-        "type": "nobody_moves",
+        "type": "thrown_out",
         "cooldown": 6,
         "power": 0,
-        "duration": 1.4
+        "hitShare": 1.5
       }
     ]
   },
@@ -62,7 +62,7 @@
     "spriteId": "glasses-guy",
     "aspect": 0.8357,
     "maxHp": 1000,
-    "attack": 8.8,
+    "attack": 10.4,
     "attackSpeed": 0.95,
     "critChance": 0.28,
     "critMult": 2.8,
@@ -70,7 +70,7 @@
     "abilities": [
       {
         "type": "glasses_throw",
-        "cooldown": 7,
+        "cooldown": 9,
         "power": 0,
         "hitShare": 2.9
       },

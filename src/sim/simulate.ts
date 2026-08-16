@@ -67,6 +67,14 @@ export const SIGNATURE_PULSE_SHARE = 1.33;
  * lands from somewhere near the other man rather than across the square.
  */
 const HAYMAKER_DASH = 4.5;
+/**
+ * How much faster the man Bodyguard Guy has thrown travels, and for how long.
+ *
+ * Long enough to cross the square and reach a wall, so the throw ends where a
+ * throw should end: against something.
+ */
+const THROW_SPEED = 4.2;
+const THROW_SECONDS = 0.75;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
 const DERIVED_MINION_ATTACK_SPEED = 0.9;
@@ -511,6 +519,7 @@ export function simulate(
           heading,
           HAYMAKER_DASH,
           tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND),
+          true,
         );
         scheduleSignature(state, ability, true);
         events.push({
@@ -560,6 +569,42 @@ export function simulate(
           actorId: state.base.id,
           targetId: enemy.base.id,
           value: thrown,
+        });
+        break;
+      }
+      /**
+       * THROWN OUT — Bodyguard Guy.
+       *
+       * **He is a bouncer, so he throws you out.** He grabs whoever is in front
+       * of him and hurls them the length of the arena; they cross it at four
+       * times their own speed and hit the far wall.
+       *
+       * The ability he had was hazard tape and a freeze, and both were wrong.
+       * The tape is a *detective's* prop — it was copied off the reference's
+       * Detective Guy and put on the wrong man — and a bodyguard who stops the
+       * arena dead is doing a policeman's job. What a bodyguard does is move
+       * people, which is also the one verb this format is built out of: the
+       * whole picture is two figures crossing a square.
+       */
+      case "thrown_out": {
+        const away = Math.atan2(
+          movement[enemy.side].y - movement[state.side].y,
+          movement[enemy.side].x - movement[state.side].x,
+        );
+        dash(
+          movement[enemy.side],
+          away,
+          THROW_SPEED,
+          tick + Math.round(THROW_SECONDS * TICKS_PER_SECOND),
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: away,
         });
         break;
       }
@@ -660,6 +705,23 @@ export function simulate(
         castAbility(side, ability);
         side.abilityCooldowns[i] = ability.cooldown * TICKS_PER_SECOND;
       }
+    }
+
+    // **A charge homes on the man it was aimed at.**
+    //
+    // `HAYMAKER` used to set the heading once, at the moment of the cast, and
+    // then run for the lead time — during which the other man keeps bouncing and
+    // the boxer's own wall reflections re-steer him. So he arrived at where the
+    // target had been a third of a second ago, and the punch landed on empty
+    // arena while the number appeared on somebody standing elsewhere. Re-aiming
+    // every tick is what makes a charge a charge: he lands *on* him.
+    for (const side of [sides.a, sides.b]) {
+      const me = movement[side.side];
+      // Only a *charge* homes. A man who has been thrown flies where he was
+      // thrown — steering him back at the thrower would be a boomerang.
+      if (tick >= me.dashUntilTick || !me.dashHoming) continue;
+      const them = movement[opponentOf(side).side];
+      setHeading(me, Math.atan2(them.y - me.y, them.x - me.x));
     }
 
     // The bounce...

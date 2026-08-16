@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "boxer-vs-bodyguard-138.mp4",
+      "file": "boxer-vs-bodyguard-70.mp4",
       "fighters": [
         "boxer",
         "bodyguard"
@@ -10,17 +10,17 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 138,
+      "seed": 70,
       "dramaScore": 69.5,
-      "durationSeconds": 26.33,
-      "frames": 790,
+      "durationSeconds": 28.5,
+      "frames": 855,
       "winnerId": "boxer",
-      "sizeBytes": 7720014,
-      "generatedAt": "2026-08-16T20:04:37.903Z",
+      "sizeBytes": 7125244,
+      "generatedAt": "2026-08-16T20:42:38.275Z",
       "provenance": {
-        "commit": "26e9bbbd89ae23a661b0f109495ad36cb51a0aed",
+        "commit": "b3111b4192b3d4761a99ad3ed255f7df589da5e1",
         "dirty": true,
-        "rosterHash": "cd6f23fc617ba165",
+        "rosterHash": "3c7d706944052815",
         "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {
@@ -49,12 +49,12 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          27
+          23
         ]
       }
     },
     {
-      "file": "boxer-vs-glasses-61.mp4",
+      "file": "boxer-vs-glasses-113.mp4",
       "fighters": [
         "boxer",
         "glasses"
@@ -63,17 +63,17 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 61,
+      "seed": 113,
       "dramaScore": 69.6,
-      "durationSeconds": 31.17,
-      "frames": 935,
+      "durationSeconds": 28.57,
+      "frames": 857,
       "winnerId": "boxer",
-      "sizeBytes": 7850069,
-      "generatedAt": "2026-08-16T20:05:31.516Z",
+      "sizeBytes": 7132687,
+      "generatedAt": "2026-08-16T20:43:49.725Z",
       "provenance": {
-        "commit": "26e9bbbd89ae23a661b0f109495ad36cb51a0aed",
+        "commit": "b3111b4192b3d4761a99ad3ed255f7df589da5e1",
         "dirty": true,
-        "rosterHash": "cd6f23fc617ba165",
+        "rosterHash": "3c7d706944052815",
         "seedsSearched": 300,
         "wantedOutcome": "cleared",
         "constants": {

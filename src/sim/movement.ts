@@ -77,6 +77,8 @@ export interface MovementState {
   /** Tick until which this fighter travels at `dashMul` speed — see `HAYMAKER`. */
   dashUntilTick: number;
   dashMul: number;
+  /** Does this dash steer itself at the other fighter? A charge does; a throw does not. */
+  dashHoming: boolean;
 }
 
 export interface MovementInput {
@@ -156,6 +158,7 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
     frozenUntilTick: 0,
     dashUntilTick: 0,
     dashMul: 1,
+    dashHoming: false,
   };
 }
 
@@ -370,10 +373,17 @@ export function setHeading(state: MovementState, heading: number): void {
  * range and hits you. So the ability moves *him*, and the punch lands when he
  * arrives.
  */
-export function dash(state: MovementState, heading: number, mul: number, untilTick: number): void {
+export function dash(
+  state: MovementState,
+  heading: number,
+  mul: number,
+  untilTick: number,
+  homing = false,
+): void {
   setHeading(state, heading);
   state.dashMul = mul;
   state.dashUntilTick = untilTick;
+  state.dashHoming = homing;
 }
 
 /** Stops a fighter dead — Bodyguard Guy's `NOBODY MOVES`, and his own stance. */

@@ -56,6 +56,7 @@ const SCALE_RANGE: [number, number] = [0.08, 3.0];
 const SIGNATURE_ABILITIES = new Set<string>([
   "magnetic_north",
   "nobody_moves",
+  "thrown_out",
   "haymaker",
   "glasses_throw",
   "four_eyes",

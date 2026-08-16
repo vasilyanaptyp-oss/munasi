@@ -11,6 +11,7 @@ const ABILITY_TYPES = new Set([
   "aoe",
   "magnetic_north",
   "nobody_moves",
+  "thrown_out",
   "haymaker",
   "glasses_throw",
   "four_eyes",

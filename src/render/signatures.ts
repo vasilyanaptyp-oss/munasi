@@ -3,7 +3,6 @@ import type { AbilityType, MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { SIGNATURE_LEAD_SECONDS, SIGNATURE_PULSE_SECONDS } from "../sim/simulate.js";
 import { hasProp, propImage } from "./photo.js";
-import { font } from "./theme.js";
 
 /**
  * The signature abilities.
@@ -68,6 +67,7 @@ export interface Point {
 export type SignatureKind =
   | "magnetic_north"
   | "nobody_moves"
+  | "thrown_out"
   | "haymaker"
   | "glasses_throw"
   | "four_eyes";
@@ -101,6 +101,7 @@ const ABILITY_PROPS: Record<SignatureKind, { prop: string; mode: PropMode; size:
   // light up with no other change.
   magnetic_north: { prop: "compass", mode: "held", size: 0.8 },
   nobody_moves: { prop: "tape", mode: "worn", size: 1.15 },
+  thrown_out: { prop: "grab", mode: "held", size: 0.8 },
   haymaker: { prop: "glove", mode: "held", size: 0.7 },
 };
 
@@ -172,17 +173,13 @@ function placedProp(
  *   his lens across half the square, about half opacity, no outline, no
  *   gradient, no particles. It is the biggest thing in those frames and it is
  *   also the simplest.
- * - **A band of hazard tape.** Detective Guy stretches yellow "DO NOT CROSS"
- *   tape diagonally across the arena — a strip with a black edge and the words
- *   repeated along it, clipped by the walls, held for seconds at a time.
- *
- * Both are big flat objects, which is the opposite of the rings, sparks and
- * stars that were rejected three times. Neither is illustration: one is a shape
- * with alpha, the other is a strip with lettering on it.
+ * The tape that went with it — Detective Guy's yellow "DO NOT CROSS" strips
+ * across the square — was copied onto Bodyguard Guy and that was simply the
+ * wrong man. Hazard tape is a *detective's* prop, and a bodyguard who cordons
+ * the arena off is doing a policeman's job. He throws people out instead; see
+ * `thrown_out` in `simulate.ts`.
  */
 
-/** Sampled off the reference's tape: gold band, black lettering. */
-const TAPE_GOLD = "#f2c40a";
 /** Sampled off the reference's camera cone, before it is laid over the field. */
 const CONE_RED = "#d81f11";
 
@@ -209,44 +206,6 @@ function cone(
   ctx.restore();
 }
 
-/**
- * A strip of hazard tape laid across the whole arena at an angle, with the words
- * repeated along it — the reference's own device, and the reason it reads as
- * "this one has been cordoned off" instead of as a coloured line.
- */
-function hazardTape(
-  ctx: Ctx,
-  arena: ArenaBox,
-  through: Point,
-  angle: number,
-  band: number,
-  alpha: number,
-): void {
-  const span = arena.side * 1.6;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(through.x, through.y);
-  ctx.rotate(angle);
-
-  ctx.fillStyle = TAPE_GOLD;
-  ctx.fillRect(-span, -band / 2, span * 2, band);
-  ctx.fillStyle = "#1b1b1b";
-  ctx.fillRect(-span, -band / 2, span * 2, Math.max(2, band * 0.08));
-  ctx.fillRect(-span, band / 2 - Math.max(2, band * 0.08), span * 2, Math.max(2, band * 0.08));
-
-  ctx.fillStyle = "#1b1b1b";
-  ctx.font = font(Math.round(band * 0.42), "bold");
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  // Spaced off the lettering's own width, not off the band: at a fixed step the
-  // words ran into each other and read as one long smear of capitals.
-  const label = "DO NOT CROSS";
-  const step = ctx.measureText(label).width * 1.75;
-  for (let x = -span; x < span; x += step) ctx.fillText(label, x, 0);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.restore();
-}
 
 /**
  * Draws whichever signature is playing on this frame — which, for an ability
@@ -288,26 +247,6 @@ export function drawSignatures(
     if (!from || !to) continue;
 
     // The reference's own two devices — see the note above `cone`.
-    if (kind === "nobody_moves") {
-      // Taped off. Three strips across the square, swung in as the hold lands
-      // and held while it lasts.
-      const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
-      const since = Math.max(0, (age - SIGNATURE_TRAVEL_FRAMES) / TAIL_FRAMES);
-      const alpha = Math.min(1, t) * Math.max(0, 1 - since * 0.7);
-      const band = fighterScale * 0.2;
-      for (let i = 0; i < 3; i += 1) {
-        const lean = -0.62 + i * 0.42;
-        hazardTape(
-          ctx,
-          arena,
-          { x: to.x, y: to.y + (i - 1) * fighterScale * 0.75 },
-          lean,
-          band,
-          alpha * (i === 1 ? 1 : 0.9),
-        );
-      }
-      continue;
-    }
     if (kind === "magnetic_north") {
       // A flat wedge from him to the other man, the way the reference's camera
       // throws its flash: one colour, half opacity, no edge and no detail.
@@ -450,8 +389,13 @@ export function photoTreatment(
       out.smear = Math.max(out.smear, scale * 0.7 * Math.sin(t * Math.PI));
       out.smearAngle = heading;
     }
-    if (kind === "nobody_moves" && victim && age >= SIGNATURE_TRAVEL_FRAMES) {
-      out.wash = Math.max(out.wash, 0.55 * Math.max(0, 1 - since * 0.5));
+    if (kind === "thrown_out" && victim) {
+      // Hurled: he crosses the square at four times his own speed, so he smears
+      // hard along the line he was thrown down. The photograph is the effect.
+      const t = Math.min(1, age / SIGNATURE_FRAMES);
+      out.smear = Math.max(out.smear, scale * 1.1 * Math.sin(t * Math.PI));
+      out.smearAngle = heading;
+      out.rotation += 0.16 * Math.sin(t * 7) * (1 - t);
     }
   }
   return out;
@@ -461,6 +405,7 @@ export function photoTreatment(
 export const SIGNATURE_KINDS = new Set<AbilityType>([
   "magnetic_north",
   "nobody_moves",
+  "thrown_out",
   "haymaker",
   "glasses_throw",
   "four_eyes",
