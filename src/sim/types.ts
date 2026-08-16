@@ -19,6 +19,7 @@ export type AbilityType =
   | "magnetic_north"
   | "nobody_moves"
   | "haymaker"
+  | "glasses_throw"
   | "four_eyes";
 
 /** Stats of a minion produced by a `spawn_minion` ability. */
@@ -283,6 +284,15 @@ export interface MatchEvent {
    */
   atX?: number;
   atY?: number;
+  /**
+   * Which ability a `signature` event came from.
+   *
+   * A fighter may carry more than one — Glasses Guy has his ordinary throw and
+   * his volley — and the renderer has to draw the one that actually fired. It
+   * used to look the ability up by owner and take the first that draws
+   * anything, which is only correct while everybody has exactly one.
+   */
+  ability?: AbilityType;
 }
 
 export type Winner = Side | "draw";

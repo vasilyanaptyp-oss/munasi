@@ -57,6 +57,7 @@ const SIGNATURE_ABILITIES = new Set<string>([
   "magnetic_north",
   "nobody_moves",
   "haymaker",
+  "glasses_throw",
   "four_eyes",
 ]);
 

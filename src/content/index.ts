@@ -12,6 +12,7 @@ const ABILITY_TYPES = new Set([
   "magnetic_north",
   "nobody_moves",
   "haymaker",
+  "glasses_throw",
   "four_eyes",
 ]);
 

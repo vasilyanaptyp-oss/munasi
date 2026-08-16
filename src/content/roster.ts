@@ -104,7 +104,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9961,
+    fieldScale: 0.9943,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -118,7 +118,7 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 2.9,
     abilities: [{ type: "nobody_moves", cooldown: 6, power: 0, duration: 1.4 }],
-    fieldScale: 1.0516,
+    fieldScale: 1.0543,
   },
 
   /*
@@ -149,7 +149,7 @@ export const ROSTER: FighterSpec[] = [
     // He closes the distance himself and knocks whatever he lands on along the
     // line of the punch, so the blow moves the fight as well as damaging it.
     abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.8 }],
-    fieldScale: 0.9755,
+    fieldScale: 0.9720,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -162,15 +162,24 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.28,
     critMult: 2.8,
     /**
-     * **He does not brawl.** Bumping into Glasses Guy barely registers;
-     * everything he is worth comes off the volley. He was hitting exactly as
-     * hard in a collision as the boxer, which left two characters who behaved
-     * identically and differed only in the picture.
+     * **He does not fight with his hands at all.** Zero, not "a bit less":
+     * running into Glasses Guy costs nothing and no number appears for it.
+     * Every point he takes off the other man is thrown.
      */
-    meleeShare: 0.35,
-    // Two to four pairs, rolled per cast, each arriving on its own with its own
-    // number. The count is the gag: you watch them land and you can count them.
-    abilities: [{ type: "four_eyes", cooldown: 9, power: 0, pulses: [2, 4] }],
-    fieldScale: 0.9769,
+    meleeShare: 0,
+    /**
+     * Two abilities, which is the whole character:
+     *
+     * - `glasses_throw` is his ordinary attack — **one pair, thrown hard**, four
+     *   or so times a fight. `hitShare 1.6` is what makes it the heavy single
+     *   number rather than a tap;
+     * - `four_eyes` is the ult — **three or four pairs at once**, rolled per
+     *   cast and carried on the event so exactly as many fly as land.
+     */
+    abilities: [
+      { type: "glasses_throw", cooldown: 7, power: 0, hitShare: 2.9 },
+      { type: "four_eyes", cooldown: 14, power: 0, pulses: [3, 4], hitShare: 1.0 },
+    ],
+    fieldScale: 0.9794,
   },
 ];

@@ -24,13 +24,10 @@ import {
 import { ARENA, GAUNTLET_COLORS as C, GAUNTLET_LAYOUT as L, HP_WIDGET } from "./gauntletTheme.js";
 import { worldToScreen } from "./gauntletCamera.js";
 import { drawPhoto } from "./photo.js";
-import { drawSignatures, type SignatureKind } from "./signatures.js";
+import { drawSignatures, SIGNATURE_KINDS, type SignatureKind } from "./signatures.js";
 import { ensureFonts, font, HEIGHT, WIDTH } from "./theme.js";
 
 type Ctx = SKRSContext2D;
-
-/** Ability types that draw a signature effect. */
-const SIGNATURE_KINDS = new Set<string>(["magnetic_north", "nobody_moves", "haymaker", "four_eyes"]);
 
 const FLASH_FRAMES = 4;
 
@@ -539,18 +536,16 @@ export function renderGauntletFrame(
   // Under the numbers, over the fighters: the mark is the cause, the number
   // is the readout.
   drawImpacts(ctx, index, frame, layout.camera);
-  drawDamageNumbers(ctx, index, frame, layout);
 
   // Signatures go over the fighters and under the overlay: they are the scene's
   // biggest moment, but the title still has to be readable through one.
-  const kindOf = (actorId: string): SignatureKind | null => {
-    const who =
-      actorId === result.challenger.id
-        ? result.challenger
-        : result.team.members.find((m) => m.id === actorId);
-    const ability = who?.abilities.find((a) => SIGNATURE_KINDS.has(a.type));
-    return ability ? (ability.type as SignatureKind) : null;
-  };
+  // Straight off the event: a fighter can carry more than one signature — the
+  // glasses man has his throw and his volley — and looking it up by owner and
+  // taking the first drew his ult every time he threw a single pair.
+  const kindOf = (event: { ability?: string }): SignatureKind | null =>
+    event.ability !== undefined && SIGNATURE_KINDS.has(event.ability as never)
+      ? (event.ability as SignatureKind)
+      : null;
   // Both ends of the effect come from this frame's layout, so it stays attached
   // to two fighters who are still moving.
   const positionOf = (id: string): { x: number; y: number } | null => {
@@ -567,6 +562,11 @@ export function renderGauntletFrame(
     positionOf,
     layout.opponent.sprite.h,
   );
+
+  // **The numbers go on top of the effects.** They are the readout the whole
+  // fight is followed by, and an ability that buries its own number under a
+  // shockwave has undone the thing it was drawn to explain.
+  drawDamageNumbers(ctx, index, frame, layout);
 
   drawOverlay(ctx, hud.metrics, layout.camera);
 

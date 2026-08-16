@@ -483,6 +483,7 @@ export function simulate(
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
+          ability: ability.type,
           actorId: state.base.id,
           targetId: enemy.base.id,
           value: heading,
@@ -515,6 +516,7 @@ export function simulate(
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
+          ability: ability.type,
           actorId: state.base.id,
           targetId: enemy.base.id,
           value: heading,
@@ -528,6 +530,24 @@ export function simulate(
        * scatter; the freeze-frame of a pair of glasses spinning across the
        * arena is the whole gag.
        */
+      /**
+       * GLASSES THROW — his ordinary attack, and the only one he has.
+       *
+       * He does not punch: `meleeShare` is zero, so running into him costs
+       * nothing. One pair of spectacles, thrown hard, four or so times a fight.
+       */
+      case "glasses_throw": {
+        const thrownOne = scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: thrownOne,
+        });
+        break;
+      }
       case "four_eyes": {
         // The count is rolled here and carried in the event, so the renderer
         // throws exactly as many pairs as land. Deriving it separately in the
@@ -536,6 +556,7 @@ export function simulate(
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
+          ability: ability.type,
           actorId: state.base.id,
           targetId: enemy.base.id,
           value: thrown,
@@ -549,6 +570,7 @@ export function simulate(
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
+          ability: ability.type,
           actorId: state.base.id,
           targetId: enemy.base.id,
           value: ability.duration ?? 1.2,
@@ -673,6 +695,10 @@ export function simulate(
       const landed: { side: FighterState; dealt: number; crit: boolean }[] = [];
       for (const side of [sides.a, sides.b]) {
         if (side.attackCooldown > 0) continue;
+        // A fighter with no melee at all lands nothing by bumping into someone,
+        // and must not push a "-0" onto the screen for it. Glasses Guy touches
+        // nobody: every point he takes off the other man is thrown.
+        if ((side.base.meleeShare ?? 1) <= 0) continue;
         const isCrit = side.rng.chance(side.base.critChance);
         const raw =
           effectiveAttack(side) *
