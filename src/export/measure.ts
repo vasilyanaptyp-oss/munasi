@@ -71,6 +71,8 @@ export interface FrameMeasure {
   yellowPixels: number;
   /** Pixels that differ from the previous frame, as a share. */
   changed: number;
+  /** Centres of the HP plusses, which ride their own fighter. */
+  plusses: { x: number; y: number }[];
 }
 
 export interface VideoMeasure {
@@ -91,6 +93,12 @@ export interface VideoMeasure {
   worstGap: number;
   /** Median share of pixels that change from one frame to the next. */
   motion: number;
+  /**
+   * How far a fighter travels per frame, in arena widths, tracked by his own HP
+   * plus. This is the number "they move too fast" is about, and the only way to
+   * read it off a reference is through the plus.
+   */
+  speed: { median: number; p90: number } | null;
   /** Share of frames that change almost nothing. */
   staticShare: number;
 }
@@ -192,6 +200,57 @@ function measureFrame(
     }
   }
 
+  // The HP plusses. They are the only large solid-white shapes in the frame and
+  // each rides its own fighter, so tracking them is how a fighter's speed is
+  // recovered from a video that has no events to consult. Found by flood-filling
+  // white and keeping blobs about the size the plus is.
+  const plusses: { x: number; y: number }[] = [];
+  {
+    const isWhite = (p: number): boolean =>
+      data[p]! > WHITE_LEVEL && data[p + 1]! > WHITE_LEVEL && data[p + 2]! > WHITE_LEVEL;
+    const seen = new Uint8Array(width * height);
+    const expected = (76 / 576) * width;
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        const seed = y * width + x;
+        if (seen[seed] || !isWhite(seed * 4)) continue;
+        let count = 0;
+        let sx = 0;
+        let sy = 0;
+        let minX = width;
+        let maxX = -1;
+        const stack = [seed];
+        seen[seed] = 1;
+        while (stack.length > 0) {
+          const q = stack.pop()!;
+          const qx = q % width;
+          const qy = (q - qx) / width;
+          count += 1;
+          sx += qx;
+          sy += qy;
+          if (qx < minX) minX = qx;
+          if (qx > maxX) maxX = qx;
+          if (count > 40000) break;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const nx = qx + dx;
+            const ny = qy + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            const n = ny * width + nx;
+            if (seen[n] || !isWhite(n * 4)) continue;
+            seen[n] = 1;
+            stack.push(n);
+          }
+        }
+        const span = maxX - minX + 1;
+        // A plus, not a caption and not a keyline: about as wide as the
+        // reference's 76px and at least half as tall as it is wide.
+        if (span > expected * 0.55 && span < expected * 1.7 && count > span * span * 0.35) {
+          plusses.push({ x: sx / count, y: sy / count });
+        }
+      }
+    }
+  }
+
   const pixels = width * height;
   return {
     arena: top >= 0 && left >= 0 ? { top, bottom, left, right } : null,
@@ -201,6 +260,7 @@ function measureFrame(
     whiteShare: white / pixels,
     yellowPixels: yellow,
     changed: previous ? changed / pixels : 0,
+    plusses,
   };
 }
 
@@ -271,6 +331,29 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
       // ffprobe missing is not worth failing a measurement over.
     }
 
+    // Fighter speed, from how far each plus moves between frames. Matched
+    // nearest-neighbour and thrown away when the count changes or the jump is
+    // too big to be travel — a plus leaving the frame must not read as a sprint.
+    const arenaWide = median(
+      withArena.map((m) => m.arena!.bottom - m.arena!.top),
+    ) || MEASURE_WIDTH;
+    const steps: number[] = [];
+    for (let i = 1; i < measures.length; i += 1) {
+      const before = measures[i - 1]!.plusses;
+      const now = measures[i]!.plusses;
+      if (before.length === 0 || before.length !== now.length) continue;
+      for (const a of now) {
+        let best = Infinity;
+        for (const b of before) {
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d < best) best = d;
+        }
+        // A quarter of the arena in one frame is a cut, not a fighter.
+        if (best < arenaWide * 0.25) steps.push(best / arenaWide);
+      }
+    }
+    const sortedSteps = [...steps].sort((a, b) => a - b);
+
     const moving = measures.slice(1).map((m) => m.changed);
     return {
       file,
@@ -294,6 +377,13 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
       numbersPerSecond: appearances.length / (measures.length / fps),
       worstGap: worst,
       motion: median(moving),
+      speed:
+        sortedSteps.length > 20
+          ? {
+              median: median(steps),
+              p90: sortedSteps[Math.floor(sortedSteps.length * 0.9)]!,
+            }
+          : null,
       staticShare: moving.filter((c) => c < 0.005).length / Math.max(1, moving.length),
     };
   } finally {
@@ -335,6 +425,14 @@ export function comparisonRows(measures: VideoMeasure[]): ComparisonRow[] {
     { label: "белого в кадре", values: col((m) => pct(m.whiteShare)) },
     { label: "чисел урона в секунду", values: col((m) => m.numbersPerSecond.toFixed(2)) },
     { label: "худшая пауза без числа", values: col((m) => `${m.worstGap.toFixed(2)}с`) },
+    {
+      label: "скорость бойца (арен/кадр)",
+      values: col((m) => (m.speed ? m.speed.median.toFixed(4) : "—")),
+    },
+    {
+      label: "  она же, быстрые 10%",
+      values: col((m) => (m.speed ? m.speed.p90.toFixed(4) : "—")),
+    },
     { label: "движение (пикселей за кадр)", values: col((m) => pct(m.motion)) },
     { label: "статичных кадров", values: col((m) => pct(m.staticShare)) },
   ];

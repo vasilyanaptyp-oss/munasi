@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "compass-vs-bodyguard-70.mp4",
+      "file": "compass-vs-bodyguard-391.mp4",
       "fighters": [
         "compass",
         "bodyguard"
@@ -10,22 +10,22 @@
         "Compass Guy",
         "OPPONENT"
       ],
-      "seed": 70,
+      "seed": 391,
       "dramaScore": 69.6,
-      "durationSeconds": 28.5,
-      "frames": 855,
+      "durationSeconds": 27.33,
+      "frames": 820,
       "winnerId": "compass",
-      "sizeBytes": 7339124,
-      "generatedAt": "2026-08-17T21:59:36.493Z",
+      "sizeBytes": 6436014,
+      "generatedAt": "2026-08-17T23:23:31.877Z",
       "provenance": {
-        "commit": "47496ef6d7a6ffd9d993a2ca4f5a1a65386a3ddf",
+        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
         "dirty": true,
-        "rosterHash": "fccb624a358d90ae",
+        "rosterHash": "a86777eb3e88972e",
         "seedsSearched": 400,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
-            "tempo": 0.52,
+            "tempo": 0.76,
             "challengerPower": 1
           },
           "rules": {
@@ -54,7 +54,7 @@
       }
     },
     {
-      "file": "compass-vs-glasses-166.mp4",
+      "file": "compass-vs-glasses-358.mp4",
       "fighters": [
         "compass",
         "glasses"
@@ -63,22 +63,22 @@
         "Compass Guy",
         "OPPONENT"
       ],
-      "seed": 166,
-      "dramaScore": 69.6,
-      "durationSeconds": 28,
-      "frames": 840,
+      "seed": 358,
+      "dramaScore": 68.9,
+      "durationSeconds": 26.67,
+      "frames": 800,
       "winnerId": "compass",
-      "sizeBytes": 7194031,
-      "generatedAt": "2026-08-17T22:00:28.420Z",
+      "sizeBytes": 6369567,
+      "generatedAt": "2026-08-17T23:24:47.713Z",
       "provenance": {
-        "commit": "47496ef6d7a6ffd9d993a2ca4f5a1a65386a3ddf",
+        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
         "dirty": true,
-        "rosterHash": "fccb624a358d90ae",
+        "rosterHash": "a86777eb3e88972e",
         "seedsSearched": 400,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
-            "tempo": 0.52,
+            "tempo": 0.76,
             "challengerPower": 1
           },
           "rules": {
@@ -102,12 +102,12 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          22
+          55
         ]
       }
     },
     {
-      "file": "boxer-vs-bodyguard-222.mp4",
+      "file": "boxer-vs-bodyguard-83.mp4",
       "fighters": [
         "boxer",
         "bodyguard"
@@ -116,22 +116,22 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 222,
+      "seed": 83,
       "dramaScore": 69.6,
-      "durationSeconds": 27.73,
-      "frames": 832,
+      "durationSeconds": 28,
+      "frames": 840,
       "winnerId": "bodyguard",
-      "sizeBytes": 6904166,
-      "generatedAt": "2026-08-17T22:01:17.475Z",
+      "sizeBytes": 6217170,
+      "generatedAt": "2026-08-17T23:25:36.388Z",
       "provenance": {
-        "commit": "47496ef6d7a6ffd9d993a2ca4f5a1a65386a3ddf",
+        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
         "dirty": true,
-        "rosterHash": "fccb624a358d90ae",
+        "rosterHash": "a86777eb3e88972e",
         "seedsSearched": 400,
         "wantedOutcome": "stopped",
         "constants": {
           "tuning": {
-            "tempo": 0.52,
+            "tempo": 0.76,
             "challengerPower": 1
           },
           "rules": {
@@ -160,7 +160,7 @@
       }
     },
     {
-      "file": "boxer-vs-glasses-82.mp4",
+      "file": "boxer-vs-glasses-23.mp4",
       "fighters": [
         "boxer",
         "glasses"
@@ -169,22 +169,22 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 82,
-      "dramaScore": 69.5,
-      "durationSeconds": 28.4,
-      "frames": 852,
+      "seed": 23,
+      "dramaScore": 67.6,
+      "durationSeconds": 25.13,
+      "frames": 754,
       "winnerId": "boxer",
-      "sizeBytes": 7235375,
-      "generatedAt": "2026-08-17T22:02:08.564Z",
+      "sizeBytes": 5887827,
+      "generatedAt": "2026-08-17T23:26:23.497Z",
       "provenance": {
-        "commit": "47496ef6d7a6ffd9d993a2ca4f5a1a65386a3ddf",
+        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
         "dirty": true,
-        "rosterHash": "fccb624a358d90ae",
+        "rosterHash": "a86777eb3e88972e",
         "seedsSearched": 400,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
-            "tempo": 0.52,
+            "tempo": 0.76,
             "challengerPower": 1
           },
           "rules": {
@@ -208,7 +208,7 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          24
+          41
         ]
       }
     }

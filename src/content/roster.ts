@@ -123,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9973,
+    fieldScale: 1.0018,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -139,7 +139,7 @@ export const ROSTER: FighterSpec[] = [
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 0.9308,
+    fieldScale: 0.9683,
   },
 
   /*
@@ -199,7 +199,7 @@ export const ROSTER: FighterSpec[] = [
      * owned one.
      */
     abilities: [{ type: "haymaker", cooldown: 7, power: 0, hitShare: 3.2 }],
-    fieldScale: 0.8996,
+    fieldScale: 0.8904,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -212,11 +212,25 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.18,
     critMult: 1.50,
     /**
-     * **He does not fight with his hands at all.** Zero, not "a bit less":
-     * running into Glasses Guy costs nothing and no number appears for it.
-     * Every point he takes off the other man is thrown.
+     * **A bump, not a punch.** He does not fight with his hands: nearly
+     * everything he takes off the other man is thrown, and this is a fifth of
+     * what an ordinary fighter's contact is worth — around 20 on screen against
+     * the boxer's 85.
+     *
+     * It was a flat zero, and zero turned out to be unplayable. A collision is
+     * a *shared* event: it damages both. A fighter who converts his half to
+     * nothing is handing his opponent free damage on every meeting, and the
+     * more of an opponent's output arrives as contact the bigger the gift — so
+     * Boxer Guy, who is all contact, took 65-69% of this pairing however the
+     * knobs were turned, while losing the two he could not do that to. That is
+     * not "stronger", it is rock-paper-scissors, and `fieldScale` is one number
+     * per fighter so it cannot reach a single pair.
+     *
+     * Measured: at 0.55 the same six pairings sit inside 38-62%, spread 1.4pp,
+     * and no pair is outside the band for the first time since the outline
+     * collision went in.
      */
-    meleeShare: 0,
+    meleeShare: 0.55,
     /**
      * Two abilities, which is the whole character:
      *
@@ -231,6 +245,6 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.1103,
+    fieldScale: 1.0712,
   },
 ];

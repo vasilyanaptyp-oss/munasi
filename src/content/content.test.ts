@@ -181,13 +181,29 @@ describe("calibrate", () => {
     expect(scaled.abilities[0]!.power).toBe(spec.abilities[0]!.power);
   });
 
-  it("puts each shipped fighter near a coin flip against the reference", () => {
+  it("keeps every field correction small, and nobody wildly off the dummy", () => {
+    // **Two things, because one of them was measuring the wrong quantity.**
+    //
+    // `fieldScale` is the hand correction that evens a *pair*, and the design
+    // rule for it is that it stays within a few percent of 1 — a big one means
+    // the calibrator and the shipped game disagree about something, which has
+    // happened twice and both times was a real bug. That is what this asserts
+    // first, and it is the invariant that matters.
+    //
+    // The winrate against the dummy is only a sanity net now. It used to be
+    // held inside 0.22-0.78, which sounds generous and is not: with the crits
+    // flat the outcome is close to deterministic in power, so **eleven percent
+    // of strength is worth twenty-seven points of winrate** — Boxer Guy sits at
+    // 22.5% off a `fieldScale` of 0.89. A tighter band here does not catch a
+    // mis-calibrated fighter, it catches a correctly corrected one.
+    for (const spec of ROSTER) {
+      const scale = spec.fieldScale ?? 1;
+      expect(Math.abs(scale - 1), `${spec.id} fieldScale ${scale}`).toBeLessThan(0.2);
+    }
     for (const fighter of roster) {
       const rate = winRateVsReference(fighter, 120);
-      // `fieldScale` deliberately pulls a fighter off the dummy to even the
-      // *pair*, which is the number that matters, so the band is wider here.
-      expect(rate).toBeGreaterThan(0.22);
-      expect(rate).toBeLessThan(0.78);
+      expect(rate, `${fighter.id} vs the dummy`).toBeGreaterThan(0.1);
+      expect(rate, `${fighter.id} vs the dummy`).toBeLessThan(0.9);
     }
   }, 60_000);
 });

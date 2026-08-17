@@ -103,7 +103,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 30.1,
+    "attack": 28.9,
     "attackSpeed": 1.15,
     "critChance": 0.2,
     "critMult": 1.45,
@@ -219,7 +219,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 27.6,
+    "attack": 26,
     "attackSpeed": 0.85,
     "critChance": 0.16,
     "critMult": 1.55,
@@ -336,7 +336,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 8.8,
+    "attack": 8.7,
     "attackSpeed": 0.5,
     "critChance": 0.22,
     "critMult": 1.5,
@@ -454,11 +454,11 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 20.8,
+    "attack": 15.1,
     "attackSpeed": 0.95,
     "critChance": 0.18,
     "critMult": 1.5,
-    "meleeShare": 0,
+    "meleeShare": 0.55,
     "abilities": [
       {
         "type": "glasses_throw",

@@ -129,19 +129,22 @@ function flyingProp(
   spin: number,
   trail: number,
 ): void {
+  // **One picture, turning slowly.** It used to draw four copies trailing back
+  // along the flight, each at its own angle, on top of a spin of more than one
+  // and a half full turns inside a third of a second. Both at once is not a
+  // thrown object, it is a flicker: the owner's word for it was that the
+  // spectacles twitch when they should simply turn over.
+  //
+  // `trail` is kept in the signature so the call sites read the same; nothing
+  // passes anything but the flight any more.
+  void trail;
+  void heading;
   const height = (width * sprite.height) / sprite.width;
-  const dx = Math.cos(heading);
-  const dy = Math.sin(heading);
-  for (let i = 3; i >= 0; i -= 1) {
-    const back = (i / 3) * trail;
-    ctx.save();
-    ctx.globalAlpha = i === 0 ? 1 : 0.12 / i;
-    ctx.translate(x - dx * back, y - dy * back);
-    ctx.rotate(spin - i * 0.18);
-    const scale = 1 - i * 0.08;
-    ctx.drawImage(sprite, (-width * scale) / 2, (-height * scale) / 2, width * scale, height * scale);
-    ctx.restore();
-  }
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(spin);
+  ctx.drawImage(sprite, -width / 2, -height / 2, width, height);
+  ctx.restore();
 }
 
 /** A picture held at its owner's side, or worn by whoever the ability caught. */
@@ -285,7 +288,7 @@ export function drawSignatures(
         from.y + (to.y - from.y) * p + Math.sin(heading + Math.PI / 2) * spread,
         heading,
         width,
-        heading + travel * Math.PI * 3.2 * (lane === 0 ? 1 : Math.sign(lane)),
+        heading + travel * Math.PI * 0.6 * (lane === 0 ? 1 : Math.sign(lane)),
         fighterScale * 0.42,
       );
     }

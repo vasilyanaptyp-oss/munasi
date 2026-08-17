@@ -44,7 +44,7 @@ export interface GauntletTuning {
  * a thumb on the scale. With it still at 2.74 a fight lasted 11 seconds and was
  * over before it started.
  */
-export const GAUNTLET_TUNING: GauntletTuning = { tempo: 0.52, challengerPower: 1 };
+export const GAUNTLET_TUNING: GauntletTuning = { tempo: 0.76, challengerPower: 1 };
 
 /**
  * Rules the shipped gauntlet runs under.

@@ -49,20 +49,26 @@ export const FIGHTER_HALF_HEIGHT = 0.14;
 const KEYLINE_MARGIN = 0.012;
 
 /**
- * Units per tick.
+ * Units per tick. Two ticks to a video frame.
  *
- * Set by sweeping speed against how often the two actually meet, because
- * meeting is what deals damage now. Too slow and the video has dead stretches
- * with nobody touching; the reference never goes longer than 4.87s without a
- * blow, and at the old speed ours ran to 7.6s.
+ * **Measured against the reference by `pnpm compare`, which tracks each
+ * fighter's own HP plus across the frames.** The reference's fighters travel a
+ * median 0.0095-0.0103 of the arena per video frame; ours were doing
+ * 0.0118-0.0135, a fifth to a third faster, and the owner's word for it was
+ * that they move too fast — which they did.
  *
- * Trimmed 10% once the trajectories were traced in both: the reference's
- * fighters move a median 0.0146 of the arena per video frame, ours 0.0163. That
- * gap is small on its own, but two figures crossing faster meet more often, and
- * the pace of a fight is how often they meet.
+ * The earlier number in this comment said the reference ran at 0.0146 and was
+ * wrong in the same way the arena's resting height was wrong: measured by hand,
+ * once, off one video. Both fell to the same tool.
+ *
+ * Speed is not only a look. Two figures crossing faster meet more often, and
+ * since every meeting lands a blow, how often they meet is how many numbers a
+ * fight has — and a fight's damage is fixed by the other man's thousand health,
+ * so more numbers is smaller numbers. Slowing them down buys number size back;
+ * `GAUNTLET_TUNING.tempo` then holds the length where it was.
  */
-const SPEED_MIN = 0.00597;
-const SPEED_MAX = 0.00964;
+const SPEED_MIN = 0.00472;
+const SPEED_MAX = 0.00762;
 
 export interface MovementState {
   x: number;

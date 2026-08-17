@@ -40,8 +40,13 @@ export const DAMAGE_VARIANCE = 0.35;
  * Exported because the renderer has to fly the effect across in exactly this
  * time: the thing a viewer sees arrive and the tick the health drops have to be
  * the same moment, or the ability reads as decoration again.
+ *
+ * Up from 0.35s. A pair of spectacles crossing the whole square in a third of a
+ * second is a streak, not a throw — there is no frame in which a viewer can see
+ * what the object *is*, which for the one character whose whole identity is the
+ * object he throws is the difference between an ability and a flicker.
  */
-export const SIGNATURE_LEAD_SECONDS = 0.35;
+export const SIGNATURE_LEAD_SECONDS = 0.55;
 
 /**
  * Seconds between one pulse of a cast and the next.
@@ -75,7 +80,7 @@ export const SIGNATURE_PULSE_SHARE = 1.33;
  * recoil on the punch itself they now run at 0.36, which is the same fight
  * everybody else is having.
  */
-const HAYMAKER_DASH = 3.0;
+const HAYMAKER_DASH = 2.4;
 /**
  * The anti-chatter latch on contact damage. **Not** a rate limit.
  *
@@ -102,8 +107,13 @@ export const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
  *
  * Long enough to cross the square and reach a wall, so the throw ends where a
  * throw should end: against something.
+ *
+ * Down from 4.2. At the reference's own pace a fighter covers 0.010 of the
+ * arena per frame and his fastest tenth reaches 0.023; four times base put the
+ * thrown man at 0.040, twice anything the reference ever does, and a burst that
+ * fast reads as a glitch rather than as a throw.
  */
-const THROW_SPEED = 4.2;
+const THROW_SPEED = 2.6;
 const THROW_SECONDS = 0.75;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
@@ -869,7 +879,18 @@ export function simulate(
       pulses.splice(i, 1);
       const caster = sides[pulse.side];
       const victim = opponentOf(caster);
-      if (caster.hp <= 0 || victim.hp <= 0) continue;
+      // **A thrown thing does not stop in mid-air because the thrower died.**
+      // This used to skip the pulse when either side was down, and the renderer
+      // knew nothing about that: it went on flying the spectacles across the
+      // arena and landing them on the other man's face with no number and no
+      // flash. Caught on a frame the owner sent — glasses drawn over the boxer,
+      // his health untouched, the caster on 0. From outside it is exactly the
+      // "it does not register" defect, and it is the same defect: something
+      // visibly arrives and nothing happens.
+      //
+      // Only the victim already being dead stops it now, because there is
+      // nothing left to take it.
+      if (victim.hp <= 0) continue;
       const isCrit = caster.rng.chance(caster.base.critChance);
       const raw =
         effectiveAttack(caster) *
