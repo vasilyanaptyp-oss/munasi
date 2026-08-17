@@ -1,7 +1,113 @@
 {
   "entries": [
     {
-      "file": "boxer-vs-bodyguard-70.mp4",
+      "file": "compass-vs-bodyguard-391.mp4",
+      "fighters": [
+        "compass",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 391,
+      "dramaScore": 69.6,
+      "durationSeconds": 26.77,
+      "frames": 803,
+      "winnerId": "compass",
+      "sizeBytes": 7279860,
+      "generatedAt": "2026-08-17T07:02:40.594Z",
+      "provenance": {
+        "commit": "ce06e2569347818462c9f4f931ee498149a7b7fe",
+        "dirty": true,
+        "rosterHash": "d066a3091421f338",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.05,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          21
+        ]
+      }
+    },
+    {
+      "file": "compass-vs-glasses-247.mp4",
+      "fighters": [
+        "compass",
+        "glasses"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 247,
+      "dramaScore": 65.8,
+      "durationSeconds": 23.7,
+      "frames": 711,
+      "winnerId": "compass",
+      "sizeBytes": 6174739,
+      "generatedAt": "2026-08-17T07:03:44.675Z",
+      "provenance": {
+        "commit": "ce06e2569347818462c9f4f931ee498149a7b7fe",
+        "dirty": true,
+        "rosterHash": "d066a3091421f338",
+        "seedsSearched": 400,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 1.05,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          23
+        ]
+      }
+    },
+    {
+      "file": "boxer-vs-bodyguard-219.mp4",
       "fighters": [
         "boxer",
         "bodyguard"
@@ -10,22 +116,22 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 70,
-      "dramaScore": 69.5,
-      "durationSeconds": 28.5,
-      "frames": 855,
-      "winnerId": "boxer",
-      "sizeBytes": 7125244,
-      "generatedAt": "2026-08-16T20:42:38.275Z",
+      "seed": 219,
+      "dramaScore": 69.4,
+      "durationSeconds": 27.67,
+      "frames": 830,
+      "winnerId": "bodyguard",
+      "sizeBytes": 7112731,
+      "generatedAt": "2026-08-17T07:04:58.913Z",
       "provenance": {
-        "commit": "b3111b4192b3d4761a99ad3ed255f7df589da5e1",
+        "commit": "ce06e2569347818462c9f4f931ee498149a7b7fe",
         "dirty": true,
-        "rosterHash": "3c7d706944052815",
-        "seedsSearched": 300,
-        "wantedOutcome": "cleared",
+        "rosterHash": "d066a3091421f338",
+        "seedsSearched": 400,
+        "wantedOutcome": "stopped",
         "constants": {
           "tuning": {
-            "tempo": 1.03,
+            "tempo": 1.05,
             "challengerPower": 1
           },
           "rules": {
@@ -46,15 +152,15 @@
         "teamIds": [
           "bodyguard"
         ],
-        "cleared": true,
+        "cleared": false,
         "decidedInRound": 1,
         "hpByRound": [
-          23
+          0
         ]
       }
     },
     {
-      "file": "boxer-vs-glasses-113.mp4",
+      "file": "boxer-vs-glasses-175.mp4",
       "fighters": [
         "boxer",
         "glasses"
@@ -63,22 +169,22 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 113,
-      "dramaScore": 69.6,
-      "durationSeconds": 28.57,
-      "frames": 857,
+      "seed": 175,
+      "dramaScore": 65.1,
+      "durationSeconds": 23.23,
+      "frames": 697,
       "winnerId": "boxer",
-      "sizeBytes": 7132687,
-      "generatedAt": "2026-08-16T20:43:49.725Z",
+      "sizeBytes": 5773319,
+      "generatedAt": "2026-08-17T07:06:18.799Z",
       "provenance": {
-        "commit": "b3111b4192b3d4761a99ad3ed255f7df589da5e1",
+        "commit": "ce06e2569347818462c9f4f931ee498149a7b7fe",
         "dirty": true,
-        "rosterHash": "3c7d706944052815",
-        "seedsSearched": 300,
+        "rosterHash": "d066a3091421f338",
+        "seedsSearched": 400,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
-            "tempo": 1.03,
+            "tempo": 1.05,
             "challengerPower": 1
           },
           "rules": {
@@ -102,7 +208,7 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          20
+          21
         ]
       }
     }

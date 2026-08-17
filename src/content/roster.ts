@@ -34,8 +34,18 @@ import type { Ability } from "../sim/types.js";
  *   total damage a fighter puts out over a match is fixed by the other one's
  *   health. He swings at 0.5 and hits for 71-91 where he used to swing at 1.05
  *   and hit for 36-45;
- * - `critChance` 0.22-0.38 with `critMult` 2.3-3.0. Fat crits are most of what
- *   keeps the outcome uncertain;
+ * - `critChance` 0.16-0.22 with `critMult` 1.45-1.55. **A crit is a wider
+ *   number, not a different one.** These used to be 0.22-0.38 at 2.3-3.0, which
+ *   is a whole extra reading of the format: the reference keeps every damage
+ *   number it ever shows between 75 and 120, and no roster crediting one blow in
+ *   three at 2.6x can stay inside that. The arithmetic is forced — a fighter's
+ *   total output over a match is the other one's thousand health, so a fat crit
+ *   is paid for by shrinking the ordinary blow. Boxer Guy's punch read 63 with
+ *   a 210 every third time; flattening the crit put the ordinary punch at 95
+ *   and the crit at 140, which is the reference's own spread. What that costs
+ *   is noise, and noise was hiding an unbalanced roster rather than balancing
+ *   one: with the crits flat, five of the six pairs came out lopsided and had
+ *   to be fixed as design instead of drowned in variance;
  * - and the part that matters: give it **one ability you can draw across the
  *   whole arena**. If you cannot describe the effect in one sentence, the
  *   character does not work.
@@ -82,8 +92,8 @@ export const ROSTER: FighterSpec[] = [
     spriteId: "compass-guy",
     maxHp: 1000,
     attackSpeed: 1.15,
-    critChance: 0.32,
-    critMult: 2.6,
+    critChance: 0.20,
+    critMult: 1.45,
     abilities: [{ type: "magnetic_north", cooldown: 5, power: 0 }],
     // Solved, not guessed. The calibrator evens each fighter against a reference
     // dummy, which does not make a *pair* even: without this Compass Guy took
@@ -109,7 +119,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 1.0136,
+    fieldScale: 0.9988,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -120,12 +130,12 @@ export const ROSTER: FighterSpec[] = [
     spriteId: "bodyguard-guy",
     maxHp: 1000,
     attackSpeed: 0.85,
-    critChance: 0.24,
-    critMult: 2.9,
+    critChance: 0.16,
+    critMult: 1.55,
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 1.0091,
+    fieldScale: 0.9545,
   },
 
   /*
@@ -146,23 +156,46 @@ export const ROSTER: FighterSpec[] = [
     // **Few, heavy punches.** He swung as often as everyone else and so his
     // numbers came out the same size as everyone else's — 36-45 against a man
     // who does not fight back with his hands at all. A boxer's blow has to be
-    // the biggest ordinary number in the video, and the only way to buy that
-    // is to land fewer of them: the total a fighter puts out over a match is
-    // fixed by the other one's health.
+    // the biggest number in the video, and the only way to buy that is to land
+    // fewer of them: the total a fighter puts out over a match is fixed by the
+    // other one's health.
+    //
+    // Note that `attackSpeed` no longer gates contact — a collision is a
+    // physical event and every one of them lands. It survives because the
+    // calibrator reads it and because it still paces minions and buffs.
     attackSpeed: 0.5,
-    critChance: 0.34,
-    critMult: 2.7,
+    critChance: 0.22,
+    critMult: 1.50,
     /**
-     * **He is the one with the heavy hands.** Running into Boxer Guy is the
-     * biggest number in the video — that is what a boxer is, and it was not
+     * **He is the one with the heavy hands.** Running into Boxer Guy costs more
+     * than running into anyone else — that is what a boxer is, and it was not
      * true here: every fighter dealt the same contact damage and the boxer was
      * distinguishable only by an effect nobody could read.
+     *
+     * It was 3.0 and had to come down. At that weight nine tenths of everything
+     * he did arrived as contact, and contact is the one thing Glasses Guy is
+     * immune to — so the boxer took 92% of that pairing and 20-39% of the two
+     * where the other man could hit back with his hands. Style has to survive
+     * meeting a man with a different style.
      */
-    meleeShare: 3.0,
-    // He closes the distance himself and knocks whatever he lands on along the
-    // line of the punch, so the blow moves the fight as well as damaging it.
-    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 1.8 }],
-    fieldScale: 0.9331,
+    meleeShare: 2.3,
+    /**
+     * **The charge is his signature and the charge is where the big number is.**
+     *
+     * He crosses the arena and arrives, and the punch that lands there is the
+     * single largest number in the video — around 120, against an ordinary
+     * contact of 50-60. `hitShare` used to be 0.55 on the theory that his weight
+     * belonged in contact instead, which put the biggest swing in the fight at
+     * 24: smaller than a bump into a man walking past.
+     *
+     * The charge does not also collect a contact number on arrival — see the
+     * note on `charging` in `simulate.ts`. Homing at the other man manufactures
+     * a collision every cast, and collisions pay both fighters, so a dash that
+     * paid twice was quietly rewriting the whole roster's pacing around whoever
+     * owned one.
+     */
+    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.4 }],
+    fieldScale: 0.8948,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -172,8 +205,8 @@ export const ROSTER: FighterSpec[] = [
     spriteId: "glasses-guy",
     maxHp: 1000,
     attackSpeed: 0.95,
-    critChance: 0.28,
-    critMult: 2.8,
+    critChance: 0.18,
+    critMult: 1.50,
     /**
      * **He does not fight with his hands at all.** Zero, not "a bit less":
      * running into Glasses Guy costs nothing and no number appears for it.
@@ -184,15 +217,16 @@ export const ROSTER: FighterSpec[] = [
      * Two abilities, which is the whole character:
      *
      * - `glasses_throw` is his ordinary attack — **one pair, thrown hard**, four
-     *   or so times a fight. `hitShare 1.6` is what makes it the heavy single
-     *   number rather than a tap;
+     *   times a fight, which is what the five-second cooldown buys and what the
+     *   owner asked for. `hitShare 2.2` is what makes it the heavy single number
+     *   rather than a tap: it lands for 95-120, the reference's own band;
      * - `four_eyes` is the ult — **three or four pairs at once**, rolled per
      *   cast and carried on the event so exactly as many fly as land.
      */
     abilities: [
-      { type: "glasses_throw", cooldown: 9, power: 0, hitShare: 2.9 },
-      { type: "four_eyes", cooldown: 14, power: 0, pulses: [3, 4], hitShare: 1.0 },
+      { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
+      { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.0406,
+    fieldScale: 1.0913,
   },
 ];

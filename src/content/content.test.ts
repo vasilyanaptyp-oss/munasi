@@ -58,8 +58,14 @@ describe("roster loading", () => {
       expect(fighter.maxHp).toBeLessThanOrEqual(1400);
       expect(fighter.attackSpeed).toBeGreaterThanOrEqual(0.45);
       expect(fighter.attackSpeed).toBeLessThanOrEqual(1.45);
-      expect(fighter.critChance).toBeGreaterThanOrEqual(0.2);
-      expect(fighter.critChance).toBeLessThanOrEqual(0.4);
+      // A crit is a *wider* number, not a different one. The reference keeps
+      // every damage number it shows inside 75-120, which no roster with a
+      // 2.6x crit can do: one blow in three would land at 250 and the ordinary
+      // blow has to be shrunk to pay for it. See the note in `roster.ts`.
+      expect(fighter.critChance).toBeGreaterThanOrEqual(0.12);
+      expect(fighter.critChance).toBeLessThanOrEqual(0.28);
+      expect(fighter.critMult).toBeGreaterThanOrEqual(1.3);
+      expect(fighter.critMult).toBeLessThanOrEqual(1.8);
       expect(fighter.attack).toBeGreaterThan(0);
     }
   });

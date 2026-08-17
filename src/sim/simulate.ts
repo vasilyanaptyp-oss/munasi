@@ -9,6 +9,7 @@ import {
 import { mulberry32, type Rng } from "./rng.js";
 import type {
   Ability,
+  AbilityType,
   Fighter,
   MatchConfig,
   MatchRules,
@@ -63,10 +64,39 @@ export const SIGNATURE_PULSE_SHARE = 1.33;
 /**
  * How much faster Boxer Guy travels while closing for `HAYMAKER`.
  *
- * Enough to cross most of a typical gap inside the lead time, so the punch
- * lands from somewhere near the other man rather than across the square.
+ * Enough to cross most of a typical gap inside the lead time — about half the
+ * square — so the punch lands from somewhere near the other man rather than
+ * across it.
+ *
+ * Down from 4.5, and the reason is balance rather than looks. A charge that
+ * always arrives *manufactures* a collision, collisions damage both fighters,
+ * and Glasses Guy cannot use one: the pairings with a charge in them ran at 0.70
+ * contacts a second against 0.33 in the pairings without. Between this and the
+ * recoil on the punch itself they now run at 0.36, which is the same fight
+ * everybody else is having.
  */
-const HAYMAKER_DASH = 4.5;
+const HAYMAKER_DASH = 3.0;
+/**
+ * The anti-chatter latch on contact damage. **Not** a rate limit.
+ *
+ * `Contact.closing` already marks the one tick a meeting begins on, so a pair
+ * sliding through each other is one blow. This exists for the corner case it
+ * does not cover: a fighter pinned against a wall by the other is shoved back
+ * inside by `keepInside`, ends up overlapping again on the next tick, and reads
+ * as closing every other tick for as long as the press lasts.
+ *
+ * Four tenths of a second — far shorter than any real second meeting, so
+ * **every meeting that a viewer can see as a separate meeting lands a blow.**
+ *
+ * It used to be two seconds, and that was the bug the owner kept reporting.
+ * Sized as a rate limit it swallowed genuine collisions: measured on shipped
+ * video, half of them produced no number at all. Two photographs met on screen
+ * and nothing happened, which from the outside is indistinguishable from the
+ * fight being broken. How *big* a blow is belongs to `meleeShare` and to how
+ * often the bouncing brings them together; it must not be bought by dropping
+ * hits on the floor.
+ */
+const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
 /**
  * How much faster the man Bodyguard Guy has thrown travels, and for how long.
  *
@@ -452,7 +482,13 @@ export function simulate(
    * appeared with nothing attached to it.
    */
   const SIGNATURE_PULSE_GAP = Math.round(SIGNATURE_PULSE_SECONDS * TICKS_PER_SECOND);
-  const pulses: { atTick: number; side: Side; knockback: boolean; share: number }[] = [];
+  const pulses: {
+    atTick: number;
+    side: Side;
+    knockback: boolean;
+    share: number;
+    ability: AbilityType;
+  }[] = [];
 
   /**
    * Schedules one cast's worth of hits and returns how many there are, so the
@@ -474,6 +510,7 @@ export function simulate(
         side: state.side,
         knockback,
         share: ability.hitShare ?? 1,
+        ability: ability.type,
       });
     }
     return count;
@@ -499,11 +536,12 @@ export function simulate(
         break;
       }
       /**
-       * HAYMAKER — Boxer Guy throws a glove across the arena.
+       * HAYMAKER — Boxer Guy crosses the arena himself and hits you.
        *
-       * The knock is the character: whatever it lands on is sent flying the way
-       * the punch was going. Same shape as the other two — it leaves him, it
-       * crosses, it arrives on the frame the damage lands.
+       * Not a thrown glove: that was a different character, and the boxer's
+       * whole point is that he fights at range zero. He charges, he arrives,
+       * and the punch is the single biggest number in the video. Whatever it
+       * lands on is sent flying the way the punch was going.
        */
       case "haymaker": {
         const heading = Math.atan2(
@@ -753,7 +791,20 @@ export function simulate(
      * refills, so lying against each other for a few ticks is one blow, not
      * twenty.
      */
-    if (contact?.closing === true) {
+    // **Any overlap is a blow, not just a head-on one.**
+    //
+    // This used to read `contact.closing`, which is the tick the pair exchange
+    // velocities on. That flag is decided along whichever axis they are least
+    // deep into each other, and it is false whenever they are separating along
+    // *that* axis while still driving into each other along the other — a
+    // corner clip. On screen a corner clip is two photographs plainly running
+    // into each other. Measured: thirteen percent of all overlaps produced no
+    // number, and that is exactly what the owner kept reporting as the boxer
+    // not hitting.
+    //
+    // `closing` still governs the physics, where it is right: two figures
+    // already flying apart must not be thrown back together.
+    if (contact !== null) {
       const landed: { side: FighterState; dealt: number; crit: boolean }[] = [];
       for (const side of [sides.a, sides.b]) {
         if (side.attackCooldown > 0) continue;
@@ -787,7 +838,22 @@ export function simulate(
           atX: contact.x,
           atY: contact.y,
         });
-        side.attackCooldown = ticksPerAttack(effectiveAttackSpeed(side));
+        // **One blow per meeting, and every meeting gets one.**
+        //
+        // This used to refill from `attackSpeed`, and once Boxer Guy's speed
+        // dropped to 0.5 to buy him a heavy punch, his cooldown became one swing
+        // per 5.7 seconds — so he ran into the other man and *nothing happened*.
+        // Measured on a shipped video: 4 collisions in 27 seconds, 2 of which
+        // produced a number, and the fewer he landed the harder each was made,
+        // which made the hole worse every pass.
+        //
+        // A collision is a physical event and the reference damages both
+        // fighters every time they meet. So the gate is a short fixed window,
+        // the same for everyone, doing the one job it is actually for: stopping
+        // a single overlap from counting several times while the two are still
+        // sliding through each other. How hard a fighter hits is `meleeShare`'s
+        // business; how often is the bouncing's.
+        side.attackCooldown = CONTACT_RECOVERY_TICKS;
       }
     }
     for (const side of [sides.a, sides.b]) {
@@ -817,10 +883,19 @@ export function simulate(
       // the victim flying before the blow arrives is exactly the incoherence
       // this whole pass is about.
       if (pulse.knockback) {
-        setHeading(
-          at,
-          Math.atan2(at.y - movement[caster.side].y, at.x - movement[caster.side].x),
-        );
+        const from = movement[caster.side];
+        const away = Math.atan2(at.y - from.y, at.x - from.x);
+        setHeading(at, away);
+        // **And the man who threw it goes the other way.**
+        //
+        // Equal and opposite, and it is the fix for a balance leak rather than
+        // a flourish: a charge that homes leaves the two standing on top of each
+        // other, and they keep colliding for as long as it takes them to drift
+        // apart. Those extra collisions pay both fighters, so owning a dash was
+        // quietly worth a run of free contact damage — against Glasses Guy, who
+        // cannot use a collision, it was worth it to one side only. Bouncing the
+        // puncher off his own punch separates the pair on the frame it lands.
+        setHeading(from, away + Math.PI);
       }
       events.push({
         frame,
@@ -830,6 +905,11 @@ export function simulate(
         value: dealt,
         atX: at.x,
         atY: at.y,
+        // Which ability took these points off. A pulse and a collision both
+        // carry a position, so without this there is nothing to tell a thrown
+        // pair of glasses from two men running into each other — and the split
+        // between the two is the whole of a fighter's style.
+        ability: pulse.ability,
       });
     }
 

@@ -226,8 +226,14 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
  * the edges overlap the way they do in the reference — traced frame by frame,
  * the guitarist's neck crosses the other man's jacket repeatedly — while the two
  * bodies never sit on top of each other, which is the thing that looked broken.
+ *
+ * **It is also the knob that sets how often they meet**, and since every meeting
+ * now lands a blow, it sets how big each blow can be. Down from 0.75 to 0.5: the
+ * reference lands about eight blows per fighter over its 24 seconds, ours were
+ * meeting twice that often, and a thousand points of health split twice as many
+ * ways is a number half the size.
  */
-const COLLISION_SHARE = 0.75;
+const COLLISION_SHARE = 0.5;
 
 /**
  * Two fighters cannot occupy the same place: they push off each other.

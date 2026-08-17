@@ -33,8 +33,16 @@ const MIRROR_TTK = 27;
 /** The power product every fighter is built to hit. */
 const POWER = (MID_HP * MID_HP) / MIRROR_TTK;
 
-const REFERENCE_CRIT_CHANCE = 0.3;
-const REFERENCE_CRIT_MULT = 2.6;
+/**
+ * The dummy's crits, kept level with the roster's.
+ *
+ * They used to be 0.3 at 2.6x, from back when the roster's own crits were that
+ * fat. A dummy that crits three times harder than anyone it measures is a
+ * different kind of fighter, and every fighter is scaled to beat *it* half the
+ * time.
+ */
+const REFERENCE_CRIT_CHANCE = 0.19;
+const REFERENCE_CRIT_MULT = 1.5;
 
 /** Matches per probe while bisecting, and how many halvings to run. */
 const CALIBRATION_SAMPLE = 200;
@@ -71,9 +79,17 @@ const REFERENCE: Fighter = {
   id: "reference",
   name: "REFERENCE",
   spriteId: "knight",
-  // The dummy is never drawn, so its shape is arbitrary; a square keeps it from
-  // implying anything about the roster it calibrates.
-  aspect: 1,
+  /**
+   * The roster's own middle width — **not** a square.
+   *
+   * Two fighters collide as boxes, so how often a fight has collisions in it
+   * depends on how wide the pair is, and a fighter whose damage is mostly
+   * contact is measured on that number. A square dummy is wider than every one
+   * of the four (0.55 to 0.84), so the calibration ran at a collision rate no
+   * real matchup reaches, and the more of a fighter's damage came from running
+   * into people the further his shipped strength sat from his measured one.
+   */
+  aspect: 0.7,
   maxHp: MID_HP,
   hp: MID_HP,
   attack: MID_HP / MIRROR_TTK / (1 + REFERENCE_CRIT_CHANCE * (REFERENCE_CRIT_MULT - 1)),

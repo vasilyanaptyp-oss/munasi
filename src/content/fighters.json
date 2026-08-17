@@ -5,10 +5,10 @@
     "spriteId": "compass-guy",
     "aspect": 0.8119,
     "maxHp": 1000,
-    "attack": 16.4,
+    "attack": 26.1,
     "attackSpeed": 1.15,
-    "critChance": 0.32,
-    "critMult": 2.6,
+    "critChance": 0.2,
+    "critMult": 1.45,
     "abilities": [
       {
         "type": "magnetic_north",
@@ -23,10 +23,10 @@
     "spriteId": "bodyguard-guy",
     "aspect": 0.6286,
     "maxHp": 1000,
-    "attack": 16.3,
+    "attack": 23.3,
     "attackSpeed": 0.85,
-    "critChance": 0.24,
-    "critMult": 2.9,
+    "critChance": 0.16,
+    "critMult": 1.55,
     "abilities": [
       {
         "type": "thrown_out",
@@ -42,17 +42,17 @@
     "spriteId": "boxer-guy",
     "aspect": 0.5455,
     "maxHp": 1000,
-    "attack": 9.2,
+    "attack": 11.1,
     "attackSpeed": 0.5,
-    "critChance": 0.34,
-    "critMult": 2.7,
-    "meleeShare": 3,
+    "critChance": 0.22,
+    "critMult": 1.5,
+    "meleeShare": 2.3,
     "abilities": [
       {
         "type": "haymaker",
         "cooldown": 5,
         "power": 0,
-        "hitShare": 1.8
+        "hitShare": 2.4
       }
     ]
   },
@@ -62,21 +62,21 @@
     "spriteId": "glasses-guy",
     "aspect": 0.8357,
     "maxHp": 1000,
-    "attack": 10.4,
+    "attack": 14.6,
     "attackSpeed": 0.95,
-    "critChance": 0.28,
-    "critMult": 2.8,
+    "critChance": 0.18,
+    "critMult": 1.5,
     "meleeShare": 0,
     "abilities": [
       {
         "type": "glasses_throw",
-        "cooldown": 9,
+        "cooldown": 5,
         "power": 0,
-        "hitShare": 2.9
+        "hitShare": 2.2
       },
       {
         "type": "four_eyes",
-        "cooldown": 14,
+        "cooldown": 11,
         "power": 0,
         "pulses": [
           3,

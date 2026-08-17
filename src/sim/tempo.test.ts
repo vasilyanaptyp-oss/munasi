@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
 import { buildGauntlet, byFaction, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { findBestGauntlet, ROUND_HOLD_FRAMES } from "./gauntlet.js";
-import { FIGHTER_HALF_HEIGHT, MAX_STILL_FRAMES } from "./movement.js";
+import {
+  collisionHalfExtents,
+  FIGHTER_HALF_HEIGHT,
+  MAX_STILL_FRAMES,
+  type MovementState,
+} from "./movement.js";
 import { MAX_QUIET_FRAMES, tempoReport } from "./tempo.js";
 import { FPS } from "./types.js";
 
@@ -234,9 +239,16 @@ describe("movement", () => {
     };
     const a = core("compass");
     const b = core("bodyguard");
-    // The same 0.75 the simulation collides on, minus a hair for float drift.
-    const halfW = (a.w + b.w) * 0.75 * 0.98;
-    const halfH = (a.h + b.h) * 0.75 * 0.98;
+    // Read off the simulation rather than written down here. The share used to
+    // be copied into this file as a literal, so when it moved the gate went on
+    // asserting the old one — either passing on a box nobody collides with any
+    // more, or failing on a change that was correct.
+    const ext = collisionHalfExtents(
+      { x: 0, y: 0, vx: 0, vy: 0, halfW: a.w, halfH: a.h } as MovementState,
+      { x: 0, y: 0, vx: 0, vy: 0, halfW: b.w, halfH: b.h } as MovementState,
+    );
+    const halfW = ext.halfW * 0.98;
+    const halfH = ext.halfH * 0.98;
 
     const worst: string[] = [];
     for (const snap of result.snapshots) {
