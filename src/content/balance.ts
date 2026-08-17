@@ -1,3 +1,4 @@
+import { asShipped } from "./teams.js";
 import { simulate } from "../sim/simulate.js";
 import type { Fighter, MatchRules } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
@@ -44,7 +45,7 @@ export function evaluatePair(a: Fighter, b: Fighter, options: BalanceOptions = {
   let winsA = 0;
   let frames = 0;
   for (let i = 0; i < sample; i += 1) {
-    const result = simulate({ a, b }, startSeed + i, options.rules ?? {});
+    const result = simulate({ a: asShipped(a), b: asShipped(b) }, startSeed + i, options.rules ?? {});
     if (result.winner === "a") winsA += 1;
     else if (result.winner === "draw") winsA += 0.5;
     frames += result.durationFrames;

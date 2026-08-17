@@ -96,7 +96,7 @@ const HAYMAKER_DASH = 3.0;
  * often the bouncing brings them together; it must not be bought by dropping
  * hits on the floor.
  */
-const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
+export const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
 /**
  * How much faster the man Bodyguard Guy has thrown travels, and for how long.
  *

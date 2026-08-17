@@ -28,12 +28,16 @@ import type { Ability } from "../sim/types.js";
  *   other constantly, and if the numbers start from different places the viewer
  *   cannot tell who is ahead without doing arithmetic. Difference belongs in
  *   attack, speed and crits, which are legible as *behaviour*;
- * - `attackSpeed` 0.45-1.45. The floor came down from 0.75 when style moved into
- *   `meleeShare`: a boxer whose whole identity is that his punch is the biggest
- *   number in the video can only have that if he lands few of them, because the
- *   total damage a fighter puts out over a match is fixed by the other one's
- *   health. He swings at 0.5 and hits for 71-91 where he used to swing at 1.05
- *   and hit for 36-45;
+ * - `attackSpeed` 0.45-1.45. **It no longer gates contact at all** — a collision
+ *   is a physical event and every one of them lands — so it survives only for
+ *   minions, buffs and as an input the calibrator reads. How hard a fighter hits
+ *   by running into someone is `meleeShare`;
+ * - **how big a number gets is arithmetic, not a knob.** A fighter's total output
+ *   over a match is the other one's thousand health, so the number on screen is
+ *   that thousand divided by how many blows land. Blows land when the outlines
+ *   meet, which is geometry — figure size, speed, arena — and all three are
+ *   measured off the reference. The only real lever left is *which* of a
+ *   fighter's own sources carries his total: `meleeShare` against `hitShare`;
  * - `critChance` 0.16-0.22 with `critMult` 1.45-1.55. **A crit is a wider
  *   number, not a different one.** These used to be 0.22-0.38 at 2.3-3.0, which
  *   is a whole extra reading of the format: the reference keeps every damage
@@ -119,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9778,
+    fieldScale: 0.9973,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -135,7 +139,7 @@ export const ROSTER: FighterSpec[] = [
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 0.9132,
+    fieldScale: 0.9308,
   },
 
   /*
@@ -178,7 +182,7 @@ export const ROSTER: FighterSpec[] = [
      * where the other man could hit back with his hands. Style has to survive
      * meeting a man with a different style.
      */
-    meleeShare: 2.3,
+    meleeShare: 4.0,
     /**
      * **The charge is his signature and the charge is where the big number is.**
      *
@@ -194,8 +198,8 @@ export const ROSTER: FighterSpec[] = [
      * paid twice was quietly rewriting the whole roster's pacing around whoever
      * owned one.
      */
-    abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.4 }],
-    fieldScale: 0.8708,
+    abilities: [{ type: "haymaker", cooldown: 7, power: 0, hitShare: 3.2 }],
+    fieldScale: 0.8996,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -227,6 +231,6 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.1960,
+    fieldScale: 1.1103,
   },
 ];

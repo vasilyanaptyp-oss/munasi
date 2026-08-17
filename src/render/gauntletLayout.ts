@@ -607,27 +607,31 @@ export function damageNumberRects(
       // Slide it clear rather than letting it sit on the one number a viewer is
       // actually tracking.
       const rect: Rect = { name: `damage:${event.type}@${event.frame}`, x, y, w, h };
-      for (const widget of widgets) {
-        if (!intersects(rect, widget)) continue;
-        rect.y = Math.min(bottom - h, widget.y + widget.h + Math.round(HEIGHT * 0.006));
-      }
 
-      // **And clear of the other numbers.** A contact damages both fighters on
-      // the same frame, and the abilities land on top of that, so when the pair
-      // are close their numbers were drawn one over another — measured on the
-      // shipped cut, "-118" and "-128" sharing the same pixels, unreadable. The
-      // reference never stacks two: its numbers sit apart in the blue.
+      // **Clear of the HP crosses and clear of the other numbers, together.**
+      //
+      // These were two passes, widgets first and then numbers, and the second
+      // one could push a number straight back onto a cross the first had just
+      // moved it off — the per-frame gate caught exactly that. One loop, both
+      // rules, until the rect is clean or the guard runs out.
+      //
+      // The numbers have to be pushed at all because a contact damages both
+      // fighters on the same frame and the abilities land on top of that, so
+      // with the pair close their numbers shared pixels: measured on the shipped
+      // cut, "-118" drawn over "-128". The reference never stacks two.
       const step = Math.round(h * 0.85);
-      for (let guard = 0; guard < 8; guard += 1) {
-        const clash = out.find((other) => intersects(rect, other));
+      for (let guard = 0; guard < 12; guard += 1) {
+        const clash =
+          widgets.find((widget) => intersects(rect, widget)) ??
+          out.find((other) => intersects(rect, other));
         if (!clash) break;
-        const below = clash.y + clash.h + Math.round(HEIGHT * 0.004);
+        const below = clash.y + clash.h + Math.round(HEIGHT * 0.005);
         // Downward while there is room, upward against the floor, so a late
         // number in a crowded frame never walks off the bottom.
         rect.y = below + h <= bottom ? below : Math.max(top, rect.y - step);
       }
 
-      out.push(rect);
+      out.push(rect)
     }
   }
   return out;

@@ -44,7 +44,7 @@ export interface GauntletTuning {
  * a thumb on the scale. With it still at 2.74 a fight lasted 11 seconds and was
  * over before it started.
  */
-export const GAUNTLET_TUNING: GauntletTuning = { tempo: 0.74, challengerPower: 1 };
+export const GAUNTLET_TUNING: GauntletTuning = { tempo: 0.52, challengerPower: 1 };
 
 /**
  * Rules the shipped gauntlet runs under.
@@ -88,6 +88,24 @@ export const GAUNTLET_RULES = {
    */
   attackRate: 0.35,
 } as const;
+
+/**
+ * A fighter as the shipped path actually plays him.
+ *
+ * **Anything that measures balance has to go through this.** `GAUNTLET_TUNING`
+ * scales damage, and it lives here rather than in `MatchRules`, so
+ * `evaluateRoster` — which takes rules — was measuring fighters at full damage
+ * while every video shipped at `tempo`. The winrates survive that, because the
+ * scale is the same on both sides; the *length* does not, and the length is what
+ * the drama-window gate reads. Changing the tempo moved every shipped video and
+ * left that gate's number sitting exactly where it was.
+ *
+ * This is the same defect that `pnpm balance` already carries a note about for
+ * `GAUNTLET_RULES`. It was fixed for the rules and missed for the tuning.
+ */
+export function asShipped(fighter: Fighter, tuning: GauntletTuning = GAUNTLET_TUNING): Fighter {
+  return scaled(fighter, tuning.tempo);
+}
 
 function scaled(fighter: Fighter, damageMultiplier: number): Fighter {
   return {

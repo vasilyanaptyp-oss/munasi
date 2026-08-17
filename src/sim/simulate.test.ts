@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { simulate } from "./simulate.js";
+import { CONTACT_RECOVERY_TICKS, simulate } from "./simulate.js";
 import { abilityMatch, lopsidedMatch, makeFighter, mirrorMatch } from "./testFixtures.js";
-import { FPS, MAX_FRAMES } from "./types.js";
+import { FPS, MAX_FRAMES, TICKS_PER_FRAME } from "./types.js";
 
 describe("optional comeback rules", () => {
   it("hits harder the more HP a fighter has lost", () => {
@@ -177,29 +177,31 @@ describe("simulate", () => {
     }
   });
 
-  it("never swings faster than its attack speed allows", () => {
-    // `attackSpeed` stopped being a metronome when damage moved onto contact.
-    // Blows land when the two run into each other, so the rate is set by how
-    // often that happens; what the stat still guarantees is the floor between
-    // two swings, which is what stops a pair lying against each other for half a
-    // second from registering thirty hits.
+  it("never lands two contact blows closer than the recovery window", () => {
+    // **This used to assert `attackSpeed`, and that guarantee no longer exists.**
+    // Damage moved onto the collision, so how often a fighter lands is set by
+    // how often the bouncing brings the pair together — the stat does not gate
+    // it at all, and the gate went on checking it for two more rounds, passing
+    // only because the fighters happened to meet slowly enough.
+    //
+    // What the simulation actually promises is `CONTACT_RECOVERY_TICKS`: a pair
+    // lying against each other, or one pressed into the other by a wall, counts
+    // once per window rather than once per tick.
     const config = {
       a: makeFighter({ id: "fast", attackSpeed: 3, attack: 1, maxHp: 100000, hp: 100000 }),
       b: makeFighter({ id: "slow", attackSpeed: 1, attack: 1, maxHp: 100000, hp: 100000 }),
     };
     const result = simulate(config, 4);
-    for (const [id, speed] of [["fast", 3], ["slow", 1]] as const) {
+    const floor = Math.floor(CONTACT_RECOVERY_TICKS / TICKS_PER_FRAME) - 1;
+    for (const id of ["fast", "slow"]) {
       const frames = result.events
         .filter((e) => e.actorId === id && (e.type === "hit" || e.type === "crit"))
         .map((e) => e.frame);
-      expect(frames.length, `${id} never swung`).toBeGreaterThan(0);
-      // Signature pulses are exempt: they are one cast spending itself over
-      // several ticks, not several swings. This roster has no abilities.
-      const floor = FPS / speed;
+      expect(frames.length, `${id} never landed anything`).toBeGreaterThan(0);
       for (let i = 1; i < frames.length; i += 1) {
         const gap = frames[i]! - frames[i - 1]!;
-        expect(gap, `${id} swung again after ${gap} frames, floor ${floor}`)
-          .toBeGreaterThanOrEqual(Math.floor(floor) - 1);
+        expect(gap, `${id} landed again after ${gap} frames, floor ${floor}`)
+          .toBeGreaterThanOrEqual(floor);
       }
     }
   });
