@@ -105,7 +105,18 @@ const F = {
    * was already right — 0.225 of the frame against the reference's 0.237 —
    * so this moves the home, not the pan.
    */
-  arenaTop: 0.145, // of frame height — measured
+  /**
+   * Where the arena's top border rests, as a share of frame height.
+   *
+   * **0.197, measured by `pnpm compare` on two references at once.** It was
+   * 0.145, from a hand measurement of one reference that read 0.150 — and the
+   * hand measurement was wrong: run the same detector over our videos and two
+   * references, and ours sit at 0.137-0.142 against their 0.196-0.199, with an
+   * identical camera travel of 0.22-0.27. The whole composition was a twentieth
+   * of a frame high, which is about a hundred pixels of blue added above the
+   * title and taken off below the caption.
+   */
+  arenaTop: 0.197,
   /**
    * Wall thickness: 24px on a 576-wide reference frame, in every frame of both
    * references that show the top wall. Ours was 0.032 — 18px at the same scale,

@@ -1,0 +1,341 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
+
+/**
+ * Measures a finished video the way a viewer sees it: from its pixels.
+ *
+ * **This exists because every geometric gate in the project passed while the
+ * picture was wrong.** The arena sat a fifth of a frame lower than the
+ * reference's, the wall was a quarter too thin, the caption half again too big,
+ * and a card at the end was sliced by the bottom edge — and the gates were all
+ * green, because they measured what they were told to measure (nothing
+ * overlaps, nothing leaves the frame, the arena does not resize) and not one of
+ * them compared the picture with the reference.
+ *
+ * The only thing that ever found those was pulling frames out of both files and
+ * measuring the *same* quantities in each. That was done by hand, in throwaway
+ * scripts, six times. This is that, kept.
+ *
+ * Everything here is read off the pixels and nothing is read off our own
+ * simulation, which is the point: a reference video has no events to consult,
+ * so any quantity that cannot be recovered from the image cannot be compared.
+ */
+
+/** Width frames are normalised to. The reference measurements are all at 576. */
+export const MEASURE_WIDTH = 576;
+
+/**
+ * Frames pulled per video. Enough to see the camera's whole travel — the
+ * reference's arena moves 200-250px over a fight — without decoding minutes of
+ * video for a number that settles in a few hundred samples.
+ */
+const MAX_FRAMES = 900;
+
+const FIELD_BLUE: readonly [number, number, number] = [24, 162, 211];
+/** How far a pixel may sit from the field blue and still be the field. */
+const BLUE_TOLERANCE = 46;
+/** Below this on every channel is the arena's border, or a text stroke. */
+const BLACK_LEVEL = 60;
+/** Above this on every channel is a keyline, a plus, or a caption. */
+const WHITE_LEVEL = 200;
+
+/**
+ * A damage number's own colour, in both files: ours is `#ffef4d`, the
+ * reference's a paler yellow-green, and one rule has to catch both.
+ *
+ * **The green channel is what does the work, and the first version of this got
+ * it wrong.** It asked for `g > 150`, which Boxer Guy's ochre trousers pass — so
+ * yellow was on screen in 850 frames out of 852, the "a number appeared"
+ * counter never saw an edge to count, and the tool reported a 24.7-second
+ * stretch with no damage in a video the simulation had put 34 blows in. A
+ * measuring tool that lies is worse than no tool: it sends you hunting a defect
+ * that is not there.
+ *
+ * `g > 200` is above anything a photograph of a person wears and below both
+ * numbers. Checked against the trousers that broke it.
+ */
+const isYellow = (r: number, g: number, b: number): boolean =>
+  g > 200 && r > 150 && b < 120 && (r + g) / 2 - b > 90;
+
+export interface FrameMeasure {
+  /** Outer edge of the arena's black border, in normalised pixels. */
+  arena: { top: number; bottom: number; left: number; right: number } | null;
+  /** Thickness of the border where it is fully on screen. */
+  border: number | null;
+  blueShare: number;
+  blackShare: number;
+  whiteShare: number;
+  yellowPixels: number;
+  /** Pixels that differ from the previous frame, as a share. */
+  changed: number;
+}
+
+export interface VideoMeasure {
+  file: string;
+  frames: number;
+  seconds: number;
+  /** Median outer height of the arena border, and its spread. */
+  arenaHeight: { median: number; min: number; max: number } | null;
+  borderThickness: number | null;
+  /** Where the arena's top edge sits, as a share of frame height. */
+  arenaTop: { median: number; travel: number } | null;
+  blueShare: number;
+  blackShare: number;
+  whiteShare: number;
+  /** Distinct appearances of a damage number, per second. */
+  numbersPerSecond: number;
+  /** Longest stretch with no number on screen, in seconds. */
+  worstGap: number;
+  /** Median share of pixels that change from one frame to the next. */
+  motion: number;
+  /** Share of frames that change almost nothing. */
+  staticShare: number;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)]!;
+}
+
+/**
+ * Longest run of `true` in a row or column.
+ *
+ * The arena's border is the only thing in the frame that draws a black line
+ * hundreds of pixels long. Looking for *any* black pixel finds the title as
+ * well — it is stroked in black — and reports an arena the size of the whole
+ * frame, which is exactly what a first attempt at this did.
+ */
+function longestRun(length: number, solid: (i: number) => boolean): number {
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < length; i += 1) {
+    if (solid(i)) {
+      run += 1;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+  }
+  return best;
+}
+
+function measureFrame(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  previous: Uint8ClampedArray | null,
+): FrameMeasure {
+  const isBlack = (p: number): boolean =>
+    data[p]! < BLACK_LEVEL && data[p + 1]! < BLACK_LEVEL && data[p + 2]! < BLACK_LEVEL;
+
+  let blue = 0;
+  let black = 0;
+  let white = 0;
+  let yellow = 0;
+  for (let p = 0; p < width * height * 4; p += 4) {
+    const r = data[p]!;
+    const g = data[p + 1]!;
+    const b = data[p + 2]!;
+    if (
+      Math.abs(r - FIELD_BLUE[0]) < BLUE_TOLERANCE &&
+      Math.abs(g - FIELD_BLUE[1]) < BLUE_TOLERANCE &&
+      Math.abs(b - FIELD_BLUE[2]) < BLUE_TOLERANCE
+    ) {
+      blue += 1;
+    } else if (r < BLACK_LEVEL && g < BLACK_LEVEL && b < BLACK_LEVEL) {
+      black += 1;
+    } else if (r > WHITE_LEVEL && g > WHITE_LEVEL && b > WHITE_LEVEL) {
+      white += 1;
+    }
+    if (isYellow(r, g, b)) yellow += 1;
+  }
+
+  // The arena: rows and columns carrying a long continuous black run.
+  const minRun = Math.round(width * 0.35);
+  let top = -1;
+  let bottom = -1;
+  for (let y = 0; y < height; y += 1) {
+    if (longestRun(width, (x) => isBlack((y * width + x) * 4)) < minRun) continue;
+    if (top < 0) top = y;
+    bottom = y;
+  }
+  let left = -1;
+  let right = -1;
+  for (let x = 0; x < width; x += 1) {
+    if (longestRun(height, (y) => isBlack((y * width + x) * 4)) < minRun) continue;
+    if (left < 0) left = x;
+    right = x;
+  }
+
+  // Border thickness, read down the middle of the top edge where nothing else
+  // is drawn. Only meaningful when the top edge is on screen.
+  let border: number | null = null;
+  if (top >= 0) {
+    const x = Math.floor(width / 2);
+    let run = 0;
+    for (let y = top; y < height && isBlack((y * width + x) * 4); y += 1) run += 1;
+    border = run > 0 ? run : null;
+  }
+
+  let changed = 0;
+  if (previous) {
+    for (let p = 0; p < width * height * 4; p += 4) {
+      const diff =
+        Math.abs(data[p]! - previous[p]!) +
+        Math.abs(data[p + 1]! - previous[p + 1]!) +
+        Math.abs(data[p + 2]! - previous[p + 2]!);
+      if (diff > 24) changed += 1;
+    }
+  }
+
+  const pixels = width * height;
+  return {
+    arena: top >= 0 && left >= 0 ? { top, bottom, left, right } : null,
+    border,
+    blueShare: blue / pixels,
+    blackShare: black / pixels,
+    whiteShare: white / pixels,
+    yellowPixels: yellow,
+    changed: previous ? changed / pixels : 0,
+  };
+}
+
+/** Pulls frames to a scratch directory and measures every one of them. */
+export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure> {
+  const dir = mkdtempSync(join(tmpdir(), "munasi-measure-"));
+  try {
+    execFileSync(
+      "ffmpeg",
+      [
+        "-v", "error",
+        "-i", file,
+        "-vf", `fps=${fps},scale=${MEASURE_WIDTH}:-1`,
+        "-frames:v", String(MAX_FRAMES),
+        "-pix_fmt", "rgb24",
+        join(dir, "f_%05d.png"),
+      ],
+      { stdio: "ignore" },
+    );
+    const files = readdirSync(dir).filter((f) => f.endsWith(".png")).sort();
+    if (files.length === 0) throw new Error(`${file}: ffmpeg produced no frames`);
+
+    const measures: FrameMeasure[] = [];
+    let previous: Uint8ClampedArray | null = null;
+    for (const name of files) {
+      const image = await loadImage(join(dir, name));
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0);
+      const { data } = ctx.getImageData(0, 0, image.width, image.height);
+      measures.push(measureFrame(data, image.width, image.height, previous));
+      previous = data;
+    }
+
+    const height = measures.length > 0 ? Math.round(MEASURE_WIDTH * (1920 / 1080)) : 0;
+    const withArena = measures.filter((m) => m.arena !== null);
+    const heights = withArena.map((m) => m.arena!.bottom - m.arena!.top);
+    const tops = withArena.map((m) => m.arena!.top);
+    const borders = measures.map((m) => m.border).filter((b): b is number => b !== null);
+
+    // A number is on screen when there is a run of yellow. Count the moments it
+    // appears, not the frames it is up for.
+    let showing = false;
+    const appearances: number[] = [];
+    measures.forEach((m, i) => {
+      const now = m.yellowPixels > 40;
+      if (now && !showing) appearances.push(i);
+      showing = now;
+    });
+    const marks = [0, ...appearances, measures.length];
+    let worst = 0;
+    for (let i = 1; i < marks.length; i += 1) {
+      worst = Math.max(worst, (marks[i]! - marks[i - 1]!) / fps);
+    }
+
+    // The real duration, not the sampled one: the frame cap is there to keep
+    // this quick, and reporting the capped length as the video's length made
+    // four different files all read 14.0s.
+    let seconds = measures.length / fps;
+    try {
+      const probed = execFileSync(
+        "ffprobe",
+        ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
+        { encoding: "utf8" },
+      ).trim();
+      if (Number.isFinite(Number(probed))) seconds = Number(probed);
+    } catch {
+      // ffprobe missing is not worth failing a measurement over.
+    }
+
+    const moving = measures.slice(1).map((m) => m.changed);
+    return {
+      file,
+      frames: measures.length,
+      seconds,
+      arenaHeight:
+        heights.length > 0
+          ? { median: median(heights), min: Math.min(...heights), max: Math.max(...heights) }
+          : null,
+      borderThickness: borders.length > 0 ? median(borders) : null,
+      arenaTop:
+        tops.length > 0
+          ? {
+              median: median(tops) / (height || 1),
+              travel: (Math.max(...tops) - Math.min(...tops)) / (height || 1),
+            }
+          : null,
+      blueShare: median(measures.map((m) => m.blueShare)),
+      blackShare: median(measures.map((m) => m.blackShare)),
+      whiteShare: median(measures.map((m) => m.whiteShare)),
+      numbersPerSecond: appearances.length / (measures.length / fps),
+      worstGap: worst,
+      motion: median(moving),
+      staticShare: moving.filter((c) => c < 0.005).length / Math.max(1, moving.length),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** One row of the comparison table: what it is, and the value per video. */
+export interface ComparisonRow {
+  label: string;
+  values: string[];
+}
+
+const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
+
+export function comparisonRows(measures: VideoMeasure[]): ComparisonRow[] {
+  const col = <T>(pick: (m: VideoMeasure) => T): string[] => measures.map((m) => String(pick(m)));
+  return [
+    { label: "длина", values: col((m) => `${m.seconds.toFixed(1)}с`) },
+    { label: "кадров измерено", values: col((m) => `${m.frames}`) },
+    {
+      label: "рамка арены (px при 576)",
+      values: col((m) => (m.arenaHeight ? `${m.arenaHeight.median}` : "—")),
+    },
+    {
+      label: "толщина стены",
+      values: col((m) => (m.borderThickness === null ? "—" : `${m.borderThickness}px`)),
+    },
+    {
+      label: "верх арены (доля кадра)",
+      values: col((m) => (m.arenaTop ? m.arenaTop.median.toFixed(3) : "—")),
+    },
+    {
+      label: "ход арены по кадру",
+      values: col((m) => (m.arenaTop ? m.arenaTop.travel.toFixed(3) : "—")),
+    },
+    { label: "синего в кадре", values: col((m) => pct(m.blueShare)) },
+    { label: "чёрного в кадре", values: col((m) => pct(m.blackShare)) },
+    { label: "белого в кадре", values: col((m) => pct(m.whiteShare)) },
+    { label: "чисел урона в секунду", values: col((m) => m.numbersPerSecond.toFixed(2)) },
+    { label: "худшая пауза без числа", values: col((m) => `${m.worstGap.toFixed(2)}с`) },
+    { label: "движение (пикселей за кадр)", values: col((m) => pct(m.motion)) },
+    { label: "статичных кадров", values: col((m) => pct(m.staticShare)) },
+  ];
+}

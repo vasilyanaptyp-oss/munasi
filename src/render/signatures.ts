@@ -180,31 +180,6 @@ function placedProp(
  * `thrown_out` in `simulate.ts`.
  */
 
-/** Sampled off the reference's camera cone, before it is laid over the field. */
-const CONE_RED = "#d81f11";
-
-/** A plain translucent wedge from one fighter toward the other. */
-function cone(
-  ctx: Ctx,
-  from: Point,
-  to: Point,
-  reach: number,
-  spread: number,
-  alpha: number,
-  colour: string,
-): void {
-  const heading = Math.atan2(to.y - from.y, to.x - from.x);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = colour;
-  ctx.beginPath();
-  ctx.moveTo(from.x, from.y);
-  ctx.lineTo(from.x + Math.cos(heading - spread) * reach, from.y + Math.sin(heading - spread) * reach);
-  ctx.lineTo(from.x + Math.cos(heading + spread) * reach, from.y + Math.sin(heading + spread) * reach);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
 
 
 /**
@@ -246,15 +221,18 @@ export function drawSignatures(
     const to = positionOf(event.targetId);
     if (!from || !to) continue;
 
-    // The reference's own two devices — see the note above `cone`.
-    if (kind === "magnetic_north") {
-      // A flat wedge from him to the other man, the way the reference's camera
-      // throws its flash: one colour, half opacity, no edge and no detail.
-      const t = Math.min(1, age / SIGNATURE_FRAMES);
-      const reach = Math.hypot(to.x - from.x, to.y - from.y) * (0.4 + easeOut(Math.min(1, age / SIGNATURE_TRAVEL_FRAMES)) * 0.85);
-      cone(ctx, from, to, reach, 0.3, 0.5 * Math.max(0, 1 - Math.max(0, t - 0.6) / 0.4), CONE_RED);
-      continue;
-    }
+    // **`MAGNETIC_NORTH` draws nothing.** It used to lay a flat translucent
+    // wedge from him to the other man, on the theory that the reference's own
+    // camera flash is a plain triangle — but that reference belongs to a
+    // character we do not have, and a coloured shape stretched across the arena
+    // is vector graphics pasted into a collage of photographs, which is the one
+    // thing this format is not. It was rejected three times as drawing and then
+    // outlived the removal, because it lived on its own branch above the props
+    // table and nothing walked past it.
+    //
+    // What the ability *does* is still on screen and still the strongest thing
+    // an ability can do here: it rewrites where the other man is flying. When
+    // `compass.png` is in `assets/props/`, it gets a picture like everyone else.
 
     const spec = ABILITY_PROPS[kind];
     if (!hasProp(spec.prop)) continue;

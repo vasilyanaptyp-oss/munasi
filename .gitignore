@@ -16,3 +16,6 @@ tmp/
 
 # Generated audio assets (see src/export/audio.ts)
 assets/audio/*.wav
+
+# Чужие ролики: см. refs/videos/README.md
+refs/videos/*.mp4

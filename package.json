@@ -21,7 +21,9 @@
     "diagnose": "tsx src/cli/diagnose.ts",
     "calibrate:gauntlet": "tsx src/content/calibrateGauntlet.ts",
     "motion": "tsx src/cli/motion.ts",
-    "smoke": "tsx src/cli/smoke.ts"
+    "smoke": "tsx src/cli/smoke.ts",
+    "compare": "tsx src/cli/compare.ts",
+    "sheet": "tsx src/cli/sheet.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"
