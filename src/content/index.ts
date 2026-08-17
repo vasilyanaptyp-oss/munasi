@@ -57,6 +57,31 @@ function parseAbility(raw: unknown, label: string): Ability {
   return ability;
 }
 
+/**
+ * The outline the fighters collide on, checked rather than trusted.
+ *
+ * A band out of order or outside 0..1 would not throw anywhere downstream — it
+ * would just quietly make a fighter collide with air, or with nothing at all,
+ * which is the sort of defect that only shows up as "he does not hit" three
+ * rounds later.
+ */
+function parseSilhouette(raw: unknown, label: string): [number, number][] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`${label}: expected a non-empty array of [left, right] bands`);
+  }
+  return raw.map((band, i) => {
+    if (!Array.isArray(band) || band.length !== 2) {
+      throw new Error(`${label}[${i}]: expected [left, right]`);
+    }
+    const left = assertNumber(band[0], `${label}[${i}][0]`);
+    const right = assertNumber(band[1], `${label}[${i}][1]`);
+    if (left < 0 || right > 1 || right < left) {
+      throw new Error(`${label}[${i}]: ${left}..${right} is not a span inside 0..1`);
+    }
+    return [left, right] as [number, number];
+  });
+}
+
 function parseFighter(raw: unknown, index: number): Fighter {
   if (typeof raw !== "object" || raw === null) throw new Error(`fighter[${index}]: not an object`);
   const r = raw as Record<string, unknown>;
@@ -73,6 +98,9 @@ function parseFighter(raw: unknown, index: number): Fighter {
     name: typeof r["name"] === "string" ? r["name"] : id.toUpperCase(),
     spriteId: typeof r["spriteId"] === "string" ? r["spriteId"] : id,
     aspect: assertNumber(r["aspect"], `${label}.aspect`),
+    ...(r["silhouette"] === undefined
+      ? {}
+      : { silhouette: parseSilhouette(r["silhouette"], `${label}.silhouette`) }),
     maxHp,
     hp: maxHp,
     attack: assertNumber(r["attack"], `${label}.attack`),

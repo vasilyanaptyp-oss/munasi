@@ -119,7 +119,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 0.9988,
+    fieldScale: 0.9778,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -135,7 +135,7 @@ export const ROSTER: FighterSpec[] = [
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 0.9545,
+    fieldScale: 0.9132,
   },
 
   /*
@@ -195,7 +195,7 @@ export const ROSTER: FighterSpec[] = [
      * owned one.
      */
     abilities: [{ type: "haymaker", cooldown: 5, power: 0, hitShare: 2.4 }],
-    fieldScale: 0.8948,
+    fieldScale: 0.8708,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -227,6 +227,6 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.0913,
+    fieldScale: 1.1960,
   },
 ];

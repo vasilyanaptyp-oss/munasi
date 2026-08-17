@@ -85,6 +85,21 @@ export interface Fighter {
    * drift apart.
    */
   aspect: number;
+  /**
+   * The figure's outline: `[left, right]` per horizontal band, top to bottom,
+   * as fractions of the sprite's own width. Written by the calibrator straight
+   * out of the PNG's alpha channel — see `spriteProfile`.
+   *
+   * **This is what two fighters collide on.** A bounding box scaled by a
+   * hand-set share was the wrong shape in both directions at once: too narrow
+   * across the shoulders, too wide beside the head. Because the numbers are
+   * fractions of the drawn sprite, the outline the simulation bounces is the
+   * outline the renderer draws, at whatever size it draws it.
+   *
+   * Optional so a fighter invented in a test does not need a PNG; without it
+   * the whole rectangle is solid.
+   */
+  silhouette?: [number, number][];
   maxHp: number;
   /** Current HP. Equals `maxHp` at the start of a match. */
   hp: number;

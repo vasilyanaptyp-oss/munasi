@@ -5,7 +5,7 @@ import { isMain } from "../util/main.js";
 import { ROSTER, type FighterSpec } from "./roster.js";
 import { ROSTER_PATH } from "./index.js";
 import { GAUNTLET_RULES } from "./teams.js";
-import { spriteAspect } from "./cutout.js";
+import { spriteAspect, spriteProfile } from "./cutout.js";
 
 /**
  * Turns the hand-authored specs in `roster.ts` into `fighters.json` by solving
@@ -167,6 +167,10 @@ export function scaleSpec(spec: FighterSpec, attack: number, scale: number): Fig
     name: spec.name,
     spriteId: spec.spriteId,
     aspect: spriteAspect(spec.spriteId),
+    // Straight off the PNG's alpha. This is the shape the pair collide on, and
+    // it comes from the same file the renderer draws, so the outline that
+    // bounces and the outline on screen cannot drift apart.
+    silhouette: spriteProfile(spec.spriteId),
     maxHp: spec.maxHp,
     hp: spec.maxHp,
     attack: attack * scale,
@@ -268,6 +272,14 @@ function serialise(fighter: Fighter): unknown {
     // Four places is enough to reproduce the bounce box exactly; the aspect
     // comes from the PNG's own pixel dimensions, so it is already exact.
     aspect: Math.round(fighter.aspect * 10000) / 10000,
+    ...(fighter.silhouette === undefined
+      ? {}
+      : {
+          silhouette: fighter.silhouette.map(
+            ([l, r]) =>
+              [Math.round(l * 10000) / 10000, Math.round(r * 10000) / 10000] as [number, number],
+          ),
+        }),
     maxHp: fighter.maxHp,
     attack: Math.round(fighter.attack * 10) / 10,
     attackSpeed: fighter.attackSpeed,

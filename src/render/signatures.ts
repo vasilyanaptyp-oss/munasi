@@ -357,6 +357,7 @@ export function photoTreatment(
   headingOf: (event: MatchEvent) => number,
   scale: number,
 ): PhotoTreatment {
+  void scale;
   let out = { ...NO_TREATMENT };
   for (const event of events) {
     if (event.type !== "signature") continue;
@@ -367,16 +368,23 @@ export function photoTreatment(
     const caster = event.actorId === fighterId;
     const victim = event.targetId === fighterId;
     if (!caster && !victim) continue;
-    const heading = headingOf(event);
+    void headingOf;
     const since = (age - SIGNATURE_TRAVEL_FRAMES) / TAIL_FRAMES;
 
     if (kind === "haymaker" && caster) {
-      // The charge: he swells and smears until the punch lands, then drops back.
+      // **No trail, and no swelling.** He used to grow by a third and drag three
+      // copies of himself behind him, which on a shipped frame is a pale cloud
+      // twice the size of a man with a photograph somewhere inside it. Nothing
+      // in any of the four references does either: a fighter is the same size
+      // in every frame, and the only thing that ever happens to the photograph
+      // itself is that it flashes solid white.
+      //
+      // The charge still reads, because the charge is *movement* — he crosses
+      // half the square in a third of a second, which is the fastest anything
+      // in the format moves.
       const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
       const settle = age <= SIGNATURE_TRAVEL_FRAMES ? 1 : Math.max(0, 1 - since * 3);
-      out.scale = Math.max(out.scale, 1 + 0.34 * easeOut(t) * settle);
-      out.smear = Math.max(out.smear, scale * 0.55 * t * settle);
-      out.smearAngle = heading;
+      out.scale = Math.max(out.scale, 1 + 0.06 * easeOut(t) * settle);
     }
     if (kind === "haymaker" && victim && age >= SIGNATURE_TRAVEL_FRAMES) {
       // Knocked off true, and squashed, righting himself over half a second.
@@ -384,17 +392,12 @@ export function photoTreatment(
       out.rotation += 0.3 * decay * Math.sin(since * 9 + 1);
       out.scale *= 1 - 0.1 * decay;
     }
-    if (kind === "magnetic_north" && victim) {
-      const t = Math.min(1, age / SIGNATURE_FRAMES);
-      out.smear = Math.max(out.smear, scale * 0.7 * Math.sin(t * Math.PI));
-      out.smearAngle = heading;
-    }
+
     if (kind === "thrown_out" && victim) {
-      // Hurled: he crosses the square at four times his own speed, so he smears
-      // hard along the line he was thrown down. The photograph is the effect.
+      // Hurled across the square at four times his own speed. That speed is the
+      // effect; a trail behind it was three more copies of the same photograph
+      // and read as a smudge.
       const t = Math.min(1, age / SIGNATURE_FRAMES);
-      out.smear = Math.max(out.smear, scale * 1.1 * Math.sin(t * Math.PI));
-      out.smearAngle = heading;
       out.rotation += 0.16 * Math.sin(t * 7) * (1 - t);
     }
   }

@@ -539,7 +539,10 @@ function numberStyle(type: string): { size: number; heavy: boolean } | null {
 export function numberText(type: string, value: number | undefined): string {
   if (type === "pickup_claim") return "+BUFF";
   if (type === "heal") return `+${value}`;
-  if (type === "crit") return `-${value}!`;
+  // **No exclamation mark.** A crit used to read "-120!", and nothing in any of
+  // the four references ever writes one: every number they show is a bare minus
+  // and a figure. It was ours, and at thumbnail size it reads as part of the
+  // number.
   return `-${value}`;
 }
 
@@ -607,6 +610,21 @@ export function damageNumberRects(
       for (const widget of widgets) {
         if (!intersects(rect, widget)) continue;
         rect.y = Math.min(bottom - h, widget.y + widget.h + Math.round(HEIGHT * 0.006));
+      }
+
+      // **And clear of the other numbers.** A contact damages both fighters on
+      // the same frame, and the abilities land on top of that, so when the pair
+      // are close their numbers were drawn one over another — measured on the
+      // shipped cut, "-118" and "-128" sharing the same pixels, unreadable. The
+      // reference never stacks two: its numbers sit apart in the blue.
+      const step = Math.round(h * 0.85);
+      for (let guard = 0; guard < 8; guard += 1) {
+        const clash = out.find((other) => intersects(rect, other));
+        if (!clash) break;
+        const below = clash.y + clash.h + Math.round(HEIGHT * 0.004);
+        // Downward while there is room, upward against the floor, so a late
+        // number in a crowded frame never walks off the bottom.
+        rect.y = below + h <= bottom ? below : Math.max(top, rect.y - step);
       }
 
       out.push(rect);

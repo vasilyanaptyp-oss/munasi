@@ -38,7 +38,12 @@ export const GAUNTLET_COLORS = {
    */
   damageText: "#ffef4d",
   // Hotter still, so a crit reads on colour as well as on size.
-  critText: "#fffbc2",
+  /**
+   * **The same yellow as an ordinary hit.** A crit was drawn in its own paler
+   * colour, which put two different damage colours on one frame; the reference
+   * uses one for every number it shows, and marks a crit by size alone.
+   */
+  critText: "#ffef4d",
   /**
    * The impact mark at the point of contact, and the "!" over it. Both sampled
    * off the reference, which draws red slashes and an orange exclamation at

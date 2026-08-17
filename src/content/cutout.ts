@@ -1,5 +1,6 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 import { isMain } from "../util/main.js";
 
@@ -211,4 +212,131 @@ export function spriteAspect(spriteId: string): number {
   const height = png.readUInt32BE(20);
   if (width <= 0 || height <= 0) throw new Error(`${spriteId}.png: bad dimensions`);
   return width / height;
+}
+
+/**
+ * Alpha channel of a cut-out, decoded from the PNG itself.
+ *
+ * Hand-rolled rather than run through a canvas, for the same reason
+ * `spriteAspect` is: what comes out of here ends up in `fighters.json` and gets
+ * collided against by `src/sim`, which must never reach into the render stack.
+ * `zlib` is in Node; the rest is the filter table from the PNG spec.
+ *
+ * Only what `pnpm cutout` writes is accepted — 8-bit RGBA, not interlaced — and
+ * anything else throws rather than being guessed at.
+ */
+function spriteAlpha(spriteId: string): { width: number; height: number; alpha: Uint8Array } {
+  const png = readFileSync(join(FIGHTER_DIR, `${spriteId}.png`));
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  const depth = png[24];
+  const colourType = png[25];
+  const interlace = png[28];
+  if (depth !== 8 || colourType !== 6 || interlace !== 0) {
+    throw new Error(
+      `${spriteId}.png: expected 8-bit RGBA, not interlaced; got depth ${depth}, ` +
+        `colour type ${colourType}, interlace ${interlace}`,
+    );
+  }
+
+  const parts: Buffer[] = [];
+  for (let at = 8; at + 8 <= png.length; ) {
+    const length = png.readUInt32BE(at);
+    const type = png.toString("latin1", at + 4, at + 8);
+    if (type === "IDAT") parts.push(png.subarray(at + 8, at + 8 + length));
+    if (type === "IEND") break;
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(parts));
+
+  // Undo the per-scanline filters. `bpp` is 4 because the colour type is RGBA8,
+  // and each row is one filter byte followed by the pixels.
+  const bpp = 4;
+  const stride = width * bpp;
+  const out = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)]!;
+    const src = y * (stride + 1) + 1;
+    const dst = y * stride;
+    for (let i = 0; i < stride; i += 1) {
+      const x = raw[src + i]!;
+      const a = i >= bpp ? out[dst + i - bpp]! : 0;
+      const b = y > 0 ? out[dst - stride + i]! : 0;
+      const c = i >= bpp && y > 0 ? out[dst - stride + i - bpp]! : 0;
+      let value: number;
+      switch (filter) {
+        case 0: value = x; break;
+        case 1: value = x + a; break;
+        case 2: value = x + b; break;
+        case 3: value = x + ((a + b) >> 1); break;
+        case 4: {
+          const p = a + b - c;
+          const pa = Math.abs(p - a);
+          const pb = Math.abs(p - b);
+          const pc = Math.abs(p - c);
+          value = x + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+          break;
+        }
+        default: throw new Error(`${spriteId}.png: unknown row filter ${filter}`);
+      }
+      out[dst + i] = value & 0xff;
+    }
+  }
+
+  const alpha = new Uint8Array(width * height);
+  for (let p = 0; p < width * height; p += 1) alpha[p] = out[p * bpp + 3]!;
+  return { width, height, alpha };
+}
+
+/**
+ * How many horizontal slices a silhouette is cut into.
+ *
+ * Twenty-four over a figure that stands 30% of the arena tall puts a band at
+ * roughly the height of a head, which is the finest distinction that matters:
+ * a raised arm, a guitar neck and a pair of shoulders all land in different
+ * bands, and nothing smaller than a head changes whether two photographs look
+ * like they touched.
+ */
+export const SILHOUETTE_BANDS = 24;
+
+/** Alpha above this counts as the figure. Same threshold `cutout` trims on. */
+const SOLID_ALPHA = 8;
+
+/**
+ * The figure's outline, as the left and right edge of each horizontal band.
+ *
+ * **This is what the fighters collide on.** It used to be the bounding box
+ * scaled by a hand-set share — 0.5, then 0.75, tuned by how the fights felt —
+ * and a share is the wrong shape twice over: at the shoulders it is narrower
+ * than the man, and beside his head it is wider than the air. Two photographs
+ * would stop dead with a hand's width of blue between them, or slide through
+ * each other at the ankles.
+ *
+ * Both numbers are fractions of the sprite's own width, so the profile scales
+ * with whatever size the renderer draws the figure at and cannot drift from it.
+ * A band with nothing in it reads `[0, 0]` and never collides.
+ */
+export function spriteProfile(
+  spriteId: string,
+  bands = SILHOUETTE_BANDS,
+): [number, number][] {
+  const { width, height, alpha } = spriteAlpha(spriteId);
+  const profile: [number, number][] = [];
+  for (let band = 0; band < bands; band += 1) {
+    // Rounded rather than floored so the last band ends exactly on the last row
+    // and no row is counted twice or dropped.
+    const y0 = Math.round((band * height) / bands);
+    const y1 = Math.max(y0 + 1, Math.round(((band + 1) * height) / bands));
+    let left = width;
+    let right = -1;
+    for (let y = y0; y < y1; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (alpha[y * width + x]! <= SOLID_ALPHA) continue;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+    profile.push(right < 0 ? [0, 0] : [left / width, (right + 1) / width]);
+  }
+  return profile;
 }

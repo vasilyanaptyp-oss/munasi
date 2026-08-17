@@ -293,8 +293,8 @@ export function simulate(
     b: mulberry32(deriveSeed(5)),
   };
   const movement: Record<Side, MovementState> = {
-    a: initialMovement("a", fighters.a.aspect, movementRng.a),
-    b: initialMovement("b", fighters.b.aspect, movementRng.b),
+    a: initialMovement("a", fighters.a.aspect, movementRng.a, fighters.a.silhouette),
+    b: initialMovement("b", fighters.b.aspect, movementRng.b, fighters.b.silhouette),
   };
 
   const events: MatchEvent[] = [];

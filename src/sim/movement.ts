@@ -36,7 +36,7 @@ import type { Rng } from "./rng.js";
  * fighters up with it and left the map looking exactly as small as before. A
  * bigger map is a bigger *gap between the figures*, not a bigger everything.
  */
-export const FIGHTER_HALF_HEIGHT = 0.15;
+export const FIGHTER_HALF_HEIGHT = 0.14;
 
 /**
  * Margin the bounce box carries beyond the figure itself.
@@ -72,6 +72,13 @@ export interface MovementState {
   /** Half-width as a share of the arena, from the sprite's aspect ratio. */
   halfW: number;
   halfH: number;
+  /**
+   * The figure's outline: `[left, right]` per band, top to bottom, as fractions
+   * of the sprite's width. This is what the pair collide on — see
+   * `outlineOverlap`. A fighter with no profile gets one solid band, which is
+   * the old bounding box.
+   */
+  silhouette: readonly (readonly [number, number])[];
   /** Tick until which this fighter is held still — see `NOBODY MOVES`. */
   frozenUntilTick: number;
   /** Tick until which this fighter travels at `dashMul` speed — see `HAYMAKER`. */
@@ -135,7 +142,12 @@ function steerHeading(heading: number): number {
  * a wide box and bounces off the side walls sooner — which is the correct
  * behaviour and free, since the box is what is drawn.
  */
-export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): MovementState {
+export function initialMovement(
+  side: "a" | "b",
+  aspect: number,
+  rng: Rng,
+  silhouette: readonly (readonly [number, number])[] = [[0, 1]],
+): MovementState {
   const halfH = FIGHTER_HALF_HEIGHT + KEYLINE_MARGIN;
   const halfW = FIGHTER_HALF_HEIGHT * aspect + KEYLINE_MARGIN;
   // The two start on opposite sides, so frame 0 reads as a face-off.
@@ -155,6 +167,7 @@ export function initialMovement(side: "a" | "b", aspect: number, rng: Rng): Move
     vy: Math.sin(quarter) * speed * (rng.chance(0.5) ? 1 : -1),
     halfW,
     halfH,
+    silhouette,
     frozenUntilTick: 0,
     dashUntilTick: 0,
     dashMul: 1,
@@ -217,23 +230,98 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
 }
 
 /**
- * Share of the drawn box that is solid.
+ * The band of a fighter's outline that a given height falls in, as world
+ * coordinates: the left and right edge of the figure at that height.
  *
- * The bounce box is the whole photograph, and a photograph is mostly air at its
- * corners: an outstretched arm, a guitar neck, the gap under a raised elbow.
- * Colliding on the full box keeps two figures a visible margin apart at all
- * times and reads as an invisible wall between them. Colliding on the core lets
- * the edges overlap the way they do in the reference — traced frame by frame,
- * the guitarist's neck crosses the other man's jacket repeatedly — while the two
- * bodies never sit on top of each other, which is the thing that looked broken.
- *
- * **It is also the knob that sets how often they meet**, and since every meeting
- * now lands a blow, it sets how big each blow can be. Down from 0.75 to 0.5: the
- * reference lands about eight blows per fighter over its 24 seconds, ours were
- * meeting twice that often, and a thousand points of health split twice as many
- * ways is a number half the size.
+ * Returns `null` for a band with nothing in it — above a head, beside a pair of
+ * ankles — which is exactly the air that a bounding box used to treat as solid.
  */
-const COLLISION_SHARE = 0.5;
+function bandSpan(
+  state: MovementState,
+  band: number,
+): { left: number; right: number } | null {
+  const rows = state.silhouette;
+  const row = rows[band];
+  if (!row || row[1] <= row[0]) return null;
+  // The profile spans the sprite; the keyline is drawn pixels on top of it and
+  // sticks out all the way round, so every band is inflated by it.
+  const spriteHalfW = state.halfW - KEYLINE_MARGIN;
+  const originX = state.x - spriteHalfW;
+  return {
+    left: originX + 2 * spriteHalfW * row[0] - KEYLINE_MARGIN,
+    right: originX + 2 * spriteHalfW * row[1] + KEYLINE_MARGIN,
+  };
+}
+
+/** World y of the top and bottom edge of one band of a fighter's outline. */
+function bandEdges(state: MovementState, band: number): { top: number; bottom: number } {
+  const spriteHalfH = state.halfH - KEYLINE_MARGIN;
+  const originY = state.y - spriteHalfH;
+  const step = (2 * spriteHalfH) / state.silhouette.length;
+  return {
+    top: originY + step * band - KEYLINE_MARGIN,
+    bottom: originY + step * (band + 1) + KEYLINE_MARGIN,
+  };
+}
+
+/**
+ * How deep two fighters are into each other, measured on their outlines.
+ *
+ * Returns the horizontal overlap of the *widest* pair of bands that actually
+ * meet, together with the vertical overlap of the two figures. Separating by
+ * the first clears the widest place they touch; separating by the second lifts
+ * one clear of the other entirely. Nothing meeting means `null`.
+ *
+ * This replaces a bounding box scaled by a hand-set share (0.75, then 0.5,
+ * chosen by how the fights felt). A single share is the wrong shape in both
+ * directions at once — narrower than a man across his shoulders, wider than him
+ * beside his head — so two photographs would either stop with a visible strip of
+ * blue between them or slide through each other at the ankles. It was also
+ * carrying a second job it had no business having: how often the pair meet, and
+ * therefore, since every meeting lands a blow, how big a number can be.
+ */
+function outlineOverlap(
+  a: MovementState,
+  b: MovementState,
+): { x: number; y: number } | null {
+  // Cheap rejection on the full boxes first: most ticks are not a collision.
+  const spanY = Math.min(a.y + a.halfH, b.y + b.halfH) - Math.max(a.y - a.halfH, b.y - b.halfH);
+  if (spanY <= 0) return null;
+  if (Math.min(a.x + a.halfW, b.x + b.halfW) - Math.max(a.x - a.halfW, b.x - b.halfW) <= 0) {
+    return null;
+  }
+
+  let deepest = 0;
+  for (let i = 0; i < a.silhouette.length; i += 1) {
+    const aSpan = bandSpan(a, i);
+    if (!aSpan) continue;
+    const aEdges = bandEdges(a, i);
+    for (let j = 0; j < b.silhouette.length; j += 1) {
+      const bEdges = bandEdges(b, j);
+      // Bands are stacked top to bottom, so once b's band starts below a's
+      // ends, every later one does too.
+      if (bEdges.top >= aEdges.bottom) break;
+      if (bEdges.bottom <= aEdges.top) continue;
+      const bSpan = bandSpan(b, j);
+      if (!bSpan) continue;
+      const overlap = Math.min(aSpan.right, bSpan.right) - Math.max(aSpan.left, bSpan.left);
+      if (overlap > deepest) deepest = overlap;
+    }
+  }
+  return deepest > 0 ? { x: deepest, y: spanY } : null;
+}
+
+/**
+ * Half-extents of the widest band of a fighter's outline, for callers that need
+ * one number instead of a profile — the gates, and the measuring scripts.
+ */
+export function widestHalfWidth(state: MovementState): number {
+  let widest = 0;
+  for (const [left, right] of state.silhouette) {
+    if (right - left > widest) widest = right - left;
+  }
+  return (state.halfW - KEYLINE_MARGIN) * widest + KEYLINE_MARGIN;
+}
 
 /**
  * Two fighters cannot occupy the same place: they push off each other.
@@ -257,13 +345,12 @@ export function resolveCollision(
   const bFrozen = tick < b.frozenUntilTick;
   if (aFrozen && bFrozen) return null;
 
-  const halfWs = (a.halfW + b.halfW) * COLLISION_SHARE;
-  const halfHs = (a.halfH + b.halfH) * COLLISION_SHARE;
+  const overlap = outlineOverlap(a, b);
+  if (overlap === null) return null;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  const overlapX = halfWs - Math.abs(dx);
-  const overlapY = halfHs - Math.abs(dy);
-  if (overlapX <= 0 || overlapY <= 0) return null;
+  const overlapX = overlap.x;
+  const overlapY = overlap.y;
 
   // Push apart along the shallower axis: that is the face they actually met on.
   const horizontal = overlapX < overlapY;
@@ -347,15 +434,17 @@ export interface Contact {
   closing: boolean;
 }
 
-/** Half-extents the collision actually uses, for the gate to assert against. */
-export function collisionHalfExtents(
-  a: MovementState,
-  b: MovementState,
-): { halfW: number; halfH: number } {
-  return {
-    halfW: (a.halfW + b.halfW) * COLLISION_SHARE,
-    halfH: (a.halfH + b.halfH) * COLLISION_SHARE,
-  };
+/**
+ * Do these two overlap on their outlines right now?
+ *
+ * Exported so the gates and the measuring scripts ask the simulation itself
+ * rather than keeping their own copy of the rule. Both have been wrong that way
+ * before — a gate asserting on a box nobody collided with any more, and a
+ * measuring script that counted near-misses as touches and reported the
+ * registration rate too low because of it.
+ */
+export function outlinesOverlap(a: MovementState, b: MovementState): boolean {
+  return outlineOverlap(a, b) !== null;
 }
 
 /**
