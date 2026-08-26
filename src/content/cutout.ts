@@ -1,5 +1,5 @@
 import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 import { isMain } from "../util/main.js";
@@ -25,6 +25,29 @@ const WHITE = 236;
  * cut hard, which is what kills the grey JPEG fringe around a cut edge. */
 const FEATHER = 208;
 
+/**
+ * How white the background has to be before the fill stops.
+ *
+ * The fighters' photos are cut on a hard studio white, so the default pair is
+ * tuned tight enough to keep a white shirt. A product shot of a **prop** is
+ * usually lit with a soft drop shadow underneath it, and that shadow is grey —
+ * well under 236 — so the default fill stops at its edge and leaves a smudge
+ * around the object. On the arena's black square that smudge is the most
+ * visible thing in the picture. Props therefore cut on a looser threshold.
+ */
+export interface CutoutOptions {
+  white?: number;
+  feather?: number;
+  /**
+   * Cap on the output's width.
+   *
+   * A prop is drawn at a fraction of a fighter's height — the compass lands
+   * around 250px on a 1080-wide frame — so carrying the 900px cut-out of a
+   * product shot is most of a megabyte for pixels nothing ever samples.
+   */
+  maxWidth?: number;
+}
+
 export interface Cutout {
   png: Buffer;
   width: number;
@@ -33,7 +56,9 @@ export interface Cutout {
   coverage: number;
 }
 
-export async function cutout(sourcePath: string): Promise<Cutout> {
+export async function cutout(sourcePath: string, options: CutoutOptions = {}): Promise<Cutout> {
+  const white = options.white ?? WHITE;
+  const feather = options.feather ?? FEATHER;
   const image = await loadImage(sourcePath);
   const w = image.width;
   const h = image.height;
@@ -53,7 +78,7 @@ export async function cutout(sourcePath: string): Promise<Cutout> {
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     const p = y * w + x;
     if (background[p]) return;
-    if (!near(p * 4, WHITE)) return;
+    if (!near(p * 4, white)) return;
     background[p] = 1;
     stack.push(p);
   };
@@ -90,7 +115,7 @@ export async function cutout(sourcePath: string): Promise<Cutout> {
     for (let x = 0; x < w; x += 1) {
       const seed = y * w + x;
       if (visited[seed] || background[seed]) continue;
-      if (!near(seed * 4, WHITE)) {
+      if (!near(seed * 4, white)) {
         visited[seed] = 1;
         continue;
       }
@@ -114,7 +139,7 @@ export async function cutout(sourcePath: string): Promise<Cutout> {
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
           const n = ny * w + nx;
           if (visited[n] || background[n]) continue;
-          if (!near(n * 4, WHITE)) {
+          if (!near(n * 4, white)) {
             visited[n] = 1;
             continue;
           }
@@ -150,9 +175,9 @@ export async function cutout(sourcePath: string): Promise<Cutout> {
         (x < w - 1 && background[p + 1] === 1) ||
         (y > 0 && background[p - w] === 1) ||
         (y < h - 1 && background[p + w] === 1);
-      if (touchesBackground && near(i, FEATHER)) {
+      if (touchesBackground && near(i, feather)) {
         const level = Math.max(px[i]!, px[i + 1]!, px[i + 2]!);
-        const t = (level - FEATHER) / (255 - FEATHER);
+        const t = (level - feather) / (255 - feather);
         px[i + 3] = Math.round(255 * (1 - Math.min(1, Math.max(0, t))));
       }
       if (px[i + 3]! > 8) {
@@ -171,30 +196,52 @@ export async function cutout(sourcePath: string): Promise<Cutout> {
   // not have to guess where inside a photo the person actually is.
   const tw = maxX - minX + 1;
   const th = maxY - minY + 1;
-  const out = createCanvas(tw, th);
-  out.getContext("2d").drawImage(canvas, minX, minY, tw, th, 0, 0, tw, th);
+  const cap = options.maxWidth ?? Infinity;
+  const ow = Math.min(tw, cap);
+  const oh = Math.max(1, Math.round((th * ow) / tw));
+  const out = createCanvas(ow, oh);
+  out.getContext("2d").drawImage(canvas, minX, minY, tw, th, 0, 0, ow, oh);
 
-  return { png: out.toBuffer("image/png"), width: tw, height: th, coverage: kept / (w * h) };
+  return { png: out.toBuffer("image/png"), width: ow, height: oh, coverage: kept / (w * h) };
 }
 
 export const FIGHTER_DIR = join(process.cwd(), "assets", "fighters");
+export const PROP_DIR = join(process.cwd(), "assets", "props");
 
-async function main(): Promise<void> {
-  const sourceDir = join(FIGHTER_DIR, "source");
+/**
+ * Props cut looser than fighters.
+ *
+ * A product shot is lit with a soft drop shadow under the object, and that
+ * shadow is grey — far under the 236 the studio paper behind a person sits at.
+ * Cut at the fighters' threshold, a compass keeps a grey wisp along its bottom
+ * edge, and on the arena's black square that wisp is the thing you notice.
+ * Measured on `compass.jpg`: 236 leaves it, 200 takes it, and the only thing
+ * 200 costs is a sliver of the transparent plastic lid, which is transparent.
+ */
+const PROP_WHITE = 200;
+/** See `maxWidth` — a prop draws at a quarter of this and no one samples the rest. */
+const PROP_MAX_WIDTH = 512;
+
+async function cutDir(dir: string, options: CutoutOptions = {}): Promise<number> {
+  const sourceDir = join(dir, "source");
+  if (!existsSync(sourceDir)) return 0;
   const files = readdirSync(sourceDir).filter((f) => /\.(jpg|jpeg|png)$/i.test(f));
-  if (files.length === 0) {
-    console.log(`no source images in ${sourceDir}`);
-    return;
-  }
   for (const file of files) {
-    const result = await cutout(join(sourceDir, file));
+    const result = await cutout(join(sourceDir, file), options);
     const name = `${file.replace(/\.[^.]+$/, "")}.png`;
-    writeFileSync(join(FIGHTER_DIR, name), result.png);
+    writeFileSync(join(dir, name), result.png);
     console.log(
       `${file.padEnd(24)} -> ${name.padEnd(24)} ${result.width}x${result.height}  ` +
         `figure is ${(result.coverage * 100).toFixed(0)}% of the source`,
     );
   }
+  return files.length;
+}
+
+async function main(): Promise<void> {
+  const fighters = await cutDir(FIGHTER_DIR);
+  const props = await cutDir(PROP_DIR, { white: PROP_WHITE, feather: PROP_WHITE - 28, maxWidth: PROP_MAX_WIDTH });
+  if (fighters + props === 0) console.log("no source images under assets/*/source");
 }
 
 if (isMain(import.meta.url)) await main();

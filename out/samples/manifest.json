@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "file": "compass-vs-bodyguard-391.mp4",
+      "file": "compass-vs-bodyguard-399.mp4",
       "fighters": [
         "compass",
         "bodyguard"
@@ -10,18 +10,18 @@
         "Compass Guy",
         "OPPONENT"
       ],
-      "seed": 391,
+      "seed": 399,
       "dramaScore": 69.6,
-      "durationSeconds": 27.33,
-      "frames": 820,
+      "durationSeconds": 30.2,
+      "frames": 906,
       "winnerId": "compass",
-      "sizeBytes": 6436014,
-      "generatedAt": "2026-08-17T23:23:31.877Z",
+      "sizeBytes": 7554206,
+      "generatedAt": "2026-08-26T18:08:29.724Z",
       "provenance": {
-        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
+        "commit": "f314193700ad94ebff056b1f9f477b6b8c1a9c37",
         "dirty": true,
-        "rosterHash": "a86777eb3e88972e",
-        "seedsSearched": 400,
+        "rosterHash": "bb665edd79886a48",
+        "seedsSearched": 500,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
@@ -54,7 +54,7 @@
       }
     },
     {
-      "file": "compass-vs-glasses-358.mp4",
+      "file": "compass-vs-glasses-388.mp4",
       "fighters": [
         "compass",
         "glasses"
@@ -63,18 +63,18 @@
         "Compass Guy",
         "OPPONENT"
       ],
-      "seed": 358,
-      "dramaScore": 68.9,
-      "durationSeconds": 26.67,
-      "frames": 800,
+      "seed": 388,
+      "dramaScore": 69.6,
+      "durationSeconds": 26.13,
+      "frames": 784,
       "winnerId": "compass",
-      "sizeBytes": 6369567,
-      "generatedAt": "2026-08-17T23:24:47.713Z",
+      "sizeBytes": 6827433,
+      "generatedAt": "2026-08-26T18:09:11.880Z",
       "provenance": {
-        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
+        "commit": "f314193700ad94ebff056b1f9f477b6b8c1a9c37",
         "dirty": true,
-        "rosterHash": "a86777eb3e88972e",
-        "seedsSearched": 400,
+        "rosterHash": "bb665edd79886a48",
+        "seedsSearched": 500,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
@@ -102,12 +102,12 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          55
+          20
         ]
       }
     },
     {
-      "file": "boxer-vs-bodyguard-83.mp4",
+      "file": "boxer-vs-bodyguard-210.mp4",
       "fighters": [
         "boxer",
         "bodyguard"
@@ -116,18 +116,18 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 83,
-      "dramaScore": 69.6,
-      "durationSeconds": 28,
-      "frames": 840,
+      "seed": 210,
+      "dramaScore": 69.5,
+      "durationSeconds": 27.93,
+      "frames": 838,
       "winnerId": "bodyguard",
-      "sizeBytes": 6217170,
-      "generatedAt": "2026-08-17T23:25:36.388Z",
+      "sizeBytes": 6451265,
+      "generatedAt": "2026-08-26T18:09:56.938Z",
       "provenance": {
-        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
+        "commit": "f314193700ad94ebff056b1f9f477b6b8c1a9c37",
         "dirty": true,
-        "rosterHash": "a86777eb3e88972e",
-        "seedsSearched": 400,
+        "rosterHash": "bb665edd79886a48",
+        "seedsSearched": 500,
         "wantedOutcome": "stopped",
         "constants": {
           "tuning": {
@@ -160,7 +160,7 @@
       }
     },
     {
-      "file": "boxer-vs-glasses-23.mp4",
+      "file": "boxer-vs-glasses-186.mp4",
       "fighters": [
         "boxer",
         "glasses"
@@ -169,18 +169,18 @@
         "Boxer Guy",
         "OPPONENT"
       ],
-      "seed": 23,
-      "dramaScore": 67.6,
-      "durationSeconds": 25.13,
-      "frames": 754,
+      "seed": 186,
+      "dramaScore": 69.5,
+      "durationSeconds": 26.5,
+      "frames": 795,
       "winnerId": "boxer",
-      "sizeBytes": 5887827,
-      "generatedAt": "2026-08-17T23:26:23.497Z",
+      "sizeBytes": 6069115,
+      "generatedAt": "2026-08-26T18:10:39.188Z",
       "provenance": {
-        "commit": "f20a70d3fedf79225f7c3bb8287e8805a261c044",
+        "commit": "f314193700ad94ebff056b1f9f477b6b8c1a9c37",
         "dirty": true,
-        "rosterHash": "a86777eb3e88972e",
-        "seedsSearched": 400,
+        "rosterHash": "bb665edd79886a48",
+        "seedsSearched": 500,
         "wantedOutcome": "cleared",
         "constants": {
           "tuning": {
@@ -208,7 +208,7 @@
         "cleared": true,
         "decidedInRound": 1,
         "hpByRound": [
-          41
+          27
         ]
       }
     }

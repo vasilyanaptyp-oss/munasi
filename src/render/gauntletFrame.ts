@@ -434,9 +434,9 @@ export function renderGauntletFrame(
       ctx.fillRect(minion.bar.x, minion.bar.y, minion.bar.w * share, minion.bar.h);
     }
 
-    // A cut-out photo with a white keyline, exactly the reference's treatment.
-    // There is no wind-up and no lunge to draw: the figure is a photograph, and
-    // what animates is where it is, not what it is doing.
+    // A cut-out photo, exactly the reference's treatment — no keyline, see the
+    // note in `photo.ts`. There is no wind-up and no lunge to draw: the figure
+    // is a photograph, and what animates is where it is, not what it is doing.
     void size;
     void facing;
     // **The ability is done to the photograph.** There is no illustration in
@@ -454,6 +454,24 @@ export function renderGauntletFrame(
       },
       place.sprite.h,
     );
+    // **Clipped to the inside of the wall, because a turned photograph is
+    // wider than an upright one.** The simulation bounces an upright box and
+    // the layout gate measures an upright box, so neither can see the corner a
+    // tumbling fighter puts through the wall: measured across every pairing at
+    // six seeds, 5.4% of treated frames crossed it and the worst was 52px of a
+    // 1149px arena, drawn on top of the black. Clipped, the same corner reads
+    // as the man passing behind the wall, which is what the reference's own
+    // rule — nothing of the fight outside the square — asks for. His plus is
+    // drawn after this and stays free to climb above it, as it does there.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(
+      layout.arena.x + border,
+      layout.arena.y + border,
+      layout.arena.w - border * 2,
+      layout.arena.h - border * 2,
+    );
+    ctx.clip();
     drawPhoto(ctx, fighter.spriteId, {
       x: place.sprite.x + place.sprite.w / 2,
       y: place.sprite.y + place.sprite.h / 2,
@@ -472,6 +490,7 @@ export function renderGauntletFrame(
       // both the reference's behaviour and the readable one.
       ...(vis.death === undefined ? {} : { fade: vis.death }),
     });
+    ctx.restore();
 
     // The plus goes with its fighter. Left drawing, it hung on as a dark plus
     // reading 0 over an empty patch of arena for the rest of the video — the

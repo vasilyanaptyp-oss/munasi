@@ -23,7 +23,8 @@ function measure(over: Partial<VideoMeasure> = {}): VideoMeasure {
     numbersPerSecond: 0.6,
     worstGap: 3.2,
     motion: 0.1,
-    staticShare: 0,
+    figureHeight: null,
+  staticShare: 0,
     speed: { median: 0.0101, p90: 0.019 },
     ...over,
   };

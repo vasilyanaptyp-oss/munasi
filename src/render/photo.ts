@@ -3,13 +3,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Draws a fighter: a cut-out photo with a white keyline.
+ * Draws a fighter: a cut-out photo, straight on the blue.
  *
- * This replaces the procedural art. A character in the reference is a PNG with
- * the background removed and a white outline traced round it, floating on the
- * flat blue field — nothing is drawn by hand, and the whole visual identity is
- * the photo. Anything drawn by code would have to be as recognisable as a
- * photograph is, and it never was.
+ * This replaces the procedural art. A character in the reference is a
+ * photograph with the background removed, dropped on the flat blue field —
+ * nothing is drawn by hand, and the whole visual identity is the photo.
+ * Anything drawn by code would have to be as recognisable as a photograph is,
+ * and it never was.
  *
  * Loaded synchronously and cached: `renderGauntletFrame` is a pure synchronous
  * function of `(result, frame)` and every worker process renders its own stripe,
@@ -90,19 +90,24 @@ export function photoAspect(spriteId: string): number {
   return image.width / image.height;
 }
 
-/** Thickness of the white keyline, in pixels at 1080 wide. */
-export const PHOTO_OUTLINE = 7;
-
-const OFFSETS: [number, number][] = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [0.7, 0.7],
-  [-0.7, 0.7],
-  [0.7, -0.7],
-  [-0.7, -0.7],
-];
+/**
+ * **There is no keyline.** The figure is the photograph, cut out and dropped on
+ * the blue.
+ *
+ * We drew a 7px white outline around every fighter on the strength of a note
+ * that said the reference does. It does not. Checked at pixel zoom in three of
+ * its videos and in the full-resolution screenshots: Boxing Guy's skin meets the
+ * blue directly, Drunk Guy's white shirt meets it directly, and the henchmen are
+ * not even cut out — they are rectangular photo crops with the studio backdrop
+ * still in them, pasted flat on the field. The only outlines anywhere in the
+ * reference are coloured ones, and they mark a *state* (a buff, a hit), not a
+ * figure.
+ *
+ * It is also the answer to the owner's "персонажи какие-то вытянутые". An
+ * outline traces the silhouette, so a narrow figure gets its narrowness drawn
+ * around it in white; take the outline away and the same photographs read as
+ * solid people. Nothing else about them changed.
+ */
 
 export interface DrawPhotoOptions {
   /** Centre of the figure. */
@@ -169,19 +174,17 @@ function scratchCanvas(w: number, h: number): Canvas {
 export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPhotoOptions): void {
   const image = fighterImage(spriteId);
   const { x, y, w, h } = options;
-  const pad = PHOTO_OUTLINE * 2 + 4;
-  const bw = Math.ceil(w + pad * 2);
-  const bh = Math.ceil(h + pad * 2);
+  const bw = Math.ceil(w);
+  const bh = Math.ceil(h);
 
-  // The figure on its own layer, so the keyline can be stamped from its alpha.
+  // The figure's own alpha flooded white, on its own layer. Not a keyline — see
+  // the note above — but the **white flash**, which is the reference's mark for
+  // every blow landed and needs the silhouette to stamp.
   const layer = scratchCanvas(bw, bh);
   const lc = layer.getContext("2d");
   lc.clearRect(0, 0, bw, bh);
-  lc.drawImage(image, pad, pad, w, h);
+  lc.drawImage(image, 0, 0, w, h);
 
-  // Keyline: the figure's alpha flooded white and stamped around a ring. Eight
-  // offsets rather than four — a photo has diagonal edges everywhere, and four
-  // leaves the outline visibly thin on them.
   lc.save();
   lc.globalCompositeOperation = "source-in";
   lc.fillStyle = "#ffffff";
@@ -200,21 +203,8 @@ export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPho
   if (rotation !== 0) ctx.rotate(rotation);
   if (scale !== 1) ctx.scale(scale, scale);
 
-  const drawKeyed = (ox: number, oy: number, alpha: number): void => {
+  const drawFigure = (ox: number, oy: number, alpha: number): void => {
     ctx.globalAlpha = alpha;
-    for (const [dx, dy] of OFFSETS) {
-      ctx.drawImage(
-        layer,
-        0,
-        0,
-        bw,
-        bh,
-        ox - w / 2 - pad + dx * PHOTO_OUTLINE,
-        oy - h / 2 - pad + dy * PHOTO_OUTLINE,
-        bw,
-        bh,
-      );
-    }
     ctx.drawImage(image, ox - w / 2, oy - h / 2, w, h);
   };
 
@@ -223,11 +213,11 @@ export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPho
     const angle = options.smearAngle ?? 0;
     for (let i = 3; i >= 1; i -= 1) {
       const back = (i / 3) * smear;
-      drawKeyed(-Math.cos(angle) * back, -Math.sin(angle) * back, alive * (0.26 / i));
+      drawFigure(-Math.cos(angle) * back, -Math.sin(angle) * back, alive * (0.26 / i));
     }
   }
 
-  drawKeyed(0, 0, alive);
+  drawFigure(0, 0, alive);
 
   // A hit turns the figure into a solid white silhouette, exactly as in the
   // reference — it reads at thumbnail size where a tint does not. `wash` is the
@@ -235,7 +225,7 @@ export function drawPhoto(ctx: SKRSContext2D, spriteId: string, options: DrawPho
   const white = Math.max(options.flash ?? 0, options.wash ?? 0);
   if (white > 0) {
     ctx.globalAlpha = alive * white;
-    ctx.drawImage(layer, pad, pad, w, h, -w / 2, -h / 2, w, h);
+    ctx.drawImage(layer, 0, 0, bw, bh, -w / 2, -h / 2, w, h);
   }
   ctx.restore();
 }

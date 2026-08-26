@@ -99,13 +99,36 @@ const ABILITY_PROPS: Record<SignatureKind, { prop: string; mode: PropMode; size:
   four_eyes: { prop: "glasses", mode: "thrown", size: 0.62 },
   // No files yet: drop `compass.png`, `tape.png` or `glove.png` in and these
   // light up with no other change.
-  magnetic_north: { prop: "compass", mode: "held", size: 0.8 },
+  // Sized and placed against a rendered frame, not guessed: at 0.8 the compass
+  // came out as wide as the man is tall and, offset half a height upward, it
+  // sat exactly where his head is. He now holds it out at his own shoulder, on
+  // the side the other man is on, at a size that shows the needle and nothing
+  // more.
+  magnetic_north: { prop: "compass", mode: "held", size: 0.42 },
   nobody_moves: { prop: "tape", mode: "worn", size: 1.15 },
   thrown_out: { prop: "grab", mode: "held", size: 0.8 },
   haymaker: { prop: "glove", mode: "held", size: 0.7 },
 };
 
 const TAIL_FRAMES = SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES;
+
+/**
+ * How far the thrown man turns at the top of his tumble.
+ *
+ * A rotated rectangle is wider than an upright one — a 0.6-aspect figure turned
+ * 57 degrees is nearly twice as wide as it stands — and both the simulation's
+ * bounce box and the layout gate measure the *upright* one, so neither can see
+ * the corner this puts through the arena wall. Walked every pairing at six
+ * seeds: at 1.0 rad the worst crossing was 82px of a 1149px arena and 5.4% of
+ * treated frames crossed by more than 10px.
+ *
+ * The answer is not to shrink the turn until it is safe — that lands at about
+ * nine degrees, which is not a tumble and does not read. It is to **clip the
+ * fighter to the inside of the wall**, which `gauntletFrame` now does, so the
+ * corner reads as the man passing behind it. This value is then chosen for how
+ * it looks: forty degrees at the top of the arc, upright again on arrival.
+ */
+const TUMBLE_RADIANS = 0.7;
 
 /** Ease-out, so a thrown thing leaves fast and settles onto its target. */
 function easeOut(t: number): number {
@@ -245,14 +268,17 @@ export function drawSignatures(
     const heading = Math.atan2(to.y - from.y, to.x - from.x);
 
     if (spec.mode === "held") {
+      // Held out **toward** the other man, clear of the owner's own outline: a
+      // prop is there to say who is doing this and to whom, so it has to sit on
+      // the side the ability is pointing and not on top of the face.
       const life = Math.min(1, age / SIGNATURE_FRAMES);
       placedProp(
         ctx,
         sprite,
         from,
         width,
-        -Math.cos(heading) * fighterScale * 0.55,
-        -fighterScale * 0.55,
+        Math.cos(heading) * fighterScale * 0.5,
+        -fighterScale * 0.12,
         life > 0.8 ? (1 - life) / 0.2 : 1,
       );
       continue;
@@ -308,8 +334,9 @@ export function drawSignatures(
  * - `HAYMAKER` — the boxer **grows and smears** as he charges, so he comes at
  *   the other man out of the screen; on arrival the victim is **knocked
  *   crooked** and squashed, and rights himself over the next half second.
- * - `MAGNETIC NORTH` — the man being pulled **leaves copies of himself** along
- *   the line he is being dragged down, for as long as the needle holds him.
+ * - `THROWN OUT` — the man thrown **tumbles**, a third of a turn across the
+ *   square and upright again on arrival, while the bodyguard **leans after
+ *   him**. Speed alone read as a man moving fast, not as a man thrown.
  * - `NOBODY MOVES` — whoever is caught goes **pale and still**, the photograph
  *   bleached most of the way to a white silhouette while the hold lasts.
  * - the thrown spectacles do their own work; the fighters are left alone.
@@ -349,7 +376,6 @@ export function photoTreatment(
     const caster = event.actorId === fighterId;
     const victim = event.targetId === fighterId;
     if (!caster && !victim) continue;
-    void headingOf;
     const since = (age - SIGNATURE_TRAVEL_FRAMES) / TAIL_FRAMES;
 
     if (kind === "haymaker" && caster) {
@@ -375,11 +401,27 @@ export function photoTreatment(
     }
 
     if (kind === "thrown_out" && victim) {
-      // Hurled across the square at four times his own speed. That speed is the
-      // effect; a trail behind it was three more copies of the same photograph
-      // and read as a smudge.
+      // **He tumbles.** Hurled across the square at four times his own speed —
+      // that speed is the effect, and a trail behind it was three more copies of
+      // the same photograph reading as a smudge.
+      //
+      // The speed alone was not enough, and the owner said so: a man who simply
+      // slides fast is a man who is moving fast, not a man who has been thrown.
+      // What separates the two is that a thrown person turns. He goes over
+      // roughly a third of a turn on the way and rights himself as he arrives,
+      // which is the same thing `HAYMAKER` does to its victim and is a handling
+      // of the photograph rather than a drawing next to it.
       const t = Math.min(1, age / SIGNATURE_FRAMES);
-      out.rotation += 0.16 * Math.sin(t * 7) * (1 - t);
+      out.rotation += TUMBLE_RADIANS * Math.sin(Math.PI * t) * (1 - 0.35 * t);
+    }
+    if (kind === "thrown_out" && caster) {
+      // And it has to be visible **who** threw him. The bodyguard has no prop —
+      // there is no free photograph of a pair of hands that is not either a
+      // brand's advertising or a drawing — so the follow-through is on him: he
+      // leans after the throw and comes back up.
+      const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+      const decay = age <= SIGNATURE_TRAVEL_FRAMES ? 1 : Math.max(0, 1 - since * 2);
+      out.rotation += 0.15 * Math.sin(Math.PI * t) * decay * (Math.cos(headingOf(event)) >= 0 ? 1 : -1);
     }
   }
   return out;

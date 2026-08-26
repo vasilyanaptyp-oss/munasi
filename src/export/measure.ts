@@ -73,6 +73,15 @@ export interface FrameMeasure {
   changed: number;
   /** Centres of the HP plusses, which ride their own fighter. */
   plusses: { x: number; y: number }[];
+  /**
+   * Height and width of each fighter, in pixels, found under his own plus.
+   *
+   * "Make the map bigger" and "make the fighters bigger" are the same knob seen
+   * from two ends, and this project has three times been wrong about a
+   * proportion it eyeballed off a still. So it gets measured in both files by
+   * the same code, like everything else.
+   */
+  figures: { w: number; h: number }[];
 }
 
 export interface VideoMeasure {
@@ -99,8 +108,17 @@ export interface VideoMeasure {
    * read it off a reference is through the plus.
    */
   speed: { median: number; p90: number } | null;
+  /** Median fighter height as a share of the arena's inner height, and of the frame. */
+  figureHeight: { ofArena: number; ofFrame: number; aspect: number } | null;
   /** Share of frames that change almost nothing. */
   staticShare: number;
+}
+
+/** The value at `q` of the way through, for a robust range. */
+function percentile(values: number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]!;
 }
 
 function median(values: number[]): number {
@@ -251,6 +269,78 @@ function measureFrame(
     }
   }
 
+  // Each fighter, found by walking down from his own plus.
+  //
+  // The plus is centred on the figure and sits just above it, so the figure is
+  // whatever non-field blob starts under it. Flood-filled rather than
+  // row-scanned because a photograph is any colour at all, including the white
+  // of a shirt and the black of a suit — the one thing it is never is the
+  // field's blue. Blobs that run away (the reference's guitar track is a lit
+  // strip of non-blue across half the square) are thrown out by size.
+  const figures: { w: number; h: number }[] = [];
+  {
+    const plusWidth = (76 / 576) * width;
+    const isField = (p: number): boolean =>
+      Math.abs(data[p]! - FIELD_BLUE[0]) < BLUE_TOLERANCE &&
+      Math.abs(data[p + 1]! - FIELD_BLUE[1]) < BLUE_TOLERANCE &&
+      Math.abs(data[p + 2]! - FIELD_BLUE[2]) < BLUE_TOLERANCE;
+    const capacity = Math.round(width * height * 0.06);
+    for (const plus of plusses) {
+      const cx = Math.round(plus.x);
+      let start = -1;
+      for (let y = Math.round(plus.y + plusWidth * 0.55); y < height; y += 1) {
+        const p = (y * width + cx) * 4;
+        if (!isField(p) && data[p]! + data[p + 1]! + data[p + 2]! > BLACK_LEVEL * 3) {
+          start = y;
+          break;
+        }
+        // A gap wider than the plus means the plus has no figure under it.
+        if (y > plus.y + plusWidth * 2.2) break;
+      }
+      if (start < 0) continue;
+      const seen = new Uint8Array(width * height);
+      const stack = [start * width + cx];
+      seen[stack[0]!] = 1;
+      let count = 0;
+      let minX = width;
+      let maxX = -1;
+      let minY = height;
+      let maxY = -1;
+      let ran = false;
+      while (stack.length > 0) {
+        const q = stack.pop()!;
+        const qx = q % width;
+        const qy = (q - qx) / width;
+        count += 1;
+        if (count > capacity) {
+          ran = true;
+          break;
+        }
+        if (qx < minX) minX = qx;
+        if (qx > maxX) maxX = qx;
+        if (qy < minY) minY = qy;
+        if (qy > maxY) maxY = qy;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = qx + dx;
+          const ny = qy + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const n = ny * width + nx;
+          if (seen[n]) continue;
+          const np = n * 4;
+          if (isField(np)) continue;
+          seen[n] = 1;
+          stack.push(n);
+        }
+      }
+      if (ran) continue;
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      // A person, not a stray mark and not the wall he is standing against.
+      if (h < plusWidth * 0.8 || h > plusWidth * 4 || w < plusWidth * 0.35) continue;
+      figures.push({ w, h });
+    }
+  }
+
   const pixels = width * height;
   return {
     arena: top >= 0 && left >= 0 ? { top, bottom, left, right } : null,
@@ -261,6 +351,7 @@ function measureFrame(
     yellowPixels: yellow,
     changed: previous ? changed / pixels : 0,
     plusses,
+    figures,
   };
 }
 
@@ -354,6 +445,12 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
     }
     const sortedSteps = [...steps].sort((a, b) => a - b);
 
+    // Fighter size, against the arena's *inner* height — the field a fighter
+    // actually has to cross — and against the frame, which is the gate's unit.
+    const inner = arenaWide - 2 * (borders.length > 0 ? median(borders) : 0);
+    const figureHeights = measures.flatMap((m) => m.figures.map((f) => f.h));
+    const figureAspects = measures.flatMap((m) => m.figures.map((f) => f.w / f.h));
+
     const moving = measures.slice(1).map((m) => m.changed);
     return {
       file,
@@ -368,7 +465,14 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
         tops.length > 0
           ? {
               median: median(tops) / (height || 1),
-              travel: (Math.max(...tops) - Math.min(...tops)) / (height || 1),
+              // **Not max minus min.** The arena's top edge is found as the
+              // longest black run in a row, and on a handful of frames — a
+              // fighter in a black suit against the wall, a white flash washing
+              // the wall out — that lands on the wrong row. One such frame is
+              // enough to turn a 0.18 travel into 0.75, which is what it
+              // reported for one of four videos whose real travel, read off the
+              // layout, was 0.178. The 5th-to-95th spread ignores them.
+              travel: (percentile(tops, 0.95) - percentile(tops, 0.05)) / (height || 1),
             }
           : null,
       blueShare: median(measures.map((m) => m.blueShare)),
@@ -382,6 +486,14 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
           ? {
               median: median(steps),
               p90: sortedSteps[Math.floor(sortedSteps.length * 0.9)]!,
+            }
+          : null,
+      figureHeight:
+        figureHeights.length > 20 && inner > 0
+          ? {
+              ofArena: median(figureHeights) / inner,
+              ofFrame: median(figureHeights) / (height || 1),
+              aspect: median(figureAspects),
             }
           : null,
       staticShare: moving.filter((c) => c < 0.005).length / Math.max(1, moving.length),
@@ -432,6 +544,18 @@ export function comparisonRows(measures: VideoMeasure[]): ComparisonRow[] {
     {
       label: "  она же, быстрые 10%",
       values: col((m) => (m.speed ? m.speed.p90.toFixed(4) : "—")),
+    },
+    {
+      label: "рост бойца (доля арены)",
+      values: col((m) => (m.figureHeight ? m.figureHeight.ofArena.toFixed(3) : "—")),
+    },
+    {
+      label: "  он же, доля кадра",
+      values: col((m) => (m.figureHeight ? m.figureHeight.ofFrame.toFixed(3) : "—")),
+    },
+    {
+      label: "  ширина/рост бойца",
+      values: col((m) => (m.figureHeight ? m.figureHeight.aspect.toFixed(2) : "—")),
     },
     { label: "движение (пикселей за кадр)", values: col((m) => pct(m.motion)) },
     { label: "статичных кадров", values: col((m) => pct(m.staticShare)) },

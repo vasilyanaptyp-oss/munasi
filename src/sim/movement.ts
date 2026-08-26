@@ -39,16 +39,6 @@ import type { Rng } from "./rng.js";
 export const FIGHTER_HALF_HEIGHT = 0.14;
 
 /**
- * Margin the bounce box carries beyond the figure itself.
- *
- * The renderer traces every fighter with a white keyline, and a keyline is drawn
- * pixels like any other. Without this the figure stayed inside the wall and its
- * outline did not — 22 frames of one video, which is exactly the class of defect
- * the wall guarantee exists to prevent.
- */
-const KEYLINE_MARGIN = 0.012;
-
-/**
  * Units per tick. Two ticks to a video frame.
  *
  * **Measured against the reference by `pnpm compare`, which tracks each
@@ -104,10 +94,26 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+/**
+ * Sub-pixel guard between a fighter's box and the wall.
+ *
+ * The sprite is drawn at exactly the box the simulation bounces, so a fighter
+ * resting against a wall sits at *precisely* the inner edge, and the layout gate
+ * — which rounds to screen pixels — then catches him a few ten-thousandths of a
+ * pixel outside it. This is one pixel of a 1080-wide frame, expressed in arena
+ * units: enough that "touching the wall" is unambiguously inside it, small
+ * enough to be invisible.
+ *
+ * It replaces a 0.012 margin that existed for a real reason — the white keyline
+ * was drawn pixels and stuck out past the figure — which stopped being a reason
+ * when the keyline turned out not to be in the reference at all.
+ */
+const WALL_GUARD = 1 / 1149;
+
 /** Holds a fighter's box inside the arena walls. */
 function keepInside(state: MovementState): void {
-  state.x = clamp(state.x, state.halfW, 1 - state.halfW);
-  state.y = clamp(state.y, state.halfH, 1 - state.halfH);
+  state.x = clamp(state.x, state.halfW + WALL_GUARD, 1 - state.halfW - WALL_GUARD);
+  state.y = clamp(state.y, state.halfH + WALL_GUARD, 1 - state.halfH - WALL_GUARD);
 }
 
 /**
@@ -154,8 +160,8 @@ export function initialMovement(
   rng: Rng,
   silhouette: readonly (readonly [number, number])[] = [[0, 1]],
 ): MovementState {
-  const halfH = FIGHTER_HALF_HEIGHT + KEYLINE_MARGIN;
-  const halfW = FIGHTER_HALF_HEIGHT * aspect + KEYLINE_MARGIN;
+  const halfH = FIGHTER_HALF_HEIGHT;
+  const halfW = FIGHTER_HALF_HEIGHT * aspect;
   // The two start on opposite sides, so frame 0 reads as a face-off.
   const x = side === "a" ? halfW + 0.08 : 1 - halfW - 0.08;
   const y = rng.range(halfH, 1 - halfH);
@@ -199,10 +205,10 @@ export function stepMovement(state: MovementState, input: MovementInput): void {
   state.x += state.vx * dash;
   state.y += state.vy * dash;
 
-  const left = state.halfW;
-  const right = 1 - state.halfW;
-  const top = state.halfH;
-  const bottom = 1 - state.halfH;
+  const left = state.halfW + WALL_GUARD;
+  const right = 1 - state.halfW - WALL_GUARD;
+  const top = state.halfH + WALL_GUARD;
+  const bottom = 1 - state.halfH - WALL_GUARD;
 
   if (state.x <= left) {
     state.x = left;
@@ -249,24 +255,22 @@ function bandSpan(
   const rows = state.silhouette;
   const row = rows[band];
   if (!row || row[1] <= row[0]) return null;
-  // The profile spans the sprite; the keyline is drawn pixels on top of it and
-  // sticks out all the way round, so every band is inflated by it.
-  const spriteHalfW = state.halfW - KEYLINE_MARGIN;
-  const originX = state.x - spriteHalfW;
+  // The profile spans the sprite, and since the white keyline went, the sprite
+  // is everything the renderer puts on screen — no margin to add.
+  const originX = state.x - state.halfW;
   return {
-    left: originX + 2 * spriteHalfW * row[0] - KEYLINE_MARGIN,
-    right: originX + 2 * spriteHalfW * row[1] + KEYLINE_MARGIN,
+    left: originX + 2 * state.halfW * row[0],
+    right: originX + 2 * state.halfW * row[1],
   };
 }
 
 /** World y of the top and bottom edge of one band of a fighter's outline. */
 function bandEdges(state: MovementState, band: number): { top: number; bottom: number } {
-  const spriteHalfH = state.halfH - KEYLINE_MARGIN;
-  const originY = state.y - spriteHalfH;
-  const step = (2 * spriteHalfH) / state.silhouette.length;
+  const originY = state.y - state.halfH;
+  const step = (2 * state.halfH) / state.silhouette.length;
   return {
-    top: originY + step * band - KEYLINE_MARGIN,
-    bottom: originY + step * (band + 1) + KEYLINE_MARGIN,
+    top: originY + step * band,
+    bottom: originY + step * (band + 1),
   };
 }
 
@@ -326,7 +330,7 @@ export function widestHalfWidth(state: MovementState): number {
   for (const [left, right] of state.silhouette) {
     if (right - left > widest) widest = right - left;
   }
-  return (state.halfW - KEYLINE_MARGIN) * widest + KEYLINE_MARGIN;
+  return state.halfW * widest;
 }
 
 /**

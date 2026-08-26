@@ -123,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 1.0018,
+    fieldScale: 1.0127,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -139,7 +139,7 @@ export const ROSTER: FighterSpec[] = [
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 0.9683,
+    fieldScale: 1.0079,
   },
 
   /*
@@ -199,7 +199,7 @@ export const ROSTER: FighterSpec[] = [
      * owned one.
      */
     abilities: [{ type: "haymaker", cooldown: 7, power: 0, hitShare: 3.2 }],
-    fieldScale: 0.8904,
+    fieldScale: 0.8896,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -226,11 +226,24 @@ export const ROSTER: FighterSpec[] = [
      * not "stronger", it is rock-paper-scissors, and `fieldScale` is one number
      * per fighter so it cannot reach a single pair.
      *
-     * Measured: at 0.55 the same six pairings sit inside 38-62%, spread 1.4pp,
-     * and no pair is outside the band for the first time since the outline
+     * Measured: at 0.55 the same six pairings sat inside 38-62%, spread 1.4pp,
+     * and no pair was outside the band for the first time since the outline
      * collision went in.
+     *
+     * **Then the white keyline went, and 0.55 stopped being enough.** The
+     * keyline was drawn pixels, so the bounce box carried a margin for it, and
+     * taking the margin away shrank every fighter's box by 0.012 in each
+     * direction — around a sixth of the area a pair sweeps past each other.
+     * Contacts got rarer, and rarer contacts are worth *more* to the fighter
+     * whose damage is mostly contact: boxer vs glasses went to 69/31. Swept it
+     * with the calibrator in the loop, at 500 matches a pair: 0.55 -> 69%,
+     * 0.85 -> 66%, 1.15 -> 66%, **1.5 -> 62%**, 1.9 -> 56% but Bodyguard Guy
+     * drops to 38% against him. 1.5 is the one that puts all six pairs inside
+     * the band at once — 42-62%.
+     *
+     * He is still the man who does not punch: 1.5 against Boxer Guy's 4.0.
      */
-    meleeShare: 0.55,
+    meleeShare: 1.5,
     /**
      * Two abilities, which is the whole character:
      *
@@ -245,6 +258,6 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.0712,
+    fieldScale: 1.0178,
   },
 ];

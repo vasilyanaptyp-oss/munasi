@@ -17,7 +17,6 @@ import {
   type CameraFrame,
 } from "./gauntletCamera.js";
 import { minionMotionBounds } from "./silhouette.js";
-import { PHOTO_OUTLINE } from "./photo.js";
 import { font, HEIGHT, WIDTH, ensureFonts } from "./theme.js";
 import type { Canvas } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
@@ -361,14 +360,15 @@ export function gauntletFrameLayout(
   const hpA = hpFor("challengerHp", spriteA);
   const hpB = hpFor("opponentHp", spriteB);
 
-  // A photo has no wind-up and no death throw, so the box it draws is the box
-  // it claims — grown only by the keyline, which is drawn pixels too.
+  // A photo has no wind-up, no death throw and — since the keyline went — no
+  // drawn pixels outside its own box either, so the box it draws is the box it
+  // claims.
   const reachOf = (name: string, box: Rect): Rect => ({
     name: `${name}Reach`,
-    x: box.x - PHOTO_OUTLINE,
-    y: box.y - PHOTO_OUTLINE,
-    w: box.w + PHOTO_OUTLINE * 2,
-    h: box.h + PHOTO_OUTLINE * 2,
+    x: box.x,
+    y: box.y,
+    w: box.w,
+    h: box.h,
   });
 
   const damageNumbers = damageNumberRects(result, frame, index, {
