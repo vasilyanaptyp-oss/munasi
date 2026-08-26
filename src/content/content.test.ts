@@ -123,9 +123,17 @@ describe("balance", () => {
     const report = evaluateRoster(roster, { sample: 30, rules: GAUNTLET_RULES });
     const mean =
       report.pairs.reduce((sum, p) => sum + p.meanSeconds, 0) / report.pairs.length;
-    // The reference's own videos run 19-30 seconds.
-    expect(mean).toBeGreaterThan(16);
-    expect(mean).toBeLessThan(34);
+    // **This is not the length of a shipped video, and the floor used to be set
+    // as though it were.** `evaluateRoster` plays random seeds; `pnpm generate`
+    // searches hundreds and keeps the dramatic ones, which are the long ones.
+    // Measured on the same build: 15.5s here against 22.0-25.7s in the four
+    // videos actually written. The reference's own two run 18.5-19.0s.
+    //
+    // So the band here is on the raw mean, with the shipped offset allowed for:
+    // below 13 the shipped videos would be under the reference, above 30 they
+    // would run past the channel's longest.
+    expect(mean).toBeGreaterThan(13);
+    expect(mean).toBeLessThan(30);
   }, 60_000);
 
   it("rarely times out", () => {

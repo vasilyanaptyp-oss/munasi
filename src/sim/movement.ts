@@ -29,14 +29,26 @@ import type { Rng } from "./rng.js";
  * fighter's centre far enough from the wall that a figure of this size stays
  * inside, and the renderer draws it at exactly this size.
  *
- * Measured off the reference: a fighter stands 20-35% of the arena's height,
- * so 0.15 here (30% of the arena) sits in the middle of that. It was 0.18 — 36%
- * of the arena, above the reference's whole range — and since the arena has
- * just grown to its measured size, keeping it there would have scaled the
- * fighters up with it and left the map looking exactly as small as before. A
- * bigger map is a bigger *gap between the figures*, not a bigger everything.
+ * **Measured by `pnpm compare`, and the hand measurement it replaces was
+ * wrong.** The note here used to say the reference stands its fighters at
+ * 20-35% of the arena's height, read off a still, and 0.14 (28%) was picked to
+ * sit inside that. The tool now finds a fighter under his own HP plus and
+ * measures him in both files with the same code; checked against a known answer
+ * first, it reports 0.281 on our own videos for a coded 0.28. On the reference
+ * it reports **0.351-0.375**, in two different videos. Its figures are a
+ * quarter to a third *bigger* relative to the arena than ours were.
+ *
+ * 0.18 puts us at 0.36, and it lands three separate measurements at once
+ * without touching anything else: the fight runs 19.6s against the reference's
+ * 18.5-19.0 (it was 22.9), and the median damage number goes 63 -> 71 with a
+ * p90 of 120 against the reference's 75-120. That is the conservation law
+ * working for us for once — a fighter's whole output is pinned to the other
+ * man's 1000 HP, so a shorter fight is a bigger number on screen.
+ *
+ * This is also the answer to "может даже карту побольше". The arena is already
+ * the reference's to within two pixels; what was off was the man standing in it.
  */
-export const FIGHTER_HALF_HEIGHT = 0.14;
+export const FIGHTER_HALF_HEIGHT = 0.18;
 
 /**
  * Units per tick. Two ticks to a video frame.

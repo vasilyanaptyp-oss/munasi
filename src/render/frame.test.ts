@@ -40,33 +40,41 @@ afterAll(() => {
 
 describe("renderSingleFrame", () => {
   const result = simulate(abilityMatch(), 383);
+  // **Frames picked off the match, not written in.** These were 100/240/300/555
+  // and the fixture's fight got shorter when the fighters grew, so `555` walked
+  // off the end and the determinism test failed for a reason that had nothing
+  // to do with determinism. A gate that carries a copy of a number the code
+  // owns goes stale silently; this is the same lesson as `collisionHalfExtents`
+  // in `tempo.test.ts`.
+  const at = (share: number): number =>
+    Math.min(result.durationFrames - 1, Math.max(0, Math.round(result.durationFrames * share)));
 
   it("produces a 1080x1920 PNG", () => {
-    const png = renderSingleFrame(result, 100);
+    const png = renderSingleFrame(result, at(0.2));
     expect(png.subarray(0, 8)).toEqual(PNG_MAGIC);
     expect(pngSize(png)).toEqual({ width: WIDTH, height: HEIGHT });
   });
 
   it("is deterministic — the same frame renders byte-identically", () => {
-    const a = renderSingleFrame(result, 240);
-    const b = renderSingleFrame(result, 240);
+    const a = renderSingleFrame(result, at(0.5));
+    const b = renderSingleFrame(result, at(0.5));
     expect(a.equals(b)).toBe(true);
   });
 
   it("does not depend on which frames were rendered before it", () => {
-    const direct = renderSingleFrame(result, 300);
-    renderSingleFrame(result, 12);
-    renderSingleFrame(result, 555);
-    expect(renderSingleFrame(result, 300).equals(direct)).toBe(true);
+    const direct = renderSingleFrame(result, at(0.6));
+    renderSingleFrame(result, at(0.02));
+    renderSingleFrame(result, at(0.95));
+    expect(renderSingleFrame(result, at(0.6)).equals(direct)).toBe(true);
   });
 
   it("gives the same bytes with and without a prebuilt index", () => {
-    const withIndex = renderSingleFrame(result, 150, { index: buildRenderIndex(result) });
-    expect(renderSingleFrame(result, 150).equals(withIndex)).toBe(true);
+    const withIndex = renderSingleFrame(result, at(0.3), { index: buildRenderIndex(result) });
+    expect(renderSingleFrame(result, at(0.3)).equals(withIndex)).toBe(true);
   });
 
   it("renders different frames differently", () => {
-    expect(renderSingleFrame(result, 0).equals(renderSingleFrame(result, 400))).toBe(false);
+    expect(renderSingleFrame(result, 0).equals(renderSingleFrame(result, at(0.8)))).toBe(false);
   });
 
   it("draws the victory overlay only when asked", () => {
@@ -95,7 +103,7 @@ describe("renderSingleFrame", () => {
     let best = Number.POSITIVE_INFINITY;
     for (let i = 0; i < 10; i += 1) {
       const start = performance.now();
-      renderSingleFrame(result, 200 + i, { index });
+      renderSingleFrame(result, at(0.4) + i, { index });
       best = Math.min(best, performance.now() - start);
     }
     expect(best).toBeLessThan(400);
