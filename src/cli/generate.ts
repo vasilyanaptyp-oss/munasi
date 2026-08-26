@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { generateMatchups, type Matchup } from "../content/generateMatchups.js";
 import { loadFighters } from "../content/index.js";
 import { buildGauntlet, gauntletMatchups, GAUNTLET_RULES } from "../content/teams.js";
@@ -177,7 +177,7 @@ async function generateOne(
     bar.update(1, 1);
 
     return {
-      file: exported.path.split("/").pop()!,
+      file: basename(exported.path),
       fighters: [matchup.a.id, matchup.b.id],
       fighterNames: [matchup.a.name, matchup.b.name],
       seed: best.seed,
@@ -271,7 +271,7 @@ async function generateGauntlet(
     bar.update(1, 1);
 
     return {
-      file: exported.path.split("/").pop()!,
+      file: basename(exported.path),
       fighters: [challenger.id, members.map((m) => m.id).join("+")],
       fighterNames: [challenger.name, result.team.name],
       seed: best.seed,

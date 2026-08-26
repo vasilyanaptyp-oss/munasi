@@ -30,20 +30,35 @@ export const GAUNTLET_COLORS = {
   memberDefeated: "#8b8b8b",
   buffText: "#00b05b",
   /**
-   * Damage numbers are **yellow**, not white. Sampled off the reference at full
-   * resolution: every floating number in it reads about #ffff50. Ours were white
-   * with a dark outline, which on the flat blue field is the same colour as the
-   * fighters' keylines, the HP plus and the title — the one number a viewer is
-   * meant to catch had no colour of its own.
+   * Damage numbers are **yellow-green**, not white and not the golden yellow
+   * this said before.
+   *
+   * The old note claimed "about #ffff50, sampled off the reference at full
+   * resolution" — another reading taken by eye off a still, and the fifth in
+   * this project to be wrong. Measured properly: 110 frames of `ref-b` pulled at
+   * 6fps, every pixel where green is the brightest channel by a clear margin
+   * kept, and the per-frame median taken. A number is present in 37% of them —
+   * which is the check that these are numbers and not something the video wears
+   * all the time — and its core runs rgb(180-215, 231-250, 85-128), median
+   * about rgb(198, 241, 110). Red is *below* green in every frame; golden yellow
+   * has red at or above it.
+   *
+   * The same measurement on our own file returns rgb(254, 240, 76) for a coded
+   * #ffef4d, so the encoder is not what moved it — the colour really was wrong.
+   *
+   * (The second reference reports 99% of frames, because what it is really
+   * measuring there is the channel's green watermark. Discarded, not averaged
+   * in: a measuring tool that catches the wrong thing has cost this project
+   * half a day once already.)
    */
-  damageText: "#ffef4d",
+  damageText: "#c6f16e",
   // Hotter still, so a crit reads on colour as well as on size.
   /**
-   * **The same yellow as an ordinary hit.** A crit was drawn in its own paler
-   * colour, which put two different damage colours on one frame; the reference
+   * **The same colour as an ordinary hit.** A crit was drawn in its own paler
+   * shade, which put two different damage colours on one frame; the reference
    * uses one for every number it shows, and marks a crit by size alone.
    */
-  critText: "#ffef4d",
+  critText: "#c6f16e",
   /**
    * The impact mark at the point of contact, and the "!" over it. Both sampled
    * off the reference, which draws red slashes and an orange exclamation at

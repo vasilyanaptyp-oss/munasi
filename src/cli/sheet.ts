@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { ensureFonts, font } from "../render/theme.js";
 import { isMain } from "../util/main.js";
+import { ffmpegBin, ffprobeBin } from "../util/tools.js";
 
 /**
  * One picture that shows a whole batch:
@@ -37,7 +38,7 @@ export interface SheetRow {
 function durationOf(file: string): number {
   try {
     const out = execFileSync(
-      "ffprobe",
+      ffprobeBin(),
       ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
       { encoding: "utf8" },
     ).trim();
@@ -60,7 +61,7 @@ function sampleFrames(file: string, dir: string, seconds: number): string[] {
     const at = seconds * (0.08 + (0.84 * i) / (COLUMNS - 1));
     const name = join(dir, `${out.length}.png`);
     execFileSync(
-      "ffmpeg",
+      ffmpegBin(),
       ["-v", "error", "-ss", at.toFixed(2), "-i", file, "-frames:v", "1", "-y", name],
       { stdio: "ignore" },
     );

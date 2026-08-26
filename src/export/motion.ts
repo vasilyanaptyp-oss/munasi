@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { ROUND_HOLD_FRAMES } from "../sim/gauntlet.js";
 import { FPS } from "../sim/types.js";
 import { VICTORY_CARD_FRAMES } from "../render/framePlan.js";
+import { ffmpegBin, ffprobeBin } from "../util/tools.js";
 
 /**
  * How much the picture actually moves, measured on the encoded mp4.
@@ -61,7 +62,7 @@ export const STATIC_TAIL_ALLOWANCE = ROUND_HOLD_FRAMES + VICTORY_CARD_FRAMES;
 /** Duration of an encoded file, in seconds. */
 export function videoDuration(path: string): number {
   const out = execFileSync(
-    "ffprobe",
+    ffprobeBin(),
     [
       "-v",
       "error",
@@ -97,7 +98,7 @@ export function measureWholeVideo(path: string): MotionReport {
 
 function decode(path: string, seek: string[]): number[] {
   const raw = execFileSync(
-    "ffmpeg",
+    ffmpegBin(),
     [
       "-v",
       "error",

@@ -8,6 +8,7 @@ import type { GauntletResult } from "../sim/gauntlet.js";
 import type { MatchResult } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { buildSfxTrack, MUSIC_FILE, writeSfxTrack } from "./audio.js";
+import { ffmpegBin, ffprobeBin } from "../util/tools.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -24,7 +25,8 @@ const INSTALL_HINT =
   "ffmpeg is required to export video but was not found on PATH.\n" +
   "  Arch Linux:    sudo pacman -S ffmpeg\n" +
   "  Debian/Ubuntu: sudo apt install ffmpeg\n" +
-  "  macOS:         brew install ffmpeg";
+  "  macOS:         brew install ffmpeg\n" +
+  "  already have it elsewhere? set FFMPEG_PATH=/full/path/to/ffmpeg";
 
 export class FfmpegMissingError extends Error {
   constructor() {
@@ -36,7 +38,7 @@ export class FfmpegMissingError extends Error {
 /** Throws a message you can act on if ffmpeg is not installed. */
 export function checkFfmpeg(): { version: string } {
   try {
-    const out = execFileSync("ffmpeg", ["-version"], { encoding: "utf8", stdio: "pipe" });
+    const out = execFileSync(ffmpegBin(), ["-version"], { encoding: "utf8", stdio: "pipe" });
     return { version: out.split("\n")[0] ?? "unknown" };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -103,7 +105,7 @@ function countFrames(dir: string): number {
 }
 
 async function probeDuration(path: string): Promise<number> {
-  const { stdout } = await execFileAsync("ffprobe", [
+  const { stdout } = await execFileAsync(ffprobeBin(), [
     "-v",
     "error",
     "-show_entries",
@@ -201,7 +203,7 @@ export async function exportVideo(
   );
 
   try {
-    await execFileAsync("ffmpeg", args, { maxBuffer: 32 * 1024 * 1024 });
+    await execFileAsync(ffmpegBin(), args, { maxBuffer: 32 * 1024 * 1024 });
   } catch (error) {
     const stderr = (error as { stderr?: string }).stderr ?? "";
     throw new Error(`ffmpeg failed encoding ${outPath}\n${stderr.split("\n").slice(-15).join("\n")}`);

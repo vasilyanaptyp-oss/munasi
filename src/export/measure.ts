@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { ffmpegBin, ffprobeBin } from "../util/tools.js";
 
 /**
  * Measures a finished video the way a viewer sees it: from its pixels.
@@ -43,8 +44,9 @@ const BLACK_LEVEL = 60;
 const WHITE_LEVEL = 200;
 
 /**
- * A damage number's own colour, in both files: ours is `#ffef4d`, the
- * reference's a paler yellow-green, and one rule has to catch both.
+ * A damage number's own colour, in both files — `#c6f16e`, since ours was
+ * corrected to the reference's measured yellow-green. The rule still has to
+ * catch both, and it did even while ours was the golden `#ffef4d`.
  *
  * **The green channel is what does the work, and the first version of this got
  * it wrong.** It asked for `g > 150`, which Boxer Guy's ochre trousers pass — so
@@ -360,7 +362,7 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
   const dir = mkdtempSync(join(tmpdir(), "munasi-measure-"));
   try {
     execFileSync(
-      "ffmpeg",
+      ffmpegBin(),
       [
         "-v", "error",
         "-i", file,
@@ -413,7 +415,7 @@ export async function measureVideo(file: string, fps = 30): Promise<VideoMeasure
     let seconds = measures.length / fps;
     try {
       const probed = execFileSync(
-        "ffprobe",
+        ffprobeBin(),
         ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file],
         { encoding: "utf8" },
       ).trim();

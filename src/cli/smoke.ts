@@ -15,6 +15,7 @@ import { FPS } from "../sim/types.js";
 import { isMain } from "../util/main.js";
 import { generate } from "./generate.js";
 import { readManifest, type ManifestEntry } from "./manifest.js";
+import { ffmpegBin } from "../util/tools.js";
 
 /**
  * End-to-end smoke test of the shipped path:
@@ -81,7 +82,7 @@ async function reproduce(entry: ManifestEntry, outDir: string): Promise<string> 
 
 async function main(): Promise<void> {
   try {
-    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+    execFileSync(ffmpegBin(), ["-version"], { stdio: "ignore" });
   } catch {
     console.error("ffmpeg is required for the smoke test");
     process.exitCode = 1;
