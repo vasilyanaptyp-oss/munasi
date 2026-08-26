@@ -208,10 +208,46 @@ export interface HudMetrics {
   /** The two lines themselves, so the renderer never re-derives them. */
   first: string;
   second: string;
+  /** Which of `CAPTIONS` this video closes on — the renderer must not re-pick. */
+  caption: string;
 }
 
-/** The reference closes every video on this, so we do too. */
+/** The reference closes every video on this. */
 export const CAPTION = "Like and Subscribe!";
+
+/**
+ * The captions a batch alternates between, chosen per video by its seed.
+ *
+ * The first is measured — all four references close on it. The second is the
+ * owner's, and it is a *marketing* choice rather than a format one: comments
+ * pull reach harder than likes, and the only way to find out which lands is to
+ * ship both and read the numbers.
+ *
+ * Alternating costs nothing in reproducibility, because the choice is a pure
+ * function of the seed the video was already rendered from — the same seed
+ * still gives the same bytes.
+ *
+ * Both are checked against the measured ink height (22px on a 1024-tall frame)
+ * rather than a nominal size, and against the frame's width: at that ink height
+ * the reference's own caption takes 53% of the frame and the second takes 87%,
+ * which fits with the camera's horizontal travel on top of it.
+ */
+export const CAPTIONS: readonly string[] = [CAPTION, "Who wins next? Comment below"];
+
+/**
+ * Which caption this video closes on.
+ *
+ * Hashed rather than `seed % 2`: seeds come out of a drama search that walks
+ * them in order, so a batch of consecutive winners would otherwise alternate in
+ * lockstep with the matchup order instead of spreading.
+ */
+export function captionFor(seed: number): string {
+  let h = (seed ^ 0x9e3779b9) | 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h = (h ^ (h >>> 16)) >>> 0;
+  return CAPTIONS[h % CAPTIONS.length]!;
+}
 
 /**
  * Ink height of the whole two-line title, as a share of frame height, and the
@@ -262,8 +298,9 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   // The caption is sized by its ink, not by a nominal cap: the reference's is
   // 22px tall on a 1024-tall frame and the vendored face does not put its caps
   // where the reference's face does.
+  const caption = captionFor(result.seed);
   const captionSize = solveSize(
-    (size) => inkBox(CAPTION, size).height,
+    (size) => inkBox(caption, size).height,
     HEIGHT * CAPTION_CAP,
     L.captionSize,
   );
@@ -273,7 +310,7 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
   const firstBaseline = ARENA.y - HUD_OFFSETS.titleAbove + inkBox(first, titleSize).ascent;
   const secondBaseline = firstBaseline + lineHeight;
   const captionBaseline =
-    ARENA.y + ARENA.side + HUD_OFFSETS.captionBelow + inkBox(CAPTION, captionSize).ascent;
+    ARENA.y + ARENA.side + HUD_OFFSETS.captionBelow + inkBox(caption, captionSize).ascent;
 
   const line = (name: string, text: string, baseline: number): Rect => ({
     name,
@@ -289,9 +326,9 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
       line("titleSecond", second, secondBaseline),
       {
         name: "caption",
-        x: WIDTH / 2 - textWidth(CAPTION, captionSize) / 2,
+        x: WIDTH / 2 - textWidth(caption, captionSize) / 2,
         y: captionBaseline - captionSize,
-        w: textWidth(CAPTION, captionSize),
+        w: textWidth(caption, captionSize),
         h: captionSize * 1.15,
       },
     ],
@@ -304,6 +341,7 @@ export function hudLayout(result: GauntletResult): { rects: Rect[]; metrics: Hud
       captionBaseline,
       first,
       second,
+      caption,
     },
   };
 }

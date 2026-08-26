@@ -10,7 +10,6 @@ import {
 import { buildRenderIndex, eventsAt, strokedText, type RenderIndex } from "./frame.js";
 import type { PlannedFrame } from "./framePlan.js";
 import {
-  CAPTION,
   DAMAGE_NUMBER_FRAMES,
   gauntletFrameLayout,
   hudLayout,
@@ -266,7 +265,7 @@ function drawOverlay(ctx: Ctx, metrics: HudMetrics, cam: { dx: number; dy: numbe
   const x = WIDTH / 2 + cam.dx;
   strokedText(ctx, metrics.first, x, metrics.firstBaseline + cam.dy, metrics.titleSize, C.ink, 9);
   strokedText(ctx, metrics.second, x, metrics.secondBaseline + cam.dy, metrics.titleSize, C.ink, 9);
-  strokedText(ctx, CAPTION, x, metrics.captionBaseline + cam.dy, metrics.captionSize, C.ink, 9);
+  strokedText(ctx, metrics.caption, x, metrics.captionBaseline + cam.dy, metrics.captionSize, C.ink, 9);
   ctx.textAlign = "left";
 }
 

@@ -107,7 +107,11 @@ const ABILITY_PROPS: Record<SignatureKind, { prop: string; mode: PropMode; size:
   magnetic_north: { prop: "compass", mode: "held", size: 0.42 },
   nobody_moves: { prop: "tape", mode: "worn", size: 1.15 },
   thrown_out: { prop: "grab", mode: "held", size: 0.8 },
-  haymaker: { prop: "glove", mode: "held", size: 0.7 },
+  // **Cut out of Boxer Guy's own photograph.** Every free boxing glove on the
+  // web is either a brand's advertising with the logo on it or a vector
+  // drawing, and this format takes neither. His photo already has the glove in
+  // it, licensed exactly as he is, and it matches him because it *is* him.
+  haymaker: { prop: "glove", mode: "held", size: 0.3 },
 };
 
 const TAIL_FRAMES = SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES;

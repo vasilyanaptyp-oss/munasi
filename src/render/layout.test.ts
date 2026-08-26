@@ -8,14 +8,16 @@ import { coldOpenPlan, defaultPlan, VICTORY_CARD_FRAMES, type FramePlan } from "
 import { COLD_OPEN_FRAMES, findGauntletColdOpen } from "../sim/coldOpen.js";
 import {
   CAPTION,
+  CAPTIONS,
+  captionFor,
   gauntletFrameLayout,
   hudLayout,
   intersects,
   type Rect,
 } from "./gauntletLayout.js";
 import { drawHpWidgetForTest } from "./gauntletFrame.js";
-import { ARENA, GAUNTLET_COLORS, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
-import { HEIGHT, WIDTH } from "./theme.js";
+import { ARENA, CAPTION_CAP, GAUNTLET_COLORS, MIN_FIGHTER_HEIGHT_SHARE } from "./gauntletTheme.js";
+import { font, HEIGHT, WIDTH } from "./theme.js";
 import { FPS } from "../sim/types.js";
 
 /**
@@ -345,4 +347,48 @@ describe("hp widget readability", () => {
         .toBeGreaterThanOrEqual(4.5);
     });
   }
+});
+
+describe("caption", () => {
+  it("picks one deterministically from the seed", () => {
+    for (const seed of [0, 1, 7, 42, 105, 141, 307, 357, 9999]) {
+      expect(captionFor(seed)).toBe(captionFor(seed));
+      expect(CAPTIONS).toContain(captionFor(seed));
+    }
+  });
+
+  it("actually alternates across a batch instead of settling on one", () => {
+    const seen = new Set(Array.from({ length: 200 }, (_, i) => captionFor(i)));
+    expect(seen.size).toBe(CAPTIONS.length);
+  });
+
+  it("keeps every caption at the reference's ink height and inside the frame", () => {
+    // The reference's caption is 22px of ink on a 1024-tall frame and takes 53%
+    // of the width. A longer call to action is sized to that same ink, so what
+    // has to be checked is that it still fits: the camera slides the whole
+    // scene sideways, and a caption already at the edge would be pushed off it.
+    const ctx = createCanvas(8, 8).getContext("2d");
+    const inkHeight = (text: string, size: number): number => {
+      ctx.font = font(size, "bold");
+      const m = ctx.measureText(text);
+      return m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    };
+    // How far the scene can slide sideways: the arena overhangs the frame.
+    const pan = (ARENA.side - WIDTH) / 2;
+    for (const text of CAPTIONS) {
+      let size = HEIGHT * 0.03;
+      for (let i = 0; i < 40; i += 1) size *= (HEIGHT * CAPTION_CAP) / inkHeight(text, size);
+      // Within a pixel or two: the face reports integer metrics, so the solve
+      // lands on whichever size gets closest rather than exactly on the target.
+      expect(Math.abs(inkHeight(text, size) - HEIGHT * CAPTION_CAP), text).toBeLessThanOrEqual(2);
+      ctx.font = font(size, "bold");
+      const width = ctx.measureText(text).width;
+      expect(width + 2 * pan + 18, `${text} is ${width.toFixed(0)}px wide`).toBeLessThan(WIDTH);
+    }
+  });
+
+  it("puts the chosen caption in the metrics the renderer draws from", () => {
+    const result = simulateGauntlet(buildGauntlet(roster[0]!, [roster[1]!]), 105, GAUNTLET_RULES);
+    expect(hudLayout(result).metrics.caption).toBe(captionFor(result.seed));
+  });
 });
