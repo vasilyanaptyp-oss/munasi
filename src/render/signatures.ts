@@ -63,14 +63,35 @@ export interface Point {
   y: number;
 }
 
-/** Every signature the renderer knows about. */
+/**
+ * Every signature the renderer knows about.
+ *
+ * Most of the ten added below draw **nothing**, and that is the design rather
+ * than an omission. What each of them does is already on screen — a man
+ * crossing the arena, a man stopping dead, two men changing ends — and the
+ * blow that follows is marked the way the reference marks every blow: the
+ * victim flashes to a solid white silhouette and a yellow-green number climbs
+ * off him. They are listed here so they can *have* a treatment (see
+ * `photoTreatment`) and so a picture can be dropped in later without touching
+ * any code, exactly as the compass and the glove were.
+ */
 export type SignatureKind =
   | "magnetic_north"
   | "nobody_moves"
   | "thrown_out"
   | "haymaker"
   | "glasses_throw"
-  | "four_eyes";
+  | "four_eyes"
+  | "switcheroo"
+  | "magnet_pull"
+  | "spin_cycle"
+  | "overclock"
+  | "dead_weight"
+  | "wall_slam"
+  | "siphon"
+  | "countdown"
+  | "riposte"
+  | "slipstream";
 
 /**
  * How a picture shows itself.
@@ -112,6 +133,20 @@ const ABILITY_PROPS: Record<SignatureKind, { prop: string; mode: PropMode; size:
   // drawing, and this format takes neither. His photo already has the glove in
   // it, licensed exactly as he is, and it matches him because it *is* him.
   haymaker: { prop: "glove", mode: "held", size: 0.3 },
+  // No pictures for these, and most of them do not want one: the ability is the
+  // movement. The entries exist so that dropping `<name>.png` into
+  // `assets/props/` lights one up with no code change, which is how the compass
+  // and the glove arrived.
+  switcheroo: { prop: "switcheroo", mode: "held", size: 0.34 },
+  magnet_pull: { prop: "magnet", mode: "held", size: 0.34 },
+  spin_cycle: { prop: "spin_cycle", mode: "held", size: 0.34 },
+  overclock: { prop: "overclock", mode: "held", size: 0.34 },
+  dead_weight: { prop: "dead_weight", mode: "held", size: 0.34 },
+  wall_slam: { prop: "wall_slam", mode: "held", size: 0.34 },
+  siphon: { prop: "siphon", mode: "thrown", size: 0.34 },
+  countdown: { prop: "countdown", mode: "worn", size: 0.5 },
+  riposte: { prop: "riposte", mode: "held", size: 0.34 },
+  slipstream: { prop: "slipstream", mode: "held", size: 0.34 },
 };
 
 const TAIL_FRAMES = SIGNATURE_FRAMES - SIGNATURE_TRAVEL_FRAMES;
@@ -351,9 +386,24 @@ export interface PhotoTreatment {
   smear: number;
   smearAngle: number;
   wash: number;
+  /**
+   * 0..1 toward invisible — `SLIPSTREAM` only.
+   *
+   * A man who passes through another man has to look like he can, and the only
+   * material this format has for that is the photograph itself. Held well short
+   * of gone: at full transparency he stops being a character.
+   */
+  fade: number;
 }
 
-const NO_TREATMENT: PhotoTreatment = { scale: 1, rotation: 0, smear: 0, smearAngle: 0, wash: 0 };
+const NO_TREATMENT: PhotoTreatment = {
+  scale: 1,
+  rotation: 0,
+  smear: 0,
+  smearAngle: 0,
+  wash: 0,
+  fade: 0,
+};
 
 /**
  * The treatment for one fighter on one frame, from every signature in flight.
@@ -404,6 +454,31 @@ export function photoTreatment(
       out.scale *= 1 - 0.1 * decay;
     }
 
+    /**
+     * The three of the ten that touch the photograph at all. The other seven
+     * are movement, and movement needs no handling — a man crossing the square,
+     * a man stopping dead, two men changing ends are already the picture.
+     */
+    if (kind === "dead_weight" && caster) {
+      // Planted. Bleached most of the way to a white silhouette while it lasts,
+      // the same handling `NOBODY MOVES` gets, because it is the same reading:
+      // this figure is not going anywhere.
+      const t = Math.min(1, age / SIGNATURE_TRAVEL_FRAMES);
+      const settle = age <= SIGNATURE_FRAMES * 0.75 ? 1 : Math.max(0, 1 - since);
+      out.wash = Math.max(out.wash, 0.55 * easeOut(t) * settle);
+    }
+    if (kind === "slipstream" && caster) {
+      // Translucent on the way through, solid again on the way out.
+      const t = Math.min(1, age / SIGNATURE_FRAMES);
+      out.fade = Math.max(out.fade, 0.45 * Math.sin(Math.PI * t));
+    }
+    if (kind === "switcheroo") {
+      // **Both ends of the swap, and only for a moment.** The jump is the read;
+      // this is the flick that says it was done to them rather than a cut.
+      const t = Math.min(1, age / (SIGNATURE_TRAVEL_FRAMES * 0.6));
+      out.scale = Math.max(out.scale, 1 + 0.09 * Math.sin(Math.PI * t));
+    }
+
     if (kind === "thrown_out" && victim) {
       // **He tumbles.** Hurled across the square at four times his own speed —
       // that speed is the effect, and a trail behind it was three more copies of
@@ -439,4 +514,14 @@ export const SIGNATURE_KINDS = new Set<AbilityType>([
   "haymaker",
   "glasses_throw",
   "four_eyes",
+  "switcheroo",
+  "magnet_pull",
+  "spin_cycle",
+  "overclock",
+  "dead_weight",
+  "wall_slam",
+  "siphon",
+  "countdown",
+  "riposte",
+  "slipstream",
 ]);

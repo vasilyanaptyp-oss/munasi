@@ -487,7 +487,14 @@ export function renderGauntletFrame(
       // ours held the beaten man at 15% opacity for the rest of the video, a
       // pale figure standing under a plus reading 0. Fading all the way out is
       // both the reference's behaviour and the readable one.
-      ...(vis.death === undefined ? {} : { fade: vis.death }),
+      //
+      // `SLIPSTREAM` uses the same channel to go part-way translucent while it
+      // passes through the other man. Whichever is further along wins, so a
+      // fighter who dies mid-slip still disappears rather than settling at the
+      // ability's opacity.
+      ...(vis.death === undefined && treat.fade === 0
+        ? {}
+        : { fade: Math.max(vis.death ?? 0, treat.fade) }),
     });
     ctx.restore();
 

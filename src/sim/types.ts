@@ -11,17 +11,65 @@ export const MAX_FRAMES = 60 * FPS;
  * and instead seize the other fighter's *movement*, which in a game whose whole
  * picture is two figures bouncing is the strongest thing an ability can do.
  */
-export type AbilityType =
-  | "spawn_minion"
-  | "heal"
-  | "buff_attack"
-  | "aoe"
-  | "magnetic_north"
-  | "nobody_moves"
-  | "thrown_out"
-  | "haymaker"
-  | "glasses_throw"
-  | "four_eyes";
+/**
+ * Every ability the simulation knows.
+ *
+ * The ten below `four_eyes` were added as a batch, and they share a rule: an
+ * ability in this format may **move** somebody, **stop** somebody, **change
+ * when** something happens, or **move health between** the two — and nothing
+ * else. It may not draw. That is not a restriction invented here, it is what
+ * the reference does and what the owner has now rejected four separate times;
+ * see "Способности не рисуются" in CLAUDE.md.
+ *
+ * So each one is picked for having a silhouette a viewer can read at
+ * thumbnail size out of two photographs on a blue square:
+ *
+ * - `switcheroo`   both figures change ends of the arena in one frame
+ * - `magnet_pull`  the other man's flight curves inward for a beat
+ * - `spin_cycle`   one photograph circles the other
+ * - `overclock`    a figure visibly accelerates
+ * - `dead_weight`  he stops dead and the other man pinballs off him
+ * - `wall_slam`    the caster rockets into a wall, the victim is flung off it
+ * - `siphon`       one number leaves in yellow-green and arrives in green
+ * - `countdown`    nothing, then a white flash two and a half seconds later
+ * - `riposte`      every blow landed on him appears twice, once on each man
+ * - `slipstream`   he goes translucent and passes straight through the other
+ */
+/**
+ * **One list, and the type is derived from it.**
+ *
+ * The roster parser used to keep its own copy of these names, and this project
+ * has already paid for exactly that shape of duplication once: `meleeShare`,
+ * `pulses` and `hitShare` were added to the roster, written into
+ * `fighters.json`, used by the calibrator — and dropped on the floor by
+ * `parseFighter`, so every video shipped without them while the balance
+ * numbers assumed they were live. A list a human has to remember to update in
+ * two places is a bug with a delay on it.
+ */
+export const ABILITY_TYPES = [
+  "spawn_minion",
+  "heal",
+  "buff_attack",
+  "aoe",
+  "magnetic_north",
+  "nobody_moves",
+  "thrown_out",
+  "haymaker",
+  "glasses_throw",
+  "four_eyes",
+  "switcheroo",
+  "magnet_pull",
+  "spin_cycle",
+  "overclock",
+  "dead_weight",
+  "wall_slam",
+  "siphon",
+  "countdown",
+  "riposte",
+  "slipstream",
+] as const;
+
+export type AbilityType = (typeof ABILITY_TYPES)[number];
 
 /** Stats of a minion produced by a `spawn_minion` ability. */
 export interface MinionSpec {

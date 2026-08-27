@@ -8,6 +8,9 @@ node_modules/
 out/*
 # ...except the sample videos, which are the deliverable.
 !out/samples/
+# ...and the ability demo, which is how the ten new ones get reviewed at all:
+# seven of them are movement, and movement does not survive a screenshot.
+!out/demo/
 *.log
 .DS_Store
 .vitest/

@@ -1,8 +1,10 @@
 import {
   dash,
   initialMovement,
+  keepInside,
   resolveCollision,
   setHeading,
+  steerHeading,
   stepMovement,
   type MovementState,
 } from "./movement.js";
@@ -114,6 +116,45 @@ export const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
  * fast reads as a glitch rather than as a throw.
  */
 const THROW_SPEED = 2.6;
+
+/**
+ * Speeds and windows for the ten abilities added as a batch.
+ *
+ * All of them are multipliers on a fighter's own pace, and all are kept near
+ * the measured band rather than above it. The reference's fighters travel
+ * 0.0095-0.0103 of the arena per frame with a p90 of 0.0187, and the one
+ * complaint the owner has ever made about movement was that ours were too
+ * fast — a four-times dash measured 0.040, twice anything the reference does,
+ * and read as a glitch. Nothing here goes past 2.6.
+ */
+/** `REEL IN`: enough above his own pace that the curve inward is visible. */
+const MAGNET_PULL_SPEED = 1.5;
+/** `OVERCLOCK`: he covers ground, he does not teleport. */
+const OVERCLOCK_SPEED = 2.2;
+/** `WALL SLAM`: the caster closes, the victim is launched off the wall. */
+const WALL_SLAM_DASH = 2.2;
+const WALL_SLAM_THROW = 2.6;
+/** `SLIPSTREAM`: fast enough to pass clean through rather than linger inside. */
+const SLIPSTREAM_SPEED = 2.0;
+/**
+ * `COUNTDOWN`: how long the fuse burns.
+ *
+ * Long enough that the victim is somewhere else by the time it lands — which
+ * is the whole point, it is the one blow that does not need the pair to be
+ * together — and short enough to sit inside the gate's 5.0s ceiling on quiet
+ * stretches rather than being the thing that breaks it.
+ */
+const COUNTDOWN_SECONDS = 2.5;
+/** `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths. */
+const ORBIT_RADIUS_SHARE = 0.95;
+/**
+ * `SPIN CYCLE`: radians per tick.
+ *
+ * One full turn takes about 1.6 seconds at 60 ticks, so a 1.2-second cast is
+ * roughly three quarters of a lap — long enough to read as circling, short
+ * enough that it never looks like he is stuck in a loop.
+ */
+const ORBIT_RADIANS_PER_TICK = (Math.PI * 2) / (1.6 * TICKS_PER_SECOND);
 const THROW_SECONDS = 0.75;
 /** Derived minion stats, used when an ability has no explicit `minion` block. */
 const DERIVED_MINION_ATTACK_RATIO = 0.28;
@@ -168,6 +209,10 @@ interface FighterState {
   minionsSpawned: number;
   /** Comeback-wave thresholds already triggered. */
   wavesTriggered: number[];
+  /** Tick until which every blow he lands on contact is a crit — `OVERCLOCK`. */
+  critWindowUntilTick: number;
+  /** Tick until which a blow landed on him is dealt back — `RIPOSTE`. */
+  riposteUntilTick: number;
 }
 
 interface MinionState extends Minion {
@@ -287,6 +332,8 @@ export function simulate(
     minions: [],
     minionsSpawned: 0,
     wavesTriggered: [],
+    critWindowUntilTick: 0,
+    riposteUntilTick: 0,
   });
 
   const sides: Record<Side, FighterState> = {
@@ -498,6 +545,8 @@ export function simulate(
     knockback: boolean;
     share: number;
     ability: AbilityType;
+    /** `SIPHON`: the caster is healed by whatever this pulse takes off. */
+    siphon?: boolean;
   }[] = [];
 
   /**
@@ -509,6 +558,7 @@ export function simulate(
     state: FighterState,
     ability: Ability,
     knockback = false,
+    options: { delayTicks?: number; siphon?: boolean } = {},
   ): number => {
     const range = ability.pulses;
     const count = range
@@ -516,11 +566,12 @@ export function simulate(
       : 1;
     for (let i = 0; i < count; i += 1) {
       pulses.push({
-        atTick: tick + SIGNATURE_FIRST_TICK + i * SIGNATURE_PULSE_GAP,
+        atTick: tick + SIGNATURE_FIRST_TICK + (options.delayTicks ?? 0) + i * SIGNATURE_PULSE_GAP,
         side: state.side,
         knockback,
         share: ability.hitShare ?? 1,
         ability: ability.type,
+        ...(options.siphon === true ? { siphon: true } : {}),
       });
     }
     return count;
@@ -656,6 +707,266 @@ export function simulate(
         });
         break;
       }
+      /**
+       * SWITCHEROO — the two change ends of the arena in a single frame.
+       *
+       * The most visible thing this format can do without drawing anything:
+       * both photographs are somewhere else on the next frame, and the plus
+       * over each head goes with it. Velocities travel with the bodies, so
+       * neither one arrives moving in a direction he was not already going.
+       */
+      case "switcheroo": {
+        const mine = movement[state.side];
+        const theirs = movement[enemy.side];
+        const x = mine.x;
+        const y = mine.y;
+        mine.x = theirs.x;
+        mine.y = theirs.y;
+        theirs.x = x;
+        theirs.y = y;
+        // Each was standing somewhere legal for his own box, and the two boxes
+        // differ, so the swap can leave a wider man in a narrower man's corner.
+        keepInside(mine);
+        keepInside(theirs);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: 0,
+        });
+        break;
+      }
+      /**
+       * REEL IN — the other man's flight curves inward for a beat.
+       *
+       * `MAGNETIC NORTH` rewrites a heading once and lets go. This holds on:
+       * the homing flag re-aims the victim at whoever he is fighting on every
+       * tick, and since that is the caster, he arrives. Slightly faster than
+       * his own pace, so the curve is visible rather than inferred.
+       */
+      case "magnet_pull": {
+        const pull = movement[enemy.side];
+        dash(
+          pull,
+          Math.atan2(movement[state.side].y - pull.y, movement[state.side].x - pull.x),
+          MAGNET_PULL_SPEED,
+          tick + Math.round((ability.duration ?? 1.4) * TICKS_PER_SECOND),
+          true,
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.4,
+        });
+        break;
+      }
+      /**
+       * SPIN CYCLE — one photograph circles the other.
+       *
+       * The only movement mode `stepMovement` does not own, because it is the
+       * one that depends on where the *other* man is; the tick loop places him.
+       * He orbits at contact range, so the pair meet on the contact window's
+       * own cadence and he taps away for as long as it runs.
+       */
+      case "spin_cycle": {
+        const me = movement[state.side];
+        const them = movement[enemy.side];
+        me.orbitUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
+        me.orbitAngle = Math.atan2(me.y - them.y, me.x - them.x);
+        me.orbitDir = movementRng[state.side].chance(0.5) ? 1 : -1;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.2,
+        });
+        break;
+      }
+      /**
+       * OVERCLOCK — he visibly accelerates, and everything he touches crits.
+       *
+       * A dash with no steering is a plain speed multiplier: he keeps his
+       * heading and covers ground faster, wall bounces and all. The crit window
+       * is what makes the speed worth something rather than just decorative.
+       */
+      case "overclock": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
+        dash(me, Math.atan2(me.vy, me.vx), OVERCLOCK_SPEED, until, false);
+        state.critWindowUntilTick = until;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 2,
+        });
+        break;
+      }
+      /**
+       * DEAD WEIGHT — he plants himself, and the other man pinballs off him.
+       *
+       * Frozen so he stops, immovable so he keeps none of the collision. What
+       * the viewer sees is a figure that has stopped dead in the middle of the
+       * square and another one bouncing off him harder than he arrived.
+       */
+      case "dead_weight": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 1.6) * TICKS_PER_SECOND);
+        me.frozenUntilTick = until;
+        me.immovableUntilTick = until;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.6,
+        });
+        break;
+      }
+      /**
+       * WALL SLAM — he rockets into the nearest wall and it throws the other
+       * man off it.
+       *
+       * Two bodies moving in one cast, in opposite senses: the caster drives
+       * *into* a wall while the victim is flung *away* from that same wall. The
+       * wall he picks is the one nearest the victim, so the launch is across
+       * the square rather than into the corner they are already in.
+       */
+      case "wall_slam": {
+        const me = movement[state.side];
+        const them = movement[enemy.side];
+        // Which wall the victim is nearest, and therefore which way he leaves.
+        const toLeft = them.x;
+        const toRight = 1 - them.x;
+        const toTop = them.y;
+        const toBottom = 1 - them.y;
+        const nearest = Math.min(toLeft, toRight, toTop, toBottom);
+        const away =
+          nearest === toLeft ? 0
+          : nearest === toRight ? Math.PI
+          : nearest === toTop ? Math.PI / 2
+          : -Math.PI / 2;
+        const lead = tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
+        dash(me, Math.atan2(them.y - me.y, them.x - me.x), WALL_SLAM_DASH, lead, true);
+        dash(them, steerHeading(away), WALL_SLAM_THROW, lead, false);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: away,
+        });
+        break;
+      }
+      /**
+       * SIPHON — the points come off one man and arrive on the other.
+       *
+       * The only ability here that puts two numbers of different colours on one
+       * frame: yellow-green leaving the victim, green arriving on the caster.
+       * Both happen when the pulse lands, not when it is cast, so the two
+       * numbers are the same event seen from both ends.
+       */
+      case "siphon": {
+        scheduleSignature(state, ability, false, { siphon: true });
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: 0,
+        });
+        break;
+      }
+      /**
+       * COUNTDOWN — nothing, and then a heavy blow two and a half seconds later.
+       *
+       * The one ability whose read is *timing*. It lands wherever the victim
+       * has got to, which after that long is usually the far side of the
+       * square, and it is the only thing in the format that damages a man who
+       * is nowhere near his opponent — which makes it the strongest answer to
+       * a fight that has drifted into a quiet stretch.
+       */
+      case "countdown": {
+        scheduleSignature(state, ability, false, {
+          delayTicks: Math.round(COUNTDOWN_SECONDS * TICKS_PER_SECOND),
+        });
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: COUNTDOWN_SECONDS,
+        });
+        break;
+      }
+      /**
+       * RIPOSTE — for a couple of seconds, every blow he takes lands twice.
+       *
+       * Purely reactive: it schedules nothing and moves nobody. What it does is
+       * put a second number on the screen every time the pair meet, on the man
+       * who started it. See the contact block for where that happens.
+       */
+      case "riposte": {
+        state.riposteUntilTick =
+          tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 2,
+        });
+        break;
+      }
+      /**
+       * SLIPSTREAM — he goes translucent and passes straight through.
+       *
+       * No collision either way while it runs, so it is a dodge as much as an
+       * attack: he cannot be hit by running into him, and he cannot hit that
+       * way either. His damage arrives on the pulse instead, on the way past.
+       */
+      case "slipstream": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 1.5) * TICKS_PER_SECOND);
+        me.phasingUntilTick = until;
+        dash(
+          me,
+          Math.atan2(movement[enemy.side].y - me.y, movement[enemy.side].x - me.x),
+          SLIPSTREAM_SPEED,
+          until,
+          true,
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.5,
+        });
+        break;
+      }
       // NOBODY MOVES. He lowers the sunglasses and the arena stops.
       case "nobody_moves": {
         movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
@@ -772,8 +1083,32 @@ export function simulate(
       setHeading(me, Math.atan2(them.y - me.y, them.x - me.x));
     }
 
+    // **SPIN CYCLE places its man instead of integrating him.**
+    //
+    // Everything else in this simulation moves by velocity, and it has to: the
+    // bounce is what the format looks like. An orbit is the one exception,
+    // because where he goes depends on where the *other* man is, which is
+    // knowledge `stepMovement` deliberately does not have. So he is written
+    // straight to the circle here and skipped below.
+    const orbiting = new Set<Side>();
+    for (const side of [sides.a, sides.b]) {
+      const me = movement[side.side];
+      if (tick >= me.orbitUntilTick) continue;
+      const them = movement[opponentOf(side).side];
+      orbiting.add(side.side);
+      me.orbitAngle += me.orbitDir * ORBIT_RADIANS_PER_TICK;
+      const radius = (me.halfW + them.halfW) * ORBIT_RADIUS_SHARE;
+      me.x = them.x + Math.cos(me.orbitAngle) * radius;
+      me.y = them.y + Math.sin(me.orbitAngle) * radius;
+      keepInside(me);
+      // He leaves the orbit going the way he was travelling round it, so the
+      // ability ends in movement rather than in a dead stop.
+      setHeading(me, me.orbitAngle + me.orbitDir * (Math.PI / 2));
+    }
+
     // The bounce...
     for (const side of [sides.a, sides.b]) {
+      if (orbiting.has(side.side)) continue;
       stepMovement(movement[side.side], { tick, rng: movementRng[side.side] });
     }
     // ...and then off each other. After both have travelled, so the pair is
@@ -822,7 +1157,11 @@ export function simulate(
         // and must not push a "-0" onto the screen for it. Glasses Guy touches
         // nobody: every point he takes off the other man is thrown.
         if ((side.base.meleeShare ?? 1) <= 0) continue;
-        const isCrit = side.rng.chance(side.base.critChance);
+        // `OVERCLOCK` makes every blow inside its window a crit; otherwise the
+        // fighter's own chance decides. Rolled either way so the two paths
+        // consume the same number of draws and a seed stays a seed.
+        const rolled = side.rng.chance(side.base.critChance);
+        const isCrit = rolled || tick < side.critWindowUntilTick;
         const raw =
           effectiveAttack(side) *
           // What this fighter is worth in a collision — see `meleeShare`. The
@@ -848,6 +1187,29 @@ export function simulate(
           atX: contact.x,
           atY: contact.y,
         });
+        // **RIPOSTE returns what it was just given.**
+        //
+        // Reactive, so it lives here rather than in the cast: the man who
+        // parried takes the blow and the same points come off whoever threw it,
+        // in the same frame, at the same place. Two numbers on one meeting is
+        // the read.
+        //
+        // It does not chain — the returned points are dealt directly rather
+        // than through this loop — because two fighters both holding a riposte
+        // would otherwise volley until one of them died on a single contact.
+        if (tick < enemy.riposteUntilTick && done > 0 && side.hp > 0) {
+          const returned = damageFighter(side, done);
+          events.push({
+            frame,
+            type: "hit",
+            actorId: enemy.base.id,
+            targetId: side.base.id,
+            value: returned,
+            atX: contact.x,
+            atY: contact.y,
+            ability: "riposte",
+          });
+        }
         // **One blow per meeting, and every meeting gets one.**
         //
         // This used to refill from `attackSpeed`, and once Boxer Guy's speed
@@ -900,6 +1262,22 @@ export function simulate(
         comebackMultiplier(caster, rubberBand);
       const dealt = damageFighter(victim, rollDamage(caster.rng, raw));
       const at = movement[victim.side];
+      // `SIPHON`: the same points arrive on the caster, capped by the room he
+      // has for them. Pushed as its own `heal` event so the renderer draws it
+      // in the buff colour — one frame, two numbers, two directions.
+      if (pulse.siphon === true) {
+        const healed = Math.min(dealt, caster.base.maxHp - caster.hp);
+        if (healed > 0) {
+          caster.hp += healed;
+          events.push({
+            frame,
+            type: "heal",
+            actorId: caster.base.id,
+            targetId: caster.base.id,
+            value: healed,
+          });
+        }
+      }
       // The knock happens when the punch lands, not when it was thrown. Sending
       // the victim flying before the blow arrives is exactly the incoherence
       // this whole pass is about.

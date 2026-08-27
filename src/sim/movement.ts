@@ -94,6 +94,32 @@ export interface MovementState {
   dashMul: number;
   /** Does this dash steer itself at the other fighter? A charge does; a throw does not. */
   dashHoming: boolean;
+  /**
+   * Tick until which this fighter cannot be pushed — see `DEAD WEIGHT`.
+   *
+   * A collision between equal masses splits the exchange down the middle. An
+   * immovable fighter takes none of it, which means the other man takes all of
+   * it and leaves at twice the speed he arrived. That is the whole read: he
+   * runs into a man who does not move and pinballs off him.
+   */
+  immovableUntilTick: number;
+  /**
+   * Tick until which this fighter does not collide at all — see `SLIPSTREAM`.
+   *
+   * The pair pass through each other instead of bouncing. Drawn at part
+   * opacity, which is a handling of the photograph rather than something drawn
+   * next to it.
+   */
+  phasingUntilTick: number;
+  /**
+   * Orbit — see `SPIN CYCLE`. While this runs the fighter's position is written
+   * directly from the angle rather than integrated from velocity, so it is the
+   * one movement mode `stepMovement` does not own; the caller places him,
+   * because only the caller knows where the other man is.
+   */
+  orbitUntilTick: number;
+  orbitAngle: number;
+  orbitDir: 1 | -1;
 }
 
 export interface MovementInput {
@@ -123,7 +149,7 @@ function clamp(value: number, min: number, max: number): number {
 const WALL_GUARD = 1 / 1149;
 
 /** Holds a fighter's box inside the arena walls. */
-function keepInside(state: MovementState): void {
+export function keepInside(state: MovementState): void {
   state.x = clamp(state.x, state.halfW + WALL_GUARD, 1 - state.halfW - WALL_GUARD);
   state.y = clamp(state.y, state.halfH + WALL_GUARD, 1 - state.halfH - WALL_GUARD);
 }
@@ -152,7 +178,7 @@ const HEADING_MAX = 0.78;
  * Works on the angle inside its own quadrant, so all four are treated alike and
  * a reflection off any wall keeps its direction.
  */
-function steerHeading(heading: number): number {
+export function steerHeading(heading: number): number {
   const quarter = Math.PI / 2;
   const inQuadrant = ((heading % quarter) + quarter) % quarter;
   const clamped = clamp(inQuadrant, HEADING_MIN * quarter, HEADING_MAX * quarter);
@@ -196,6 +222,11 @@ export function initialMovement(
     dashUntilTick: 0,
     dashMul: 1,
     dashHoming: false,
+    immovableUntilTick: 0,
+    phasingUntilTick: 0,
+    orbitUntilTick: 0,
+    orbitAngle: 0,
+    orbitDir: 1,
   };
 }
 
@@ -363,9 +394,22 @@ export function resolveCollision(
   b: MovementState,
   tick: number,
 ): Contact | null {
-  const aFrozen = tick < a.frozenUntilTick;
-  const bFrozen = tick < b.frozenUntilTick;
+  // **Passing through, not bouncing** — `SLIPSTREAM`. No contact at all while
+  // it runs, which also means neither man damages the other: the ability is a
+  // dodge as much as an approach, and that is its identity.
+  if (tick < a.phasingUntilTick || tick < b.phasingUntilTick) return null;
+
+  // Held in place: frozen by `NOBODY MOVES`, or planted by `DEAD WEIGHT`. Both
+  // donate their share of the separation to the other man; the difference is
+  // what happens to his velocity, below.
+  const aFrozen = tick < a.frozenUntilTick || tick < a.immovableUntilTick;
+  const bFrozen = tick < b.frozenUntilTick || tick < b.immovableUntilTick;
   if (aFrozen && bFrozen) return null;
+  // Running into a man who has planted himself is a rebound, not an exchange:
+  // he keeps none of the energy, so it all comes back. Measured against nothing
+  // — this is a choice, and it is the read the ability is for.
+  const aBounce = tick < b.immovableUntilTick ? DEAD_WEIGHT_REBOUND : 1;
+  const bBounce = tick < a.immovableUntilTick ? DEAD_WEIGHT_REBOUND : 1;
 
   const overlap = outlineOverlap(a, b);
   if (overlap === null) return null;
@@ -408,8 +452,8 @@ export function resolveCollision(
   if (horizontal) {
     if ((b.vx - a.vx) * sign >= 0) return contact;
     contact.closing = true;
-    if (aFrozen) b.vx = -b.vx;
-    else if (bFrozen) a.vx = -a.vx;
+    if (aFrozen) b.vx = -b.vx * bBounce;
+    else if (bFrozen) a.vx = -a.vx * aBounce;
     else {
       const swap = a.vx;
       a.vx = b.vx;
@@ -418,8 +462,8 @@ export function resolveCollision(
   } else {
     if ((b.vy - a.vy) * sign >= 0) return contact;
     contact.closing = true;
-    if (aFrozen) b.vy = -b.vy;
-    else if (bFrozen) a.vy = -a.vy;
+    if (aFrozen) b.vy = -b.vy * bBounce;
+    else if (bFrozen) a.vy = -a.vy * aBounce;
     else {
       const swap = a.vy;
       a.vy = b.vy;
@@ -433,6 +477,17 @@ export function resolveCollision(
   steer(b);
   return contact;
 }
+
+/**
+ * How much faster a man leaves a fighter who has planted himself.
+ *
+ * Kept modest on purpose. The speed a fighter travels at is measured against
+ * the reference (0.0095-0.0103 of the arena per frame, p90 0.0187) and the
+ * owner's one complaint about movement was that they went too fast; a rebound
+ * that doubled it would put a figure well outside anything the reference ever
+ * does, which is what the four-times dash used to do and read as a glitch.
+ */
+const DEAD_WEIGHT_REBOUND = 1.45;
 
 /** Re-aims a velocity out of the flat and vertical bands, keeping its speed. */
 function steer(state: MovementState): void {

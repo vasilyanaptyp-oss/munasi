@@ -1,21 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Ability, Fighter } from "../sim/types.js";
+import { ABILITY_TYPES, type Ability, type Fighter } from "../sim/types.js";
 
 export const ROSTER_PATH = join(import.meta.dirname, "fighters.json");
 
-const ABILITY_TYPES = new Set([
-  "spawn_minion",
-  "heal",
-  "buff_attack",
-  "aoe",
-  "magnetic_north",
-  "nobody_moves",
-  "thrown_out",
-  "haymaker",
-  "glasses_throw",
-  "four_eyes",
-]);
+/**
+ * Straight off the simulation's own list, never a copy of it. See the note on
+ * `ABILITY_TYPES` in `types.ts` for what a second copy costs.
+ */
+const KNOWN_ABILITIES: ReadonlySet<string> = new Set(ABILITY_TYPES);
 
 function assertNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -27,7 +20,7 @@ function assertNumber(value: unknown, label: string): number {
 function parseAbility(raw: unknown, label: string): Ability {
   if (typeof raw !== "object" || raw === null) throw new Error(`${label}: not an object`);
   const r = raw as Record<string, unknown>;
-  if (typeof r["type"] !== "string" || !ABILITY_TYPES.has(r["type"])) {
+  if (typeof r["type"] !== "string" || !KNOWN_ABILITIES.has(r["type"])) {
     throw new Error(`${label}: unknown ability type ${JSON.stringify(r["type"])}`);
   }
   const ability: Ability = {
