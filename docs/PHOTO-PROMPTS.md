@@ -129,9 +129,11 @@ Photograph, not an illustration, not 3D, not CGI.
 
 ```
 A photorealistic studio photograph of a Mexican lucha libre wrestler, waist-up
-portrait, facing the camera. He wears a bright turquoise and gold wrestling mask
+portrait, facing the camera. He wears a crimson and silver wrestling mask
 covering his whole face and a matching sleeveless singlet, muscular arms folded
-across his chest so the silhouette stays narrow.
+across his chest so the silhouette stays narrow. Nothing turquoise, cyan or sky
+blue anywhere — that is the arena's own colour and the costume would vanish
+into it.
 
 Shot on a pure white seamless studio background, RGB 255 255 255, evenly lit
 from both sides, completely flat — absolutely no shadow on the background, no
