@@ -7,6 +7,7 @@ import { GAUNTLET_RULES } from "./teams.js";
 import { FPS } from "../sim/types.js";
 import { BALANCE_MAX, BALANCE_MIN, evaluatePair, evaluateRoster } from "./balance.js";
 import { analyticAttack, scaleSpec, winRateVsReference } from "./calibrate.js";
+import { cutoutWarning, spriteAspect } from "./cutout.js";
 import { generateMatchups } from "./generateMatchups.js";
 import { allPairs, getFighter, loadFighters } from "./index.js";
 import { ROSTER } from "./roster.js";
@@ -242,5 +243,27 @@ describe("generateMatchups", () => {
 
   it("never pairs a fighter with itself", () => {
     for (const m of generateMatchups({ roster, report })) expect(m.a.id).not.toBe(m.b.id);
+  });
+});
+
+describe("cutout quality", () => {
+  it("says so when the background survived the cut", () => {
+    // The failure mode that matters for somebody's first run: a flood fill from
+    // the border does not fail on a photo taken in a room, it succeeds at
+    // keeping all of it.
+    expect(cutoutWarning(0.95)).toMatch(/background is still there/);
+    expect(cutoutWarning(0.02)).toMatch(/almost nothing survived/);
+  });
+
+  it("stays quiet across the band the shipped cast actually occupies", () => {
+    // Measured on the four that ship: 36-61%. The band has room either side of
+    // that, so a tighter or looser crop than ours does not cry wolf.
+    for (const coverage of [0.15, 0.36, 0.45, 0.61, 0.8]) {
+      expect(cutoutWarning(coverage), `${coverage}`).toBeNull();
+    }
+    // And every shipped fighter is a real PNG with a sane aspect.
+    for (const fighter of roster) {
+      expect(spriteAspect(fighter.spriteId)).toBeCloseTo(fighter.aspect, 2);
+    }
   });
 });

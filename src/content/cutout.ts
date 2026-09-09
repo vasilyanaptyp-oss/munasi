@@ -223,6 +223,31 @@ const PROP_WHITE = 200;
 /** See `maxWidth` — a prop draws at a quarter of this and no one samples the rest. */
 const PROP_MAX_WIDTH = 512;
 
+/**
+ * What a cut that went wrong looks like, in one number.
+ *
+ * The background is flood-filled inward from the border, so a photograph that
+ * is not on studio white does not fail — it **succeeds at keeping everything**,
+ * and you get a rectangle of somebody's living room on the arena. The shipped
+ * cast runs 36-61% coverage. Well above that band means the fill never got in;
+ * well below means it ate the figure.
+ *
+ * This is a warning rather than an error because the bands are advisory: a very
+ * tightly cropped photograph can legitimately sit high. But a new user's first
+ * run is exactly where a silently wrong cut costs an hour, and until now the
+ * only signal was a percentage with nothing to compare it to.
+ */
+export function cutoutWarning(coverage: number): string | null {
+  if (coverage > 0.85) {
+    return "the background is still there — the photo needs a white studio backdrop, " +
+      "not a room or a grey sweep";
+  }
+  if (coverage < 0.12) {
+    return "almost nothing survived — a very light subject on white can be eaten by the fill";
+  }
+  return null;
+}
+
 async function cutDir(dir: string, options: CutoutOptions = {}): Promise<number> {
   const sourceDir = join(dir, "source");
   if (!existsSync(sourceDir)) return 0;
@@ -235,6 +260,8 @@ async function cutDir(dir: string, options: CutoutOptions = {}): Promise<number>
       `${file.padEnd(24)} -> ${name.padEnd(24)} ${result.width}x${result.height}  ` +
         `figure is ${(result.coverage * 100).toFixed(0)}% of the source`,
     );
+    const warning = cutoutWarning(result.coverage);
+    if (warning !== null) console.log(`${" ".repeat(24)}    ! ${warning}`);
   }
   return files.length;
 }
