@@ -6,6 +6,7 @@ import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { ensureFonts, font } from "../render/theme.js";
 import { isMain } from "../util/main.js";
 import { ffmpegBin, ffprobeBin } from "../util/tools.js";
+import { inProject } from "../util/paths.js";
 
 /**
  * One picture that shows a whole batch:
@@ -126,7 +127,7 @@ async function main(): Promise<void> {
     return;
   }
   const at = args.indexOf("--out");
-  const outPath = at >= 0 ? args[at + 1]! : join(process.cwd(), "out", "sheet.png");
+  const outPath = at >= 0 ? args[at + 1]! : inProject("out", "sheet.png");
   const rows = await buildSheet(files, outPath);
   console.log(`${rows.length} video(s) -> ${outPath}`);
   for (const row of rows) console.log(`  ${basename(row.file)}  ${row.seconds.toFixed(1)}s`);

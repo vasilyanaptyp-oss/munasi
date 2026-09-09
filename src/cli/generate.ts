@@ -25,6 +25,7 @@ import {
 } from "./manifest.js";
 import { ProgressBar } from "./progress.js";
 import { provenance } from "./provenance.js";
+import { inProject } from "../util/paths.js";
 
 /**
  * Batch generator:
@@ -105,7 +106,7 @@ export function parseArgs(argv: string[]): GenerateOptions {
     count: Math.floor(number("count", 10)),
     seeds: Math.floor(number("seeds", 500)),
     seedStart: Math.floor(number("start", 1) - 1),
-    outDir: flag("out") ?? join(process.cwd(), "out"),
+    outDir: flag("out") ?? inProject("out"),
     workers: Math.floor(number("workers", defaultWorkerCount())),
     matchupSample: Math.floor(number("sample", 40)),
     keepFrames: argv.includes("--keep-frames"),

@@ -4,6 +4,7 @@ import { mulberry32 } from "../sim/rng.js";
 import type { MatchEvent } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { readWav, SAMPLE_RATE, writeWav } from "./wav.js";
+import { inProject } from "../util/paths.js";
 
 /**
  * Procedural audio. The repo ships no sound files, so the first export
@@ -186,7 +187,7 @@ const SYNTHS: Record<SfxName, () => Float32Array> = {
  * Makes sure every audio asset exists, synthesising the missing ones.
  * Returns the directory it used.
  */
-export function ensureAudioAssets(dir = join(process.cwd(), "assets", "audio")): string {
+export function ensureAudioAssets(dir = inProject("assets", "audio")): string {
   mkdirSync(dir, { recursive: true });
   for (const [name, file] of Object.entries(SFX_FILES) as [SfxName, string][]) {
     const path = join(dir, file);

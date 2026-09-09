@@ -1,7 +1,9 @@
 import { fork } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { availableParallelism } from "node:os";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { inPackage } from "../util/paths.js";
 import { planFor, renderFrames, type Renderable, type RenderFramesOptions } from "./index.js";
 import type { RenderJob, WorkerMessage } from "./renderWorker.js";
 
@@ -11,8 +13,27 @@ const WORKER_PATH = fileURLToPath(new URL("./renderWorker.ts", import.meta.url))
  * The worker is TypeScript, so the child needs a loader that can read it.
  * `execArgv` is not inherited in every runner (vitest, for one, transforms
  * in-process and passes nothing along), so ask for tsx explicitly.
+ *
+ * **Resolved to an absolute URL, not left as the bare name `tsx`.** Node
+ * resolves a bare `--import` specifier against the child's working directory,
+ * and once this is a tool somebody installs, that directory is *their* project
+ * — which has no `node_modules` and no tsx in it. The child exited 1, the
+ * parent reported "render worker exited with code 1", and nothing said why;
+ * single-process rendering worked, which made it look like a concurrency bug.
  */
-const WORKER_EXEC_ARGV = WORKER_PATH.endsWith(".ts") ? ["--import", "tsx"] : [];
+function workerLoader(): string[] {
+  if (!WORKER_PATH.endsWith(".ts")) return [];
+  try {
+    const require = createRequire(inPackage("package.json"));
+    return ["--import", pathToFileURL(require.resolve("tsx")).href];
+  } catch {
+    // Running somewhere tsx is not resolvable from the package either — let the
+    // bare name have its chance rather than failing here.
+    return ["--import", "tsx"];
+  }
+}
+
+const WORKER_EXEC_ARGV = workerLoader();
 
 /** Leave one core for the parent process and whatever else is running. */
 export function defaultWorkerCount(): number {

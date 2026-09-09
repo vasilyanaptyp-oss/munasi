@@ -1,6 +1,7 @@
 import { createCanvas, loadImage, type Canvas, type Image, type SKRSContext2D } from "@napi-rs/canvas";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { assetDir, requireCutouts } from "../util/paths.js";
 
 /**
  * Draws a fighter: a cut-out photo, straight on the blue.
@@ -17,8 +18,8 @@ import { join } from "node:path";
  * a thousand times.
  */
 
-const FIGHTER_DIR = join(process.cwd(), "assets", "fighters");
-const PROP_DIR = join(process.cwd(), "assets", "props");
+const FIGHTER_DIR = assetDir("fighters");
+const PROP_DIR = assetDir("props");
 
 /**
  * Every fighter's cut-out, decoded once when this module loads.
@@ -32,8 +33,7 @@ const PROP_DIR = join(process.cwd(), "assets", "props");
  */
 const images = new Map<string, Image>(
   await Promise.all(
-    readdirSync(FIGHTER_DIR)
-      .filter((f) => f.endsWith(".png"))
+    requireCutouts(FIGHTER_DIR)
       .map(async (f): Promise<[string, Image]> => [
         f.replace(/\.png$/, ""),
         await loadImage(readFileSync(join(FIGHTER_DIR, f))),
@@ -47,7 +47,7 @@ const images = new Map<string, Image>(
  */
 const props = new Map<string, Image>(
   await Promise.all(
-    readdirSync(PROP_DIR)
+    (existsSync(PROP_DIR) ? readdirSync(PROP_DIR) : [])
       .filter((f) => f.endsWith(".png"))
       .map(async (f): Promise<[string, Image]> => [
         f.replace(/\.png$/, ""),

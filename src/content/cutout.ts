@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 import { isMain } from "../util/main.js";
+import { inProject } from "../util/paths.js";
 
 /**
  * Turns a photo on a white background into a cut-out PNG:
@@ -205,8 +206,8 @@ export async function cutout(sourcePath: string, options: CutoutOptions = {}): P
   return { png: out.toBuffer("image/png"), width: ow, height: oh, coverage: kept / (w * h) };
 }
 
-export const FIGHTER_DIR = join(process.cwd(), "assets", "fighters");
-export const PROP_DIR = join(process.cwd(), "assets", "props");
+export const FIGHTER_DIR = inProject("assets", "fighters");
+export const PROP_DIR = inProject("assets", "props");
 
 /**
  * Props cut looser than fighters.

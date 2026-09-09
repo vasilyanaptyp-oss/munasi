@@ -5,6 +5,7 @@ import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
 import { findBestGauntlet } from "../sim/gauntlet.js";
 import { findBestMatch } from "../sim/drama.js";
 import { renderAnyFrame } from "../render/index.js";
+import { inProject } from "../util/paths.js";
 
 /**
  * Renders sample frames of a real matchup for eyeballing the composition:
@@ -12,7 +13,7 @@ import { renderAnyFrame } from "../render/index.js";
  *   pnpm frame --a=plumber --b=baker chosen fighters
  */
 function main(): void {
-  const outDir = join(process.cwd(), "out", "preview");
+  const outDir = inProject("out", "preview");
   mkdirSync(outDir, { recursive: true });
 
   const roster = loadFighters();

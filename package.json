@@ -1,7 +1,6 @@
 {
   "name": "munasi",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "description": "Deterministic battle-sim short video generator (1080x1920, 30fps)",
   "type": "module",
   "engines": {
@@ -24,7 +23,8 @@
     "motion": "tsx src/cli/motion.ts",
     "smoke": "tsx src/cli/smoke.ts",
     "compare": "tsx src/cli/compare.ts",
-    "sheet": "tsx src/cli/sheet.ts"
+    "sheet": "tsx src/cli/sheet.ts",
+    "munasi": "tsx src/cli/munasi.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"
@@ -40,5 +40,31 @@
       "esbuild",
       "@napi-rs/canvas"
     ]
-  }
+  },
+  "license": "MIT",
+  "author": "vasilyanaptyp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vasilyanaptyp-oss/munasi.git"
+  },
+  "keywords": [
+    "video",
+    "generator",
+    "tiktok",
+    "shorts",
+    "ffmpeg",
+    "deterministic",
+    "simulation"
+  ],
+  "bin": {
+    "munasi": "src/cli/munasi.ts"
+  },
+  "files": [
+    "src/",
+    "!src/**/*.test.ts",
+    "assets/fonts/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ]
 }

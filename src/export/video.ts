@@ -9,6 +9,7 @@ import type { MatchResult } from "../sim/types.js";
 import { FPS } from "../sim/types.js";
 import { buildSfxTrack, MUSIC_FILE, writeSfxTrack } from "./audio.js";
 import { ffmpegBin, ffprobeBin } from "../util/tools.js";
+import { inProject } from "../util/paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -128,7 +129,7 @@ export async function exportVideo(
 ): Promise<ExportResult> {
   checkFfmpeg();
 
-  const outDir = options.outDir ?? join(process.cwd(), "out");
+  const outDir = options.outDir ?? inProject("out");
   mkdirSync(outDir, { recursive: true });
 
   const totalFrames = countFrames(options.framesDir);
@@ -152,7 +153,7 @@ export async function exportVideo(
         ...(options.sourceFrames === undefined ? {} : { sourceFrames: options.sourceFrames }),
       }),
     );
-    const musicPath = join(options.audioDir ?? join(process.cwd(), "assets", "audio"), MUSIC_FILE);
+    const musicPath = join(options.audioDir ?? inProject("assets", "audio"), MUSIC_FILE);
 
     const fadeOutStart = Math.max(0, videoSeconds - FADE_SECONDS).toFixed(3);
     // Music loops under the whole match; the SFX bus is already timed to the

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { GlobalFonts } from "@napi-rs/canvas";
+import { assetDir } from "../util/paths.js";
 
 export const WIDTH = 1080;
 export const HEIGHT = 1920;
@@ -49,7 +50,7 @@ let fontsReady = false;
  */
 export function ensureFonts(): void {
   if (fontsReady) return;
-  const dir = join(process.cwd(), "assets", "fonts");
+  const dir = assetDir("fonts");
   for (const file of ["DejaVuSans-Bold.ttf", "DejaVuSans.ttf"]) {
     const path = join(dir, file);
     if (existsSync(path)) GlobalFonts.registerFromPath(path, FONT_ALIAS);

@@ -1,8 +1,12 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { ABILITY_TYPES, type Ability, type Fighter } from "../sim/types.js";
+import { rosterPath } from "../util/paths.js";
 
-export const ROSTER_PATH = join(import.meta.dirname, "fighters.json");
+/**
+ * The roster in play: the user's own `fighters.json` if their project has one,
+ * the shipped cast otherwise. See `util/paths.ts`.
+ */
+export const ROSTER_PATH = rosterPath();
 
 /**
  * Straight off the simulation's own list, never a copy of it. See the note on

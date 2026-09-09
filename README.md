@@ -1,167 +1,161 @@
 # munasi
 
-Generates short vertical battle videos — two fighters, 1080x1920, 30fps, ready
-for TikTok/Shorts.
+Generates short vertical battle videos — two characters, 1080×1920, 30fps,
+ready for TikTok and Shorts. Same seed, same bytes, every time.
 
-The default format is a gauntlet: one worker against three bosses, one at a
-time, carrying their health between rounds. The pipeline simulates the run,
-scores how dramatic it was, keeps the best of 500 seeds, renders it to frames,
-and muxes it into an mp4 with sound. `--duel` runs the original one-on-one
-format instead.
+A character is a **cut-out photograph**, not a drawing. Two of them bounce
+around a square, run into each other, and lose health; abilities move people,
+stop people, change when things happen, or move health between them. Nothing is
+drawn over the top. That is the entire visual language, and it is copied from a
+reference channel by measurement rather than by eye.
 
-```
-pnpm install
-pnpm generate --count 20
+```bash
+npm install -g munasi        # or: pnpm add -g munasi
+munasi init                  # lay out a project here
+# put photographs in assets/fighters/source/ — see "You bring the cast"
+munasi cutout
+munasi generate --count 10
 ```
 
 Videos land in `out/`, one row per video in `out/manifest.json`.
 
 ## Requirements
 
-- Node 20+ and pnpm
-- ffmpeg on `PATH` (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`,
-  `brew install ffmpeg`)
+- **Node 20+**
+- **ffmpeg** and **ffprobe** on `PATH` — `sudo apt install ffmpeg`,
+  `brew install ffmpeg`, `sudo pacman -S ffmpeg`. Somewhere else? Set
+  `FFMPEG_PATH=/full/path/to/ffmpeg`.
 
-Nothing else: fighter art is drawn procedurally, and the soundtrack is
-synthesised into `assets/audio/` the first time you export.
+## You bring the cast
+
+**munasi ships with no characters, and cannot.** A character here is a
+photograph of a real person; those are licensed to whoever bought them and are
+not redistributable inside a package. So the first thing a fresh install needs
+is a cast:
+
+```bash
+munasi init                              # creates assets/fighters/source/ etc.
+cp ~/photos/*.jpg assets/fighters/source/
+munasi cutout                            # background off, outline read from alpha
+# describe them in fighters.json, then:
+munasi calibrate                         # solve each fighter's damage
+munasi solve 3                           # even every pair out
+munasi balance                           # check the matrix
+munasi generate --count 10
+```
+
+Photographs need a **white studio background** — the cut-out is a flood fill
+from the edge of the frame, so a room, a gradient or a drop shadow will stay.
+Waist-up, one person, 700px or more on the short side. Full requirements and the
+roster format: [`docs/ADDING-A-FIGHTER.md`](docs/ADDING-A-FIGHTER.md).
+
+Run `munasi generate` before that and it tells you so, with the three steps —
+it does not fail somewhere inside a render worker.
+
+**Licensing is on you.** Stock photography usually forbids showing a model in an
+unflattering light, and this format has them losing fights. A free-to-use
+licence covers copyright, not a person's right to their own image.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `pnpm generate --count 20` | generate the next 20 matchups |
-| `pnpm balance` | winrate matrix for all 66 pairs |
-| `pnpm calibrate` | regenerate `fighters.json` from `roster.ts` |
-| `pnpm matchups` | list pairs, most even first |
-| `pnpm frame [n...]` | render sample frames to `out/preview/` |
-| `pnpm diagnose` | drama distribution, side-bias check (`--comeback` for the prototype) |
-| `pnpm calibrate:gauntlet` | gauntlet balance table (`--solve`, `--variance`) |
-| `pnpm test` / `pnpm typecheck` | tests and types |
-| `pnpm motion out/samples/*.mp4` | how much a finished video actually moves |
-| `pnpm smoke` | one video end to end on the shipped path, then rebuilt from its manifest row |
+| `munasi init` | lay out a project in the current directory |
+| `munasi generate --count 20` | render the next 20 matchups |
+| `munasi cutout` | photo on white → cut-out PNG, outline and aspect included |
+| `munasi calibrate` | rebuild `fighters.json` from the roster |
+| `munasi solve [rounds]` | even the whole roster out as a fixed point |
+| `munasi balance` | winrate matrix for every pair |
+| `munasi frame [n...]` | sample frames to `out/preview/` |
+| `munasi compare ours.mp4 -- theirs.mp4` | measure both files with the same code |
+| `munasi sheet out/*.mp4` | contact sheet of a batch, one image |
+| `munasi motion out/*.mp4` | how much a finished mp4 actually moves |
+| `munasi smoke` | the shipped path end to end, then rebuilt from its manifest row |
 
 `generate` skips pairs already in the manifest, so running it again continues
-where the last batch left off. `--redo` starts from the top, `--seeds N`
-changes how many seeds are searched per matchup, `--workers N` sets render
-parallelism, `--keep-frames` leaves the intermediate PNGs behind.
+where the last batch stopped. `--redo` starts over, `--seeds N` changes how many
+seeds are searched per matchup, `--workers N` sets render parallelism,
+`--out DIR` writes somewhere else, `--pick=0,3,7` selects matchups by index.
 
-The video opens cold by default: 30 frames of the fight's most arresting moment
-from the **last** round, then a cut back to the real beginning. `--no-cold-open`
-posts the straight cut instead, so you can put both versions of a matchup up and
-compare watch time; the window chosen and the reason go into `manifest.json`.
-The window can never contain a killing blow or come from the last 20% of the
-fight — spoiling the ending costs more retention than a slow opening.
+Working inside a clone instead? Every command is also a script:
+`pnpm generate --count 20`, `pnpm solve`, and so on.
 
-`--pick=0,33,66,99` selects matchups by index instead of taking the next few in
-order, which is how `out/samples/` was cut.
+### Environment
+
+| Variable | Effect |
+| --- | --- |
+| `FFMPEG_PATH` / `FFPROBE_PATH` | binaries somewhere other than `PATH` |
+| `MUNASI_PROJECT` | work on a directory you are not standing in |
+| `MUNASI_ROSTER` | read the roster from somewhere else |
+
+## What it guarantees
+
+**A seed is a video.** All randomness goes through one seeded mulberry32
+stream; a frame is a pure synchronous function of `(result, frame)`, which is
+what lets frames be split across worker processes and still come back
+byte-identical. Checked rather than assumed — `munasi smoke` regenerates a
+shipped sample from its manifest row and compares bytes.
+
+The vendored DejaVu faces ship *with the package* for the same reason: text
+metrics are part of the rendered bytes, so a font resolved from the host would
+make the same seed produce different pixels on different machines.
+
+**A manifest row records the constants, not just the seed.** A seed replays a
+different fight the moment a tuning number moves. Every row carries the commit,
+a hash of `fighters.json`, the seed budget, the ending the search was asked for,
+and a snapshot of every constant the bytes depend on.
+
+**Drama is selected, not authored.** A random fight is boring, so the generator
+simulates hundreds of seeds per matchup and keeps the one that scores highest on
+closeness, lead changes, comebacks, pacing, and how late the outcome stayed in
+doubt.
+
+**The roster is balanced by construction.** Fighter damage is solved for, never
+hand-written. `munasi solve` treats the whole roster as a fixed point, because
+bisection stops working past two fighters — each one's winrate depends on all
+the others. Every pair currently sits inside 35-65%.
+
+**The format is measured, not remembered.** `munasi compare` pulls frames from
+your videos and from a reference and measures the same quantities in both by
+pixel: arena size, wall thickness, camera travel, fighter height, colour shares,
+damage numbers per second, the worst gap without one. It prints a table and
+passes no judgement — five separate "measurements" in this project turned out to
+be eyeballed off a still and wrong, and that tool is how each was caught.
 
 ## How it fits together
 
 ```
-src/sim/       simulation and drama scoring — pure, no rendering, no I/O
+src/sim/       simulation, movement, drama scoring — pure, no rendering, no I/O
 src/render/    snapshots -> PNG frames (@napi-rs/canvas), single or multi-process
-src/export/    frames + synthesised audio -> mp4 (ffmpeg)
+src/export/    frames + synthesised audio -> mp4 (ffmpeg), and measurement of the result
 src/content/   the roster, its calibration, and balance tooling
-src/cli/       generate, frame preview, motion, smoke, progress, manifest, provenance
+src/cli/       the `munasi` binary and every command behind it
 ```
 
-**Determinism is the contract.** All randomness flows through a seeded
-mulberry32 stream, so a `(matchup, seed)` pair always replays the same fight,
-and a frame renders the same bytes no matter what was rendered before it — which
-is what lets frames be split across worker processes. Checked end to end rather
-than assumed: a shipped sample regenerated from its manifest row came back
-byte-identical, container and all.
+`src/sim/` may not import from `src/render/` or `src/export/`. The project's
+rules and the reasoning behind every combat decision live in
+[CLAUDE.md](./CLAUDE.md) — read it before changing anything under `src/sim/`.
 
-**A manifest row records the constants, not just the seed.** A seed and a
-matchup replay a different fight the moment a tuning number moves, and nothing
-in the row used to say which numbers were in force. Every row now carries a
-`provenance` block: the commit, a hash of `fighters.json`, the seed budget and
-the ending the search was asked for, and a snapshot of every constant the bytes
-depend on. `dirty: true` means the tree had uncommitted changes and the commit
-is a hint rather than a key.
+## Abilities
 
-**The gauntlet is selected to a band, not to a maximum.** Scoring a run by how
-little the winner had left is monotone, and searching 400 seeds under it drove
-every shipped video to a 1 HP finish — median 0.1% of pool, every one of them
-under 5%. The score now peaks on a 2-12% margin and falls away outside it;
-shipped runs measure a 6.6% median with all twelve inside the band. The batch
-also asks every third video to end with the team winning, so a feed is not all
-of one shape.
+Sixteen are implemented. An ability may move somebody, stop somebody, change
+when something happens, or move health between the two — and nothing else,
+because this format does not draw. Each is picked for having a silhouette that
+reads at thumbnail size:
 
-**Drama is selected, not authored.** A random fight is almost always boring, so
-`findBestMatch` simulates 500 seeds (~350ms) and keeps the one that scores
-highest on closeness, lead changes, comebacks, pacing and how late the outcome
-stayed in doubt.
+`switcheroo` swaps the two · `magnet_pull` reels the other man in ·
+`spin_cycle` orbits him · `overclock` accelerates and crits ·
+`dead_weight` plants and rebounds · `wall_slam` throws him off a wall ·
+`siphon` moves health across · `countdown` lands 2.5s later ·
+`riposte` returns what it takes · `slipstream` passes through ·
+`magnetic_north` rewrites his heading · `thrown_out` hurls him ·
+`haymaker` charges and hits · `glasses_throw` and `four_eyes` throw an object ·
+`nobody_moves` freezes him
 
-**Nothing stands still — measured on the mp4, not on the layout.** Fighters
-carry positions in the simulation and move: close, strike, fall back, slide
-sideways. The camera pans after the midpoint between them and zooms to their
-spread. `src/export/motion.ts` decodes the delivered file and counts how many
-pixels change per frame; `motion.test.ts` fails under 8%, or over 5% of frames
-static. The reference channel measures 12.7% and 0%; before
-fighters had positions this project managed 3.0-4.9% with 9-27% of frames
-frozen, and no geometry rule could see it.
+An ability can also put a **photograph** on screen — an object flying across the
+square, held at its owner's side, or worn by whoever it caught. Drop
+`<name>.png` into `assets/props/` and it appears; no code changes.
 
-The gate reads the whole file, not a window. The body has to clear those
-thresholds; the file as a whole may hold no more still frames than the closing
-death hold and winner card account for — 60, and the sixty-first fails the
-build. That allowance is what makes a deliberate pause distinguishable from a
-regression, and it replaced a six-second window from the middle that could not
-see the closing stretch at all: shipped videos measure 6.7-7.7% changed with
-22-30% static there, numbers that fail the gate, on files that passed it.
+## Licence
 
-**Nothing stands still in the event stream either.** `src/sim/tempo.ts` measures the longest stretch of a
-finished video with no visible event, and `tempo.test.ts` fails the build over
-1.2 seconds. Every breach turned out to sit at a round change rather than inside
-a round, so the fix was to compress the pause — rounds now open on a short first
-cooldown — not to paper over it with effects.
-
-**The roster is balanced by construction.** Fighter `attack` values are solved
-for, not hand-written: see `src/content/calibrate.ts`. Every pair currently sits
-inside 35-65% (tightest 38-62%) over 500 matches per pair, with a mean match
-length of 26.8s.
-
-Project rules and the reasoning behind the combat model live in
-[CLAUDE.md](./CLAUDE.md) — read that before changing anything in `src/sim/`.
-
-## Art and audio
-
-Every fighter has its own drawing function in `src/render/fighters/` — its own
-silhouette, a signature prop readable at thumbnail size, its own idle tell, its
-own wind-up and its own death. The roster is a plumber, a night baker, a
-courier and a market loader against a supreme arbiter, a privy councillor, an
-eternal inspector and a committee chairman; the joke is in the pairing, and it
-lands in the title before the fight starts.
-
-`silhouette.test.ts` keeps them apart by measurement, not by eye: each fighter
-is rendered as a solid mask at a common height and every pair must score under
-0.70 intersection-over-union. The shipped roster's worst pair is 0.663.
-
-Shape is not enough on a phone, so two more rules back it up. Every fighter is
-traced with a 4px dark keyline, which stops a figure dissolving into the flat
-blue field or into the figure it overlaps. And the two sides of a round must
-differ in mean lightness by at least 60 of 255 — workers are light (174-212),
-bosses are dark (73-99), and `layout.test.ts` lists any pair that breaks it.
-
-Every fighter also recoils when hit — knocked back and squashed — applied by the
-renderer rather than by each fighter's art, so it lands even on the ones whose
-idle is deliberately still.
-
-The arena itself is a constant: a fixed square at a fixed place with a fixed
-border. The pair is staged in depth rather than on one floor — the boss stands
-on the lower line, drawn 12% larger and in front; the challenger stands higher
-up and smaller.
-
-Width, not the floor, is what limits how big they get: a fighter 30% of frame
-height is 430-590px wide, and two of those do not fit clear of each other in a
-924px arena. Measured over 12,067 frames of the shipped render path, the far
-fighter runs 20.2-31.8% of frame height and the near one 23.0-37.3%, averaging
-29.5%; the hard floor is 19% and no frame goes under it. The pair's boxes do
-cross — in every one of the 36 pairings at some point — because they close and
-break apart, and on the approach the silhouettes have to overlap. Depth and the
-4px keyline are what keep them readable, not separation.
-
-Nothing is loaded from disk — no third-party images, no real people, no
-borrowed franchises. To use your own sound, drop 16-bit 44.1kHz WAVs into
-`assets/audio/` under the names listed there; existing files are never
-overwritten.
+MIT for the code. **Not** for the photographs — see [LICENSE](./LICENSE).
