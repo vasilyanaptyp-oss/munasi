@@ -20,6 +20,23 @@ import { inProject } from "../util/paths.js";
  * The background is whatever white is reachable from the edge of the frame.
  */
 
+/**
+ * The arena's own blue, and how close a fighter's colour may come to it.
+ *
+ * **A cut-out can be flawless and the character still invisible.** The luchador
+ * arrived in a turquoise singlet: coverage 54%, no holes, no warnings, and 9.3%
+ * of him sits within 60 RGB units of the field he stands on — his chest simply
+ * dissolves. Every other one of the ten measures 0.0%, so this is not a band
+ * with judgement in it; it is one asset failing and nine passing cleanly.
+ *
+ * 60 is a third of the distance from the field to white. The limit is set at
+ * 3% because the separation is absolute — nothing legitimate has yet landed
+ * between 0 and 9.
+ */
+const FIELD_RGB: readonly [number, number, number] = [24, 162, 211];
+const FIELD_BLEND_RADIUS = 60;
+export const FIELD_BLEND_LIMIT = 0.03;
+
 /** A pixel this close to white, reachable from the border, is background. */
 const WHITE = 236;
 /** Pixels this close to background-white get their alpha ramped down instead of
@@ -55,6 +72,13 @@ export interface Cutout {
   height: number;
   /** Share of the source area the figure occupies, for a sanity check. */
   coverage: number;
+  /**
+   * Share of the figure that would disappear into the arena.
+   *
+   * See `FIELD_BLEND_LIMIT`. Measured against the field's own colour, because
+   * a cut-out that comes back perfect can still be a character nobody can see.
+   */
+  fieldBlend: number;
   /**
    * Share of the figure's own box that is a **hole** — transparent, but walled
    * in by the figure rather than connected to the outside.
@@ -209,6 +233,21 @@ export async function cutout(sourcePath: string, options: CutoutOptions = {}): P
   // not have to guess where inside a photo the person actually is.
   const tw = maxX - minX + 1;
   const th = maxY - minY + 1;
+  // How much of him is the colour of the field he will stand on.
+  let blended = 0;
+  let opaque = 0;
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const i = (y * w + x) * 4;
+      if (px[i + 3]! < 200) continue;
+      opaque += 1;
+      const dr = px[i]! - FIELD_RGB[0];
+      const dg = px[i + 1]! - FIELD_RGB[1];
+      const db = px[i + 2]! - FIELD_RGB[2];
+      if (Math.sqrt(dr * dr + dg * dg + db * db) < FIELD_BLEND_RADIUS) blended += 1;
+    }
+  }
+
   // Holes: transparent pixels the outside cannot reach. Flood-filled from the
   // border of the *trimmed* box, so what is left over is enclosed by the figure.
   let holePixels = 0;
@@ -258,6 +297,7 @@ export async function cutout(sourcePath: string, options: CutoutOptions = {}): P
     width: ow,
     height: oh,
     coverage: kept / (w * h),
+    fieldBlend: blended / Math.max(1, opaque),
     holeShare: holePixels / Math.max(1, tw * th),
   };
 }
@@ -293,8 +333,12 @@ const PROP_MAX_WIDTH = 512;
  * run is exactly where a silently wrong cut costs an hour, and until now the
  * only signal was a percentage with nothing to compare it to.
  */
-export function cutoutWarning(coverage: number, holeShare = 0): string | null {
+export function cutoutWarning(coverage: number, holeShare = 0, fieldBlend = 0): string | null {
   void holeShare;
+  if (fieldBlend > FIELD_BLEND_LIMIT) {
+    return `${(fieldBlend * 100).toFixed(1)}% of this figure is the colour of the arena ` +
+      "and will disappear into it — pick another costume colour, anything but the blue";
+  }
   if (coverage > 0.85) {
     return "the background is still there — the photo needs a white studio backdrop, " +
       "not a room or a grey sweep";
@@ -391,9 +435,10 @@ async function cutDir(dir: string, options: CutoutOptions = {}, probing = false)
       `${file.padEnd(24)} -> ${name.padEnd(24)} ${result.width}x${result.height}  ` +
         `figure ${(result.coverage * 100).toFixed(0)}% of source, ` +
         `holes ${(result.holeShare * 100).toFixed(1)}%, ` +
+        `field-blend ${(result.fieldBlend * 100).toFixed(1)}%, ` +
         `w/h ${(result.width / result.height).toFixed(2)}`,
     );
-    const warning = cutoutWarning(result.coverage, result.holeShare);
+    const warning = cutoutWarning(result.coverage, result.holeShare, result.fieldBlend);
     if (warning !== null) console.log(`${" ".repeat(24)}    ! ${warning}`);
 
     const threshold = opts.white ?? WHITE;

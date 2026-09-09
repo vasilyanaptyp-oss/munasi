@@ -7,7 +7,7 @@ import { GAUNTLET_RULES } from "./teams.js";
 import { FPS } from "../sim/types.js";
 import { BALANCE_MAX, BALANCE_MIN, evaluatePair, evaluateRoster } from "./balance.js";
 import { analyticAttack, scaleSpec, winRateVsReference } from "./calibrate.js";
-import { cutoutWarning, spriteAspect } from "./cutout.js";
+import { cutout, cutoutWarning, spriteAspect, FIELD_BLEND_LIMIT } from "./cutout.js";
 import { generateMatchups } from "./generateMatchups.js";
 import { allPairs, getFighter, loadFighters } from "./index.js";
 import { ROSTER } from "./roster.js";
@@ -265,5 +265,27 @@ describe("cutout quality", () => {
     for (const fighter of roster) {
       expect(spriteAspect(fighter.spriteId)).toBeCloseTo(fighter.aspect, 2);
     }
+  });
+});
+
+describe("nobody wears the arena", () => {
+  it("keeps every shipped fighter distinguishable from the field", async () => {
+    // A cut-out can be flawless and the character still invisible. The luchador
+    // came in a turquoise singlet: 54% coverage, no holes, no warning, and a
+    // tenth of him the exact colour of the square he stands on. Every other
+    // photograph measures 0.0%, so this gate has no judgement in it.
+    for (const fighter of roster) {
+      const source = ["jpg", "jpeg", "png"]
+        .map((ext) => join("assets", "fighters", "source", `${fighter.spriteId}.${ext}`))
+        .find((path) => existsSync(path));
+      expect(source, `no source for ${fighter.spriteId}`).toBeDefined();
+      const cut = await cutout(source!);
+      expect(cut.fieldBlend, `${fighter.id} blends into the arena`).toBeLessThan(FIELD_BLEND_LIMIT);
+    }
+  }, 60_000);
+
+  it("says so plainly when a costume is the wrong colour", () => {
+    expect(cutoutWarning(0.5, 0, 0.093)).toMatch(/colour of the arena/);
+    expect(cutoutWarning(0.5, 0, 0.0)).toBeNull();
   });
 });
