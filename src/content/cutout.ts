@@ -55,6 +55,18 @@ export interface Cutout {
   height: number;
   /** Share of the source area the figure occupies, for a sanity check. */
   coverage: number;
+  /**
+   * Share of the figure's own box that is a **hole** — transparent, but walled
+   * in by the figure rather than connected to the outside.
+   *
+   * Coverage cannot see this, and that is not a hypothetical: the barista wears
+   * a white t-shirt that forms his outer edge, the fill walked straight in
+   * through it and tore his shoulder out, and coverage came back at 42% —
+   * squarely inside the healthy band — because a hole in the middle of a figure
+   * does not change how much of the frame the figure spans. The tool reported
+   * "ok" on a man with a hole in him.
+   */
+  holeShare: number;
 }
 
 export async function cutout(sourcePath: string, options: CutoutOptions = {}): Promise<Cutout> {
@@ -197,13 +209,57 @@ export async function cutout(sourcePath: string, options: CutoutOptions = {}): P
   // not have to guess where inside a photo the person actually is.
   const tw = maxX - minX + 1;
   const th = maxY - minY + 1;
+  // Holes: transparent pixels the outside cannot reach. Flood-filled from the
+  // border of the *trimmed* box, so what is left over is enclosed by the figure.
+  let holePixels = 0;
+  {
+    const alphaAt = (x: number, y: number): number => px[(y * w + x) * 4 + 3]!;
+    const seen = new Uint8Array(w * h);
+    const stack: number[] = [];
+    const visit = (x: number, y: number): void => {
+      if (x < minX || y < minY || x > maxX || y > maxY) return;
+      const p = y * w + x;
+      if (seen[p] || alphaAt(x, y) > 8) return;
+      seen[p] = 1;
+      stack.push(p);
+    };
+    for (let x = minX; x <= maxX; x += 1) {
+      visit(x, minY);
+      visit(x, maxY);
+    }
+    for (let y = minY; y <= maxY; y += 1) {
+      visit(minX, y);
+      visit(maxX, y);
+    }
+    while (stack.length > 0) {
+      const p = stack.pop()!;
+      const x = p % w;
+      const y = (p - x) / w;
+      visit(x + 1, y);
+      visit(x - 1, y);
+      visit(x, y + 1);
+      visit(x, y - 1);
+    }
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        if (alphaAt(x, y) <= 8 && !seen[y * w + x]) holePixels += 1;
+      }
+    }
+  }
+
   const cap = options.maxWidth ?? Infinity;
   const ow = Math.min(tw, cap);
   const oh = Math.max(1, Math.round((th * ow) / tw));
   const out = createCanvas(ow, oh);
   out.getContext("2d").drawImage(canvas, minX, minY, tw, th, 0, 0, ow, oh);
 
-  return { png: out.toBuffer("image/png"), width: ow, height: oh, coverage: kept / (w * h) };
+  return {
+    png: out.toBuffer("image/png"),
+    width: ow,
+    height: oh,
+    coverage: kept / (w * h),
+    holeShare: holePixels / Math.max(1, tw * th),
+  };
 }
 
 export const FIGHTER_DIR = inProject("assets", "fighters");
@@ -237,7 +293,8 @@ const PROP_MAX_WIDTH = 512;
  * run is exactly where a silently wrong cut costs an hour, and until now the
  * only signal was a percentage with nothing to compare it to.
  */
-export function cutoutWarning(coverage: number): string | null {
+export function cutoutWarning(coverage: number, holeShare = 0): string | null {
+  void holeShare;
   if (coverage > 0.85) {
     return "the background is still there — the photo needs a white studio backdrop, " +
       "not a room or a grey sweep";
@@ -245,30 +302,125 @@ export function cutoutWarning(coverage: number): string | null {
   if (coverage < 0.12) {
     return "almost nothing survived — a very light subject on white can be eaten by the fill";
   }
+  // **Holes are deliberately not a warning.** They looked like the answer to
+  // the barista — a white t-shirt on his outer edge let the fill walk in and
+  // tear his shoulder out while coverage read a healthy 42%. But that bite was
+  // open to the outside, so hole-counting never saw it, and the one asset that
+  // *does* report a large hole is Compass Guy at 2.3% — the triangle between
+  // his raised arm and his head, which is correctly transparent and has shipped
+  // in every video for weeks.
+  //
+  // So the number is printed as data and judged by a person. A gate that fires
+  // on a correct sprite is a gate that gets ignored, and this project has
+  // already bought that lesson once with a yellow threshold that found the
+  // boxer's trousers.
   return null;
 }
 
-async function cutDir(dir: string, options: CutoutOptions = {}): Promise<number> {
+/**
+ * A per-file threshold, from `<source>.cut.json` beside the photograph.
+ *
+ * **There is no globally right threshold, and that is measured rather than
+ * assumed.** The barista's white t-shirt forms his outer edge and needs 253 to
+ * survive; the magician's white dress shirt is brighter still and *loses* 2.3%
+ * of him at 248. One number cannot serve both. Raising the default to suit the
+ * barista would also re-cut all four shipped fighters — their boxes move by
+ * 1-7px — which means recalibrating and regenerating every video that exists.
+ *
+ * So the exception lives next to the photograph that needs it, in the
+ * repository, visible in a diff.
+ */
+function fileOptions(sourceDir: string, file: string, base: CutoutOptions): CutoutOptions {
+  const sidecar = join(sourceDir, `${file.replace(/\.[^.]+$/, "")}.cut.json`);
+  if (!existsSync(sidecar)) return base;
+  const raw: unknown = JSON.parse(readFileSync(sidecar, "utf8"));
+  if (typeof raw !== "object" || raw === null) throw new Error(`${sidecar}: not an object`);
+  const over = raw as Record<string, unknown>;
+  const num = (key: string): number | undefined => {
+    const value = over[key];
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`${sidecar}: ${key} must be a number`);
+    }
+    return value;
+  };
+  const white = num("white");
+  return {
+    ...base,
+    ...(white === undefined ? {} : { white, feather: num("feather") ?? white - 28 }),
+    ...(num("maxWidth") === undefined ? {} : { maxWidth: num("maxWidth")! }),
+  };
+}
+
+/**
+ * How much more survives at a threshold that stops just short of pure white.
+ *
+ * **Reported on request, never as a warning, and the reason is a false
+ * positive I walked straight into.** The idea is sound for one case: a light
+ * garment on the figure's *outer* edge lets the border fill walk in and bite a
+ * bay out of the silhouette — not an enclosed hole, so hole-counting misses it,
+ * and not a change in how much of the frame is spanned, so coverage reads
+ * healthy. The barista came back at 42% coverage with his shoulder torn off,
+ * and recovers 7.3% at 253 while everyone clean moves 1-2%.
+ *
+ * But coverage rising at a higher threshold has a second cause: a backdrop that
+ * is not quite white stops being removed. Glasses Guy's source sits under 253,
+ * so probing him "recovers" 33% — and every pixel of it is background coming
+ * back as a checkerboard. His shipped sprite is correct. Bounding-box growth
+ * does not separate the two either: 1.2% for the barista against 1.4% for him.
+ *
+ * Telling them apart properly means asking whether the recovered pixels reach
+ * the frame border, which needs both alpha masks in source coordinates. Until
+ * that is worth building, this stays a number you ask for — `pnpm cutout
+ * --probe` — rather than one that shouts. A gate that cries wolf on four
+ * shipped assets is a gate nobody reads, which this project has already paid
+ * for once with the yellow-pixel threshold.
+ */
+const RECOVERY_PROBE = 253;
+
+async function cutDir(dir: string, options: CutoutOptions = {}, probing = false): Promise<number> {
   const sourceDir = join(dir, "source");
   if (!existsSync(sourceDir)) return 0;
   const files = readdirSync(sourceDir).filter((f) => /\.(jpg|jpeg|png)$/i.test(f));
   for (const file of files) {
-    const result = await cutout(join(sourceDir, file), options);
+    const opts = fileOptions(sourceDir, file, options);
+    const result = await cutout(join(sourceDir, file), opts);
     const name = `${file.replace(/\.[^.]+$/, "")}.png`;
     writeFileSync(join(dir, name), result.png);
     console.log(
       `${file.padEnd(24)} -> ${name.padEnd(24)} ${result.width}x${result.height}  ` +
-        `figure is ${(result.coverage * 100).toFixed(0)}% of the source`,
+        `figure ${(result.coverage * 100).toFixed(0)}% of source, ` +
+        `holes ${(result.holeShare * 100).toFixed(1)}%, ` +
+        `w/h ${(result.width / result.height).toFixed(2)}`,
     );
-    const warning = cutoutWarning(result.coverage);
+    const warning = cutoutWarning(result.coverage, result.holeShare);
     if (warning !== null) console.log(`${" ".repeat(24)}    ! ${warning}`);
+
+    const threshold = opts.white ?? WHITE;
+    if (probing && threshold < RECOVERY_PROBE) {
+      const probe = await cutout(join(sourceDir, file), {
+        ...opts,
+        white: RECOVERY_PROBE,
+        feather: RECOVERY_PROBE - 28,
+      });
+      const gain = (probe.coverage - result.coverage) / result.coverage;
+      console.log(
+        `${" ".repeat(24)}    probe: ${(gain * 100).toFixed(1)}% more survives at ${RECOVERY_PROBE}` +
+          ` — recovered garment, or a backdrop under ${RECOVERY_PROBE} coming back. Look at it.`,
+      );
+    }
   }
   return files.length;
 }
 
 async function main(): Promise<void> {
-  const fighters = await cutDir(FIGHTER_DIR);
-  const props = await cutDir(PROP_DIR, { white: PROP_WHITE, feather: PROP_WHITE - 28, maxWidth: PROP_MAX_WIDTH });
+  const probing = process.argv.includes("--probe");
+  const fighters = await cutDir(FIGHTER_DIR, {}, probing);
+  const props = await cutDir(
+    PROP_DIR,
+    { white: PROP_WHITE, feather: PROP_WHITE - 28, maxWidth: PROP_MAX_WIDTH },
+    probing,
+  );
   if (fighters + props === 0) console.log("no source images under assets/*/source");
 }
 
