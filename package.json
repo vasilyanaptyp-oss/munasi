@@ -24,7 +24,8 @@
     "smoke": "tsx src/cli/smoke.ts",
     "compare": "tsx src/cli/compare.ts",
     "sheet": "tsx src/cli/sheet.ts",
-    "munasi": "tsx src/cli/munasi.ts"
+    "munasi": "tsx src/cli/munasi.ts",
+    "inspect": "tsx src/cli/audit.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.80"

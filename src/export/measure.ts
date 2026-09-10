@@ -33,7 +33,7 @@ export const MEASURE_WIDTH = 576;
  * reference's arena moves 200-250px over a fight — without decoding minutes of
  * video for a number that settles in a few hundred samples.
  */
-const MAX_FRAMES = 900;
+export const MAX_FRAMES = 900;
 
 const FIELD_BLUE: readonly [number, number, number] = [24, 162, 211];
 /** How far a pixel may sit from the field blue and still be the field. */
@@ -62,6 +62,14 @@ const WHITE_LEVEL = 200;
 const isYellow = (r: number, g: number, b: number): boolean =>
   g > 200 && r > 150 && b < 120 && (r + g) / 2 - b > 90;
 
+/** A fighter on screen: where he is, not just how big he is. */
+export interface FigureBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface FrameMeasure {
   /** Outer edge of the arena's black border, in normalised pixels. */
   arena: { top: number; bottom: number; left: number; right: number } | null;
@@ -83,7 +91,7 @@ export interface FrameMeasure {
    * proportion it eyeballed off a still. So it gets measured in both files by
    * the same code, like everything else.
    */
-  figures: { w: number; h: number }[];
+  figures: FigureBox[];
 }
 
 export interface VideoMeasure {
@@ -151,7 +159,7 @@ function longestRun(length: number, solid: (i: number) => boolean): number {
   return best;
 }
 
-function measureFrame(
+export function measureFrame(
   data: Uint8ClampedArray,
   width: number,
   height: number,
@@ -279,7 +287,7 @@ function measureFrame(
   // of a shirt and the black of a suit — the one thing it is never is the
   // field's blue. Blobs that run away (the reference's guitar track is a lit
   // strip of non-blue across half the square) are thrown out by size.
-  const figures: { w: number; h: number }[] = [];
+  const figures: FigureBox[] = [];
   {
     const plusWidth = (76 / 576) * width;
     const isField = (p: number): boolean =>
@@ -339,7 +347,7 @@ function measureFrame(
       const h = maxY - minY + 1;
       // A person, not a stray mark and not the wall he is standing against.
       if (h < plusWidth * 0.8 || h > plusWidth * 4 || w < plusWidth * 0.35) continue;
-      figures.push({ w, h });
+      figures.push({ x: minX, y: minY, w, h });
     }
   }
 

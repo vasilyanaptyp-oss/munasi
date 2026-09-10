@@ -18,6 +18,7 @@ import { inPackage, inProject, projectRoot } from "../util/paths.js";
 const COMMANDS: Record<string, { file: string; blurb: string }> = {
   init: { file: "", blurb: "scaffold a project in the current directory" },
   generate: { file: "src/cli/generate.ts", blurb: "render videos for the best matchups" },
+  audit: { file: "src/cli/audit.ts", blurb: "read a finished mp4 frame by frame and check it against the simulation" },
   cutout: { file: "src/content/cutout.ts", blurb: "photo on white -> cut-out PNG" },
   calibrate: { file: "src/content/calibrate.ts", blurb: "rebuild fighters.json from the roster" },
   balance: { file: "src/content/validateBalance.ts", blurb: "winrate matrix for every pair" },
