@@ -103,7 +103,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 32.5,
+    "attack": 32,
     "attackSpeed": 1.15,
     "critChance": 0.2,
     "critMult": 1.45,
@@ -219,7 +219,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 28.6,
+    "attack": 27.9,
     "attackSpeed": 0.85,
     "critChance": 0.16,
     "critMult": 1.55,
@@ -336,7 +336,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 9.4,
+    "attack": 9.3,
     "attackSpeed": 0.5,
     "critChance": 0.22,
     "critMult": 1.5,
@@ -454,7 +454,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 14.1,
+    "attack": 13.3,
     "attackSpeed": 0.95,
     "critChance": 0.18,
     "critMult": 1.5,
@@ -582,7 +582,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 27.5,
+    "attack": 26.8,
     "attackSpeed": 0.9,
     "critChance": 0.18,
     "critMult": 1.5,
@@ -700,7 +700,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 28,
+    "attack": 27.4,
     "attackSpeed": 0.85,
     "critChance": 0.16,
     "critMult": 1.5,
@@ -819,7 +819,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 26.1,
+    "attack": 25.8,
     "attackSpeed": 1,
     "critChance": 0.2,
     "critMult": 1.45,
@@ -938,7 +938,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 24.8,
+    "attack": 24.3,
     "attackSpeed": 1.15,
     "critChance": 0.22,
     "critMult": 1.45,
@@ -1057,7 +1057,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 17.7,
+    "attack": 17.6,
     "attackSpeed": 0.6,
     "critChance": 0.14,
     "critMult": 1.6,
@@ -1176,7 +1176,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 19.1,
+    "attack": 18.9,
     "attackSpeed": 0.8,
     "critChance": 0.18,
     "critMult": 1.5,
@@ -1294,7 +1294,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 15.4,
+    "attack": 14.8,
     "attackSpeed": 0.9,
     "critChance": 0.16,
     "critMult": 1.5,
@@ -1412,7 +1412,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 26,
+    "attack": 25.3,
     "attackSpeed": 0.75,
     "critChance": 0.2,
     "critMult": 1.55,
@@ -1530,7 +1530,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 14.7,
+    "attack": 12.7,
     "attackSpeed": 1.2,
     "critChance": 0.24,
     "critMult": 1.4,
@@ -1540,7 +1540,7 @@
         "type": "riposte",
         "cooldown": 5,
         "power": 0,
-        "duration": 2.5,
+        "duration": 5,
         "hitShare": 1.6
       }
     ]
@@ -1649,7 +1649,7 @@
       ]
     ],
     "maxHp": 1000,
-    "attack": 22,
+    "attack": 21.4,
     "attackSpeed": 1,
     "critChance": 0.18,
     "critMult": 1.5,

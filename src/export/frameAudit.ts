@@ -136,12 +136,25 @@ export function findFigures(
   width: number,
   height: number,
   arena: { top: number; bottom: number } | null,
+  border: number | null,
 ): FigureBox[] {
-  const top = arena ? Math.max(0, arena.top) : 0;
-  const bottom = arena ? Math.min(height - 1, arena.bottom) : height - 1;
+  const inset = border ?? 0;
+  const top = arena ? Math.max(0, arena.top + inset) : 0;
+  const bottom = arena ? Math.min(height - 1, arena.bottom - inset) : height - 1;
   const isField = (p: number): boolean =>
     Math.abs(data[p]! - 24) < 26 && Math.abs(data[p + 1]! - 162) < 26 && Math.abs(data[p + 2]! - 211) < 26;
-  const isWall = (p: number): boolean => data[p]! < 60 && data[p + 1]! < 60 && data[p + 2]! < 60;
+  // **Black is not the same thing as wall.** The arena's interior is the field's
+  // own blue and only its border is black, but this used to throw out every
+  // dark pixel inside the band — so Bodyguard Guy, who is a man in a black suit
+  // and dark glasses, broke into fragments too small to be a person and simply
+  // was not there. Measured: 75 "no figure inside the arena" findings across a
+  // batch of 25, and 74 of them in his three videos.
+  //
+  // The band is inset by the border instead, which puts the horizontal walls
+  // outside it. The vertical walls stay in, and they are thrown out below by
+  // shape: a wall is a strip twenty-five times taller than it is wide and a
+  // person is about two and a half.
+  const isWall = (): boolean => false;
 
   const seen = new Uint8Array(width * height);
   const boxes: (FigureBox & { area: number; ink: number; white: number })[] = [];
@@ -153,7 +166,7 @@ export function findFigures(
       const start = y * width + x;
       if (seen[start]) continue;
       const sp = start * 4;
-      if (isField(sp) || isWall(sp)) {
+      if (isField(sp) || isWall()) {
         seen[start] = 1;
         continue;
       }
@@ -186,7 +199,7 @@ export function findFigures(
           const n = ny * width + nx;
           if (seen[n]) continue;
           const np = n * 4;
-          if (isField(np) || isWall(np)) {
+          if (isField(np) || isWall()) {
             seen[n] = 1;
             continue;
           }
@@ -217,6 +230,10 @@ export function findFigures(
     // "fighter" 75px tall against a median of 204. A flying pair of glasses was
     // being collided with.
     .filter((b) => b.h >= personFloor)
+    // A person, not a wall: the arena's side walls are inside the band by
+    // construction, and they are strips about twenty-five times taller than
+    // they are wide. The widest fighter in the roster is under three.
+    .filter((b) => b.h < b.w * 5 && b.w < b.h * 5)
     .sort((p, q) => q.area - p.area)
     .slice(0, 2)
     .map(({ x, y, w, h }) => ({ x, y, w, h }));
@@ -237,7 +254,7 @@ export function readFrame(
   width: number,
   height: number,
 ): FrameRead {
-  const figures = findFigures(data, width, height, measure.arena);
+  const figures = findFigures(data, width, height, measure.arena, measure.border);
   const a = figures[0];
   const b = figures[1];
   return {

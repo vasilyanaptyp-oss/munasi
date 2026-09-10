@@ -145,6 +145,18 @@ const SLIPSTREAM_SPEED = 2.0;
  * stretches rather than being the thing that breaks it.
  */
 const COUNTDOWN_SECONDS = 2.5;
+/**
+ * Blows one cast of `riposte` answers. See `FighterState.riposteLeft`.
+ *
+ * Swept against the fencer's own pairs, which is where the ability's whole
+ * problem lived. Two is level but far too weak — every pair 68-97% against
+ * him, which `fieldScale` would then have to lift by thirty points, and that
+ * knob is meant to be worth a couple of percent. Six stops binding on a
+ * fighter who throws a lot: Glasses Guy lands more than six blows inside the
+ * window anyway, and the pair goes back to 3%. Four sits in the middle at
+ * 38-66% with no outlier, against 15-89% before any of this.
+ */
+const RIPOSTE_PARRIES = 4;
 /** `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths. */
 /**
  * `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths.
@@ -158,7 +170,7 @@ const COUNTDOWN_SECONDS = 2.5;
  * manufacturing it. His damage arrives on his pulses, and the circling is the
  * read.
  */
-const ORBIT_RADIUS_SHARE = 1.18;
+const ORBIT_RADIUS_SHARE = 1.35;
 /**
  * `SPIN CYCLE`: radians per tick.
  *
@@ -225,6 +237,17 @@ interface FighterState {
   critWindowUntilTick: number;
   /** Tick until which a blow landed on him is dealt back — `RIPOSTE`. */
   riposteUntilTick: number;
+  /**
+   * Blows left to parry in this cast.
+   *
+   * **The cap is what makes the ability level.** Without it a parry returns one
+   * strike per blow taken, so what it is worth is the *count* of blows the
+   * other man lands — and that is a property of the opponent, not of the
+   * fencer. Measured: against a man throwing a stream of small pulses off two
+   * abilities he took 100% of the pair, against one dropping a single heavy
+   * lump every six seconds, 17%. Two per cast, whoever he is fighting.
+   */
+  riposteLeft: number;
 }
 
 interface MinionState extends Minion {
@@ -346,6 +369,7 @@ export function simulate(
     wavesTriggered: [],
     critWindowUntilTick: 0,
     riposteUntilTick: 0,
+    riposteLeft: 0,
   });
 
   const sides: Record<Side, FighterState> = {
@@ -617,6 +641,28 @@ export function simulate(
     atY: number,
   ): void => {
     if (tick >= parried.riposteUntilTick || dealt <= 0 || attacker.hp <= 0) return;
+    if (parried.riposteLeft <= 0) return;
+    parried.riposteLeft -= 1;
+    /**
+     * **A strike of his own, sized by the calibrator — and it has to stay that
+     * way.**
+     *
+     * Returning a *share of the incoming blow* is the obvious fix for an
+     * ability whose worth depends on how the other man fights, and it was
+     * tried: it does even out the style half of the problem, since a slow heavy
+     * attacker and a fast light one then pay the same for the same damage. It
+     * is unusable anyway, because a proportional term does not scale with
+     * `attack`, and `attack` is the only grip the calibrator has. Measured at
+     * 0.5, 1.0 and 1.4 of the blow: at 0.5 the fencer lost 98% of the pair
+     * against a fighter who heals — his return is capped by his own health,
+     * since he can only be hit for about a thousand — and at 1.0 and above he
+     * won **every** pair in the roster outright, because a blow coming back
+     * whole means the attacker kills himself. There is nothing in between.
+     *
+     * What survived that pass is the window, which is gapless now: see the
+     * roster. That fixed the other half — whether the other man's blows happen
+     * to fall inside it.
+     */
     const own = effectiveAttack(parried) * (parried.base.meleeShare ?? 1);
     const returned = damageFighter(attacker, rollDamage(parried.rng, own));
     events.push({
@@ -984,6 +1030,7 @@ export function simulate(
        * who started it. See the contact block for where that happens.
        */
       case "riposte": {
+        state.riposteLeft = RIPOSTE_PARRIES;
         state.riposteUntilTick =
           tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
         // **He lunges as well as parries, and that is the third correction to
@@ -1168,9 +1215,17 @@ export function simulate(
       const them = movement[opponentOf(side).side];
       orbiting.add(side.side);
       me.orbitAngle += me.orbitDir * ORBIT_RADIANS_PER_TICK;
-      const radius = (me.halfW + them.halfW) * ORBIT_RADIUS_SHARE;
-      me.x = them.x + Math.cos(me.orbitAngle) * radius;
-      me.y = them.y + Math.sin(me.orbitAngle) * radius;
+      // **An ellipse, not a circle, because a fighter is not round.** The
+      // radius was built from the two half-*widths* alone, so at the top and
+      // bottom of the orbit — where the clearance that matters is vertical, and
+      // a figure is two and a half times taller than he is wide — the two
+      // photographs sat inside each other and collided on the contact window's
+      // own cadence. Measured across all 91 pairs: the orbiter ran at 0.845
+      // contacts a second against a roster median of 0.55, the highest of
+      // anybody, and a collision damages **both**, so his own ability was
+      // paying whoever had the larger `meleeShare`.
+      me.x = them.x + Math.cos(me.orbitAngle) * (me.halfW + them.halfW) * ORBIT_RADIUS_SHARE;
+      me.y = them.y + Math.sin(me.orbitAngle) * (me.halfH + them.halfH) * ORBIT_RADIUS_SHARE;
       keepInside(me);
       // He leaves the orbit going the way he was travelling round it, so the
       // ability ends in movement rather than in a dead stop.
@@ -1187,6 +1242,23 @@ export function simulate(
     // fighter's stale position, which would make the outcome depend on which of
     // them stepped first.
     const contact = resolveCollision(movement.a, movement.b, tick);
+
+    // **The reel lets go on arrival.** A homing dash that survives the contact
+    // re-aims the victim after every bounce and grinds out collisions for as
+    // long as it runs — 0.836 a second against a roster median of 0.55, second
+    // only to the orbit — and a collision pays both men, so the caster was
+    // buying his opponent damage every time he cast. It has done its job when
+    // the man is here.
+    if (contact) {
+      for (const side of [sides.a, sides.b]) {
+        const m = movement[side.side];
+        if (m.dashHoming) {
+          m.dashHoming = false;
+          m.dashUntilTick = tick;
+          m.dashMul = 1;
+        }
+      }
+    }
 
     /**
      * **Damage lands on contact.** This is the fight.

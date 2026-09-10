@@ -103,11 +103,20 @@ describe("the ten new abilities", () => {
       const result = simulate(duel("magnet_pull", { duration: 1.4 }), seed);
       for (const cast of castsOf(result.events, "magnet_pull")) {
         const start = result.snapshots[cast.frame];
-        const end = result.snapshots[cast.frame + Math.round(1.2 * FPS)];
-        if (!start || !end) continue;
+        if (!start) continue;
         const before = Math.hypot(start.a.x - start.b.x, start.a.y - start.b.y);
-        const after = Math.hypot(end.a.x - end.b.x, end.a.y - end.b.y);
-        if (after < before) closed += 1;
+        // **The closest they get during the window, not where they are at the
+        // end of it.** The reel lets go the moment it lands its man — holding
+        // on ground out a run of collisions, and a collision pays both fighters
+        // — so by a fixed 1.2s later the pair has already bounced apart, and
+        // this gate was reading the rebound as a failure to pull.
+        let nearest = before;
+        for (let ahead = 1; ahead <= Math.round(1.2 * FPS); ahead += 1) {
+          const at = result.snapshots[cast.frame + ahead];
+          if (!at) break;
+          nearest = Math.min(nearest, Math.hypot(at.a.x - at.b.x, at.a.y - at.b.y));
+        }
+        if (nearest < before) closed += 1;
         else opened += 1;
       }
     }

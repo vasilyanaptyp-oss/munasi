@@ -24,6 +24,7 @@ const H = 1024;
 const FIELD = "#18a2d3";
 const WALL = "#000000";
 const ARENA = { top: 200, bottom: 810 };
+const BORDER = 24;
 
 interface Figure {
   x: number;
@@ -41,8 +42,14 @@ function frame(figures: Figure[], numbers: { x: number; y: number }[] = []): {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = FIELD;
   ctx.fillRect(0, 0, W, H);
+  // **The arena is a black border round the field's own blue, not a black
+  // square.** This fixture filled the whole interior black, which is not what
+  // the format draws — and the detector was built to match the fixture, so it
+  // threw out every dark pixel inside the band as wall and lost Bodyguard Guy,
+  // a man in a black suit, entirely.
   ctx.fillStyle = WALL;
-  ctx.fillRect(0, ARENA.top, W, ARENA.bottom - ARENA.top);
+  ctx.fillRect(0, ARENA.top, W, BORDER);
+  ctx.fillRect(0, ARENA.bottom - BORDER, W, BORDER);
   for (const f of figures) {
     ctx.fillStyle = f.colour;
     ctx.fillRect(f.x, f.y, f.w, f.h);
@@ -61,12 +68,20 @@ describe("frame detectors", () => {
     expect(isDamageInk(24, 162, 211)).toBe(false);
   });
 
+  it("finds a fighter dressed in black, who is not the wall", () => {
+    const { data } = frame([
+      { x: 80, y: 420, w: 120, h: 220, colour: "#141414" },
+      { x: 360, y: 400, w: 110, h: 230, colour: "#f0e8e0" },
+    ]);
+    expect(findFigures(data, W, H, ARENA, BORDER)).toHaveLength(2);
+  });
+
   it("finds two figures drawn on the arena, and their boxes", () => {
     const { data } = frame([
       { x: 80, y: 420, w: 120, h: 220, colour: "#b0603a" },
       { x: 360, y: 400, w: 110, h: 230, colour: "#404a70" },
     ]);
-    const found = findFigures(data, W, H, ARENA);
+    const found = findFigures(data, W, H, ARENA, BORDER);
     expect(found).toHaveLength(2);
     const xs = found.map((f) => f.x).sort((a, b) => a - b);
     expect(xs[0]).toBeCloseTo(80, -1);
@@ -81,7 +96,7 @@ describe("frame detectors", () => {
       { x: 80, y: 420, w: 120, h: 220, colour: "#b0603a" },
       { x: 300, y: 500, w: 60, h: 24, colour: "#202020" },
     ]);
-    expect(findFigures(data, W, H, ARENA)).toHaveLength(1);
+    expect(findFigures(data, W, H, ARENA, BORDER)).toHaveLength(1);
   });
 
   it("finds a damage number as one blob, not one per digit", () => {

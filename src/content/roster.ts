@@ -123,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 1.0590,
+    fieldScale: 1.0416,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -139,7 +139,7 @@ export const ROSTER: FighterSpec[] = [
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
     abilities: [{ type: "thrown_out", cooldown: 5, power: 0, hitShare: 1.5 }],
-    fieldScale: 1.0113,
+    fieldScale: 0.9871,
   },
 
   /*
@@ -199,7 +199,7 @@ export const ROSTER: FighterSpec[] = [
      * owned one.
      */
     abilities: [{ type: "haymaker", cooldown: 6, power: 0, hitShare: 3.2 }],
-    fieldScale: 0.9303,
+    fieldScale: 0.9518,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -258,7 +258,7 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.1275,
+    fieldScale: 1.0615,
   },
   /*
    * **The ten that arrived together**, one per ability implemented in the batch
@@ -286,7 +286,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.5,
     meleeShare: 1.0,
     abilities: [{ type: "switcheroo", cooldown: 5, power: 0, hitShare: 1.6 }],
-    fieldScale: 1.1107,
+    fieldScale: 1.0819,
   },
   {
     // Waders, rod, and the patience of a man who has waited all morning.
@@ -300,7 +300,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.5,
     meleeShare: 1.1,
     abilities: [{ type: "magnet_pull", cooldown: 5, power: 0, duration: 1.4, hitShare: 1.4 }],
-    fieldScale: 0.8664,
+    fieldScale: 0.9765,
   },
   {
     // Red tracksuit, gold chain, one hand thrown out — the only asymmetric
@@ -315,7 +315,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.45,
     meleeShare: 1.3,
     abilities: [{ type: "spin_cycle", cooldown: 6, power: 0, duration: 1.2, hitShare: 1.2 }],
-    fieldScale: 0.8754,
+    fieldScale: 0.9022,
   },
   {
     // Two cups and the eyes of a man on his ninth. Fastest hands in the roster.
@@ -329,7 +329,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.45,
     meleeShare: 1.2,
     abilities: [{ type: "overclock", cooldown: 6, power: 0, duration: 2, hitShare: 1.3 }],
-    fieldScale: 0.9881,
+    fieldScale: 0.9701,
   },
   {
     // The heaviest thing on the field. Slow, and everything that touches him
@@ -344,7 +344,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.6,
     meleeShare: 2.2,
     abilities: [{ type: "dead_weight", cooldown: 6, power: 0, duration: 1.6, hitShare: 1.5 }],
-    fieldScale: 0.9998,
+    fieldScale: 0.9908,
   },
   {
     // **Kept in turquoise on purpose.** 9.3% of him is within 60 RGB of the
@@ -362,7 +362,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.5,
     meleeShare: 1.8,
     abilities: [{ type: "wall_slam", cooldown: 6, power: 0, hitShare: 1.8 }],
-    fieldScale: 0.8972,
+    fieldScale: 0.9226,
   },
   {
     // Brown suit, forced smile, hose in hand. He takes what he takes off you
@@ -382,7 +382,7 @@ export const ROSTER: FighterSpec[] = [
     // and Rapper Guy.
     meleeShare: 1.4,
     abilities: [{ type: "siphon", cooldown: 5, power: 0, hitShare: 2.0 }],
-    fieldScale: 1.1281,
+    fieldScale: 1.0844,
   },
   {
     // Hard hat, hi-vis, and a detonator held against his chest. Nothing happens
@@ -397,7 +397,7 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.55,
     meleeShare: 1.0,
     abilities: [{ type: "countdown", cooldown: 6, power: 0, hitShare: 2.4 }],
-    fieldScale: 1.0400,
+    fieldScale: 1.0143,
   },
   {
     // White jacket, sabre, mask under one arm. Hit him and it comes back.
@@ -410,8 +410,20 @@ export const ROSTER: FighterSpec[] = [
     critChance: 0.24,
     critMult: 1.4,
     meleeShare: 1.4,
-    abilities: [{ type: "riposte", cooldown: 5, power: 0, duration: 2.5, hitShare: 1.6 }],
-    fieldScale: 0.9059,
+    // **The window covers the cooldown, and that is deliberate.** A parry that
+    // is open 2.5 seconds in every 5 makes its worth a coin flip on *when* the
+    // other man swings, and against a fighter who drops one heavy blow every
+    // six seconds half of them fell in the gap: the fencer took 17% of that
+    // pair while taking 85% of the pair against a man throwing a stream of
+    // small ones. Measured at 2.5s and 4.0s the two simply traded places —
+    // demolition 83% to 73% while glasses went 15% to 0%. With no gap, and the
+    // return proportional rather than a strike of his own, his five sampled
+    // pairs came in at 26-40% — still an offset, but a *uniform* one, and a
+    // uniform offset is exactly what `fieldScale` exists to remove.
+    //
+    // He still casts: the cast is the lunge. The parry is simply always live.
+    abilities: [{ type: "riposte", cooldown: 5, power: 0, duration: 5, hitShare: 1.6 }],
+    fieldScale: 0.9398,
   },
   {
     // Stripes, gloves, and an expression of total surprise. Walks through you.
@@ -427,6 +439,6 @@ export const ROSTER: FighterSpec[] = [
     // for a second and a half, so he already avoids some of what he is cheap in.
     meleeShare: 1.3,
     abilities: [{ type: "slipstream", cooldown: 5, power: 0, duration: 1.5, hitShare: 1.9 }],
-    fieldScale: 1.0975,
+    fieldScale: 1.0706,
   },
 ];
