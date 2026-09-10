@@ -475,6 +475,19 @@ export function resolveCollision(
   // used to. Same band, same reason.
   steer(a);
   steer(b);
+  // **And nobody leaves faster than a fighter is allowed to travel.**
+  //
+  // `DEAD_WEIGHT_REBOUND` multiplies a rebound, and a man pinned between the
+  // planted fighter and a wall rebounds *every tick* — 1.45 compounding ten
+  // times is forty times his own speed. Measured on Sumo Guy against Luchador
+  // Guy: 113 frames out of 208 moving more than a tenth of the arena each, a
+  // median step of 0.246 against a normal 0.006. On screen that is a
+  // photograph strobing across the square.
+  //
+  // The ceiling is the fastest a fighter is ever meant to go, times the
+  // rebound: one boost is a boost, ten in a row is a bug.
+  capSpeed(a);
+  capSpeed(b);
   return contact;
 }
 
@@ -488,6 +501,16 @@ export function resolveCollision(
  * does, which is what the four-times dash used to do and read as a glitch.
  */
 const DEAD_WEIGHT_REBOUND = 1.45;
+
+/** Holds a velocity under the fastest a rebound is ever allowed to produce. */
+function capSpeed(state: MovementState): void {
+  const speed = Math.hypot(state.vx, state.vy);
+  const ceiling = SPEED_MAX * DEAD_WEIGHT_REBOUND;
+  if (speed <= ceiling || speed === 0) return;
+  const k = ceiling / speed;
+  state.vx *= k;
+  state.vy *= k;
+}
 
 /** Re-aims a velocity out of the flat and vertical bands, keeping its speed. */
 function steer(state: MovementState): void {

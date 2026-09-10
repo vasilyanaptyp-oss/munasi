@@ -308,6 +308,65 @@ async function generateGauntlet(
   }
 }
 
+/**
+ * How many videos each fighter is already in. Read from the whole manifest, not
+ * from this invocation, because a batch is normally built up over several runs
+ * and a count that restarts at zero each time sends the second batch straight
+ * back to the fighters the first one just used.
+ */
+function appearances(manifest: { entries: ManifestEntry[] }): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of manifest.entries) {
+    for (const id of entry.fighters) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Picks `count` matchups off an ordered list without letting one fighter take
+ * the whole batch.
+ *
+ * **Both matchup lists are ordered fighter-major, and neither of them means to
+ * be.** `gauntletMatchups` — the one every shipped video comes from — is two
+ * nested loops, so the first challenger owns the first seven entries outright.
+ * `generateMatchups` sorts by evenness, which amounts to the same thing: a
+ * fighter who lands near a coin flip against everybody has thirteen pairs
+ * crowding the head of the list. Measured on the shipped fourteen: batch one
+ * was seven Compass Guy videos out of eight, batch two five Boxer Guy out of
+ * five, and of the ten characters just added, four were in nothing at all.
+ *
+ * So: still the incoming order, but each step takes the first matchup whose
+ * fighters have appeared least so far. Ties keep that order, which is already
+ * deterministic, so the batch stays reproducible.
+ */
+export function spreadAcrossFighters<T>(
+  ranked: T[],
+  count: number,
+  idsOf: (item: T) => string[],
+  seen: Map<string, number> = new Map(),
+): T[] {
+  const counts = new Map(seen);
+  const pool = [...ranked];
+  const picked: T[] = [];
+  while (picked.length < count && pool.length > 0) {
+    let bestIndex = 0;
+    let bestLoad = Infinity;
+    for (const [i, item] of pool.entries()) {
+      const load = idsOf(item).reduce((sum, id) => sum + (counts.get(id) ?? 0), 0);
+      if (load < bestLoad) {
+        bestLoad = load;
+        bestIndex = i;
+        if (load === 0) break;
+      }
+    }
+    const [chosen] = pool.splice(bestIndex, 1);
+    if (!chosen) break;
+    picked.push(chosen);
+    for (const id of idsOf(chosen)) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return picked;
+}
+
 export async function generate(options: GenerateOptions): Promise<GenerateSummary> {
   checkFfmpeg();
   await mkdir(options.outDir, { recursive: true });
@@ -326,13 +385,16 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
   if (options.duel) {
     console.log(`Ranking duels (${options.matchupSample} matches per pair)...`);
     const ranked = generateMatchups({ roster, sample: options.matchupSample });
-    queue = ranked
-      .filter((m) => !alreadyDone.has(pairKey(m.a.id, m.b.id)))
-      .slice(0, options.count)
-      .map((matchup) => ({
-        label: `${matchup.a.name} vs ${matchup.b.name}`,
-        run: (bar, position) => generateOne(matchup, options, bar, position),
-      }));
+    const queued = spreadAcrossFighters(
+      ranked.filter((m) => !alreadyDone.has(pairKey(m.a.id, m.b.id))),
+      options.count,
+      (m) => [m.a.id, m.b.id],
+      appearances(manifest),
+    );
+    queue = queued.map((matchup) => ({
+      label: `${matchup.a.name} vs ${matchup.b.name}`,
+      run: (bar, position) => generateOne(matchup, options, bar, position),
+    }));
   } else {
     const done = renderedGauntlets(manifest);
     // Counted across the whole manifest, not this invocation: a batch is often
@@ -341,9 +403,20 @@ export async function generate(options: GenerateOptions): Promise<GenerateSummar
     const already = manifest.entries.filter((entry) => entry.gauntlet !== undefined).length;
     const all = gauntletMatchups(roster);
     const chosen = options.pick ? options.pick.map((i) => all[i]).filter((m) => m !== undefined) : all;
-    queue = chosen
-      .filter((m) => !done.has(gauntletKey(m.challenger.id, m.members.map((x) => x.id))))
-      .slice(0, options.count)
+    const available = chosen.filter(
+      (m) => !done.has(gauntletKey(m.challenger.id, m.members.map((x) => x.id))),
+    );
+    // `--pick` is an explicit choice of matchups, so it is taken in the order
+    // asked for; everything else goes through the spread.
+    const queued = options.pick
+      ? available.slice(0, options.count)
+      : spreadAcrossFighters(
+          available,
+          options.count,
+          (m) => [m.challenger.id, ...m.members.map((x) => x.id)],
+          appearances(manifest),
+        );
+    queue = queued
       .map((m, i) => ({
         label: `${m.challenger.name} vs ${m.members.map((x) => x.name).join(", ")}`,
         // Roughly one video in three ends with the team stopping the worker.

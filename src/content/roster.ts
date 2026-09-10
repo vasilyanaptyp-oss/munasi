@@ -123,7 +123,7 @@ export const ROSTER: FighterSpec[] = [
     // fixed point instead — calibrate the roster, play every ordered pairing,
     // nudge each scale toward an even record, repeat. Three rounds from the old
     // pair values brought the spread from 10.1pp to 1.4pp.
-    fieldScale: 1.0150,
+    fieldScale: 1.0590,
   },
   {
     // Arms crossed, sunglasses on, does not move. Everything else bounces off
@@ -138,8 +138,8 @@ export const ROSTER: FighterSpec[] = [
     critMult: 1.55,
     // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
     // freeze-and-tape he had before was a policeman's job, not his.
-    abilities: [{ type: "thrown_out", cooldown: 6, power: 0, hitShare: 1.5 }],
-    fieldScale: 0.9646,
+    abilities: [{ type: "thrown_out", cooldown: 5, power: 0, hitShare: 1.5 }],
+    fieldScale: 1.0113,
   },
 
   /*
@@ -198,8 +198,8 @@ export const ROSTER: FighterSpec[] = [
      * paid twice was quietly rewriting the whole roster's pacing around whoever
      * owned one.
      */
-    abilities: [{ type: "haymaker", cooldown: 7, power: 0, hitShare: 3.2 }],
-    fieldScale: 0.9205,
+    abilities: [{ type: "haymaker", cooldown: 6, power: 0, hitShare: 3.2 }],
+    fieldScale: 0.9303,
   },
   {
     // Reads the room, then throws his glasses at it.
@@ -258,6 +258,175 @@ export const ROSTER: FighterSpec[] = [
       { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
       { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
     ],
-    fieldScale: 1.0244,
+    fieldScale: 1.1275,
+  },
+  /*
+   * **The ten that arrived together**, one per ability implemented in the batch
+   * before them. The pairing is not decoration: a character in this format is a
+   * gag with an effect, so the effect has to be the thing the photograph is
+   * already about. A magician swaps places, a fisherman reels you in, a sumo
+   * plants himself, a mime walks through you.
+   *
+   * `meleeShare` is where the style lives, and it is set from the picture: the
+   * sumo and the luchador are the heavy end because they are built to collide,
+   * the vacuum salesman and the mime the light end because their whole trick is
+   * that they do not punch. `attack` is never written here — the calibrator
+   * solves it and would erase anything typed in.
+   */
+  {
+    // Top hat, wand, and the smuggest expression in the roster. What he does to
+    // the fight is put the two of you somewhere else entirely.
+    id: "magician",
+    faction: "left",
+    name: "Magician Guy",
+    spriteId: "magician",
+    maxHp: 1000,
+    attackSpeed: 0.9,
+    critChance: 0.18,
+    critMult: 1.5,
+    meleeShare: 1.0,
+    abilities: [{ type: "switcheroo", cooldown: 5, power: 0, hitShare: 1.6 }],
+    fieldScale: 1.1107,
+  },
+  {
+    // Waders, rod, and the patience of a man who has waited all morning.
+    id: "fisherman",
+    faction: "right",
+    name: "Fisherman Guy",
+    spriteId: "fisherman",
+    maxHp: 1000,
+    attackSpeed: 0.85,
+    critChance: 0.16,
+    critMult: 1.5,
+    meleeShare: 1.1,
+    abilities: [{ type: "magnet_pull", cooldown: 5, power: 0, duration: 1.4, hitShare: 1.4 }],
+    fieldScale: 0.8664,
+  },
+  {
+    // Red tracksuit, gold chain, one hand thrown out — the only asymmetric
+    // outline in the roster, which the collision profile actually reads.
+    id: "rapper",
+    faction: "left",
+    name: "Rapper Guy",
+    spriteId: "rapper",
+    maxHp: 1000,
+    attackSpeed: 1.0,
+    critChance: 0.2,
+    critMult: 1.45,
+    meleeShare: 1.3,
+    abilities: [{ type: "spin_cycle", cooldown: 6, power: 0, duration: 1.2, hitShare: 1.2 }],
+    fieldScale: 0.8754,
+  },
+  {
+    // Two cups and the eyes of a man on his ninth. Fastest hands in the roster.
+    id: "barista",
+    faction: "right",
+    name: "Barista Guy",
+    spriteId: "barista",
+    maxHp: 1000,
+    attackSpeed: 1.15,
+    critChance: 0.22,
+    critMult: 1.45,
+    meleeShare: 1.2,
+    abilities: [{ type: "overclock", cooldown: 6, power: 0, duration: 2, hitShare: 1.3 }],
+    fieldScale: 0.9881,
+  },
+  {
+    // The heaviest thing on the field. Slow, and everything that touches him
+    // regrets the arithmetic.
+    id: "sumo",
+    faction: "left",
+    name: "Sumo Guy",
+    spriteId: "sumo",
+    maxHp: 1000,
+    attackSpeed: 0.6,
+    critChance: 0.14,
+    critMult: 1.6,
+    meleeShare: 2.2,
+    abilities: [{ type: "dead_weight", cooldown: 6, power: 0, duration: 1.6, hitShare: 1.5 }],
+    fieldScale: 0.9998,
+  },
+  {
+    // **Kept in turquoise on purpose.** 9.3% of him is within 60 RGB of the
+    // arena's own blue and his singlet dissolves into it — measured, and every
+    // other fighter reads 0.0%. The owner looked at it and chose to ship him
+    // anyway; `content.test.ts` carries the exemption by name so the gate stays
+    // live for everybody else.
+    id: "luchador",
+    faction: "right",
+    name: "Luchador Guy",
+    spriteId: "luchador",
+    maxHp: 1000,
+    attackSpeed: 0.8,
+    critChance: 0.18,
+    critMult: 1.5,
+    meleeShare: 1.8,
+    abilities: [{ type: "wall_slam", cooldown: 6, power: 0, hitShare: 1.8 }],
+    fieldScale: 0.8972,
+  },
+  {
+    // Brown suit, forced smile, hose in hand. He takes what he takes off you
+    // and keeps it.
+    id: "vacuum",
+    faction: "left",
+    name: "Vacuum Guy",
+    spriteId: "vacuum-salesman",
+    maxHp: 1000,
+    attackSpeed: 0.9,
+    critChance: 0.16,
+    critMult: 1.5,
+    // **Raised from 0.9 after measuring.** A collision is a shared event, so a
+    // fighter who is cheap in one hands the other man free damage every meeting
+    // — the trap Glasses Guy fell into at 0. At 0.9 the vacuum salesman beat
+    // every light opponent and lost 84-86% of his pairs against Fisherman Guy
+    // and Rapper Guy.
+    meleeShare: 1.4,
+    abilities: [{ type: "siphon", cooldown: 5, power: 0, hitShare: 2.0 }],
+    fieldScale: 1.1281,
+  },
+  {
+    // Hard hat, hi-vis, and a detonator held against his chest. Nothing happens
+    // for two and a half seconds.
+    id: "demolition",
+    faction: "right",
+    name: "Demolition Guy",
+    spriteId: "demolition",
+    maxHp: 1000,
+    attackSpeed: 0.75,
+    critChance: 0.2,
+    critMult: 1.55,
+    meleeShare: 1.0,
+    abilities: [{ type: "countdown", cooldown: 6, power: 0, hitShare: 2.4 }],
+    fieldScale: 1.0400,
+  },
+  {
+    // White jacket, sabre, mask under one arm. Hit him and it comes back.
+    id: "fencer",
+    faction: "left",
+    name: "Fencer Guy",
+    spriteId: "fencer",
+    maxHp: 1000,
+    attackSpeed: 1.2,
+    critChance: 0.24,
+    critMult: 1.4,
+    meleeShare: 1.4,
+    abilities: [{ type: "riposte", cooldown: 5, power: 0, duration: 2.5, hitShare: 1.6 }],
+    fieldScale: 0.9059,
+  },
+  {
+    // Stripes, gloves, and an expression of total surprise. Walks through you.
+    id: "mime",
+    faction: "right",
+    name: "Mime Guy",
+    spriteId: "mime",
+    maxHp: 1000,
+    attackSpeed: 1.0,
+    critChance: 0.18,
+    critMult: 1.5,
+    // Same correction as the vacuum salesman, milder: he phases through contact
+    // for a second and a half, so he already avoids some of what he is cheap in.
+    meleeShare: 1.3,
+    abilities: [{ type: "slipstream", cooldown: 5, power: 0, duration: 1.5, hitShare: 1.9 }],
+    fieldScale: 1.0975,
   },
 ];

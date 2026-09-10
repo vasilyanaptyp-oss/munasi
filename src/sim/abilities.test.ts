@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { simulate } from "./simulate.js";
 import { makeFighter } from "./testFixtures.js";
 import { ABILITY_TYPES, FPS, type AbilityType, type MatchConfig, type MatchEvent } from "./types.js";
-import { initialMovement, resolveCollision } from "./movement.js";
+import { initialMovement, resolveCollision, stepMovement } from "./movement.js";
 import { mulberry32 } from "./rng.js";
 
 /**
@@ -219,26 +219,66 @@ describe("the ten new abilities", () => {
     expect(gapSeconds).toBeLessThan(3.5);
   });
 
-  it("RIPOSTE answers a blow on the frame it lands, and does not volley", () => {
+  it("RIPOSTE answers any blow, not only a collision", () => {
+    // The distinction is the whole balance of the ability. While it only
+    // answered contact, its worth tracked how much of the *opponent's* game was
+    // contact — the fencer took 98% of his pairs against melee fighters and 21%
+    // against throwers. Answering everything makes it proportional to how often
+    // he is hurt, which the calibrator already levels.
+    let answeredAbility = 0;
+    for (let seed = 0; seed < 30; seed += 1) {
+      const config = duel("riposte", { duration: 3 });
+      // Give the opponent something thrown, so there is a non-contact blow to
+      // answer at all.
+      config.b = makeFighter({
+        id: "target",
+        name: "TARGET",
+        spriteId: "beast:15",
+        abilities: [{ type: "glasses_throw", cooldown: 3, power: 0, hitShare: 2 }],
+      });
+      const result = simulate(config, seed);
+      for (const back of hitsOf(result.events, "riposte")) {
+        const cause = result.events.find(
+          (e) =>
+            e.frame === back.frame &&
+            (e.type === "hit" || e.type === "crit") &&
+            e.ability === "glasses_throw" &&
+            e.actorId === back.targetId,
+        );
+        if (cause) answeredAbility += 1;
+      }
+    }
+    expect(answeredAbility, "a thrown blow was never answered").toBeGreaterThan(0);
+  });
+
+  it("RIPOSTE answers on the frame the blow lands, and does not volley", () => {
     let answered = 0;
     for (let seed = 0; seed < 20; seed += 1) {
       const result = simulate(duel("riposte", { duration: 2.5 }), seed);
       for (const back of hitsOf(result.events, "riposte")) {
-        answered += 1;
         // Somebody hit him on this frame, and it was the man being answered.
         const cause = result.events.find(
           (e) =>
             e.frame === back.frame &&
             (e.type === "hit" || e.type === "crit") &&
-            e.ability === undefined &&
+            e.ability !== "riposte" &&
             e.actorId === back.targetId,
         );
-        expect(cause, `nothing caused the riposte at frame ${back.frame}`).toBeDefined();
-        // And the answer is never itself answered.
-        const chained = result.events.filter(
-          (e) => e.frame === back.frame && e.ability === "riposte",
+        // **Not every riposte hit is an answer any more.** The ability schedules
+        // its own lunge as well, so `hitsOf(..., "riposte")` mixes the two; what
+        // has to hold is that answers exist and that nothing volleys.
+        if (cause) answered += 1;
+        // And nobody answers his own answer. A lunge and a parry can share a
+        // frame, so the count is not the test — the test is that no riposte hit
+        // is credited to the man it just landed on.
+        const selfAnswer = result.events.find(
+          (e) =>
+            e.frame === back.frame &&
+            e.ability === "riposte" &&
+            e.actorId === back.targetId &&
+            e.targetId === back.actorId,
         );
-        expect(chained.length).toBeLessThanOrEqual(1);
+        expect(selfAnswer, `riposte volleyed at frame ${back.frame}`).toBeUndefined();
       }
     }
     expect(answered, "riposte never fired in twenty fights").toBeGreaterThan(0);
@@ -273,5 +313,39 @@ describe("the ten new abilities", () => {
       const result = simulate(duel(type), 9);
       expect(result.durationFrames / FPS, type).toBeLessThanOrEqual(60);
     }
+  });
+});
+
+describe("a rebound is a boost, not a ratchet", () => {
+  it("never lets a pinned fighter compound his own speed", () => {
+    // The bug this exists for: `DEAD_WEIGHT` makes the sumo immovable, a man
+    // caught between him and a wall collides on every tick, and a 1.45x rebound
+    // applied every tick is 1.45^n. Measured before the cap on Sumo Guy against
+    // Luchador Guy: 113 frames out of 208 moving more than a tenth of the arena,
+    // a median step of 0.246 against a normal 0.006 — a photograph strobing
+    // across the square.
+    const rng = mulberry32(4);
+    const wall = initialMovement("a", 0.8, rng);
+    const pinned = initialMovement("b", 0.8, rng);
+    wall.x = 0.5;
+    wall.y = 0.5;
+    wall.vx = 0;
+    wall.vy = 0;
+    wall.frozenUntilTick = 10_000;
+    wall.immovableUntilTick = 10_000;
+    pinned.x = 0.5 + wall.halfW + pinned.halfW - 0.004;
+    pinned.y = 0.5;
+    pinned.vx = -0.007;
+    pinned.vy = 0.001;
+
+    let fastest = 0;
+    for (let tick = 0; tick < 400; tick += 1) {
+      stepMovement(pinned, { tick, rng });
+      resolveCollision(wall, pinned, tick);
+      fastest = Math.max(fastest, Math.hypot(pinned.vx, pinned.vy));
+    }
+    // A fighter's own top speed is 0.00762; the rebound may lift one bounce
+    // above it, and nothing may lift a hundred.
+    expect(fastest, `pinned fighter reached ${fastest.toFixed(4)} per tick`).toBeLessThan(0.012);
   });
 });

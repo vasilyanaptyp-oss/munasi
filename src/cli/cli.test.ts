@@ -5,9 +5,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import { renderFrames } from "../render/index.js";
 import { renderFramesParallel } from "../render/parallel.js";
 import { simulate } from "../sim/simulate.js";
+import { loadFighters } from "../content/index.js";
+import { gauntletMatchups } from "../content/teams.js";
+import type { Matchup } from "../content/generateMatchups.js";
 import { abilityMatch, makeFighter } from "../sim/testFixtures.js";
 import type { MatchResult } from "../sim/types.js";
-import { generate, parseArgs } from "./generate.js";
+import { generate, parseArgs, spreadAcrossFighters } from "./generate.js";
 import { manifestPath, pairKey, readManifest, renderedPairs, writeManifest } from "./manifest.js";
 
 const tempDirs: string[] = [];
@@ -348,4 +351,92 @@ describe("generate", () => {
     expect(summary.produced).toEqual([]);
     expect(summary.failures).toEqual([]);
   }, 120_000);
+});
+
+describe("batch composition", () => {
+  const pair = (a: string, b: string): Matchup =>
+    ({
+      a: { id: a, name: a } as Matchup["a"],
+      b: { id: b, name: b } as Matchup["b"],
+      winRateA: 0.5,
+      imbalance: 0,
+      meanSeconds: 20,
+    }) as Matchup;
+
+  // Fourteen fighters, all 91 pairs — and ordered the way evenness orders them
+  // in practice: the fighter who sits near a coin flip against everybody has
+  // *thirteen* pairs crowding the head of the list. That is not a quirk of the
+  // sort, it is what "most even first" means, and it is why a straight
+  // `.slice(0, 8)` produced eight videos about Compass Guy.
+  const ids = "abcdefghijklmn".split("");
+  const all: Matchup[] = [];
+  for (const [i, a] of ids.entries()) {
+    for (const b of ids.slice(i + 1)) all.push(pair(a, b));
+  }
+  const ranked = [
+    ...all.filter((m) => m.a.id === "a" || m.b.id === "a"),
+    ...all.filter((m) => m.a.id !== "a" && m.b.id !== "a"),
+  ];
+
+  const ids2 = (m: Matchup): string[] => [m.a.id, m.b.id];
+
+  const tally = (picked: Matchup[]): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const m of picked) {
+      for (const id of [m.a.id, m.b.id]) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return counts;
+  };
+
+  it("does not give one fighter the whole batch", () => {
+    const picked = spreadAcrossFighters(ranked, 8, ids2);
+    expect(picked).toHaveLength(8);
+    // Sixteen slots over fourteen fighters. `.slice(0, 8)` puts "a" in all
+    // eight of them; the spread cannot put anybody in more than two.
+    expect(Math.max(...tally(picked).values())).toBeLessThanOrEqual(2);
+  });
+
+  it("carries the count across runs, so the second batch is not the first again", () => {
+    // Exactly what happened: batch one came out all Compass Guy, the manifest
+    // then removed those pairs, and batch two came out all Boxer Guy — the
+    // fighter whose pairs were now at the head.
+    const first = spreadAcrossFighters(ranked, 8, ids2);
+    const seen = tally(first);
+    const done = new Set(first.map((m) => pairKey(m.a.id, m.b.id)));
+    const rest = ranked.filter((m) => !done.has(pairKey(m.a.id, m.b.id)));
+    const second = spreadAcrossFighters(rest, 8, ids2, seen);
+
+    const both = tally([...first, ...second]);
+    // Sixteen videos, 32 slots, fourteen fighters: nobody above three.
+    expect(Math.max(...both.values())).toBeLessThanOrEqual(3);
+    // And everybody is on screen at least once, which is the point of adding
+    // ten characters in the first place.
+    expect(both.size).toBe(ids.length);
+  });
+
+  it("stays deterministic", () => {
+    const key = (ms: Matchup[]): string[] => ms.map((m) => `${m.a.id}/${m.b.id}`);
+    expect(key(spreadAcrossFighters(ranked, 6, ids2))).toEqual(key(spreadAcrossFighters(ranked, 6, ids2)));
+  });
+
+  it("returns what there is when asked for more than exists", () => {
+    expect(spreadAcrossFighters(ranked.slice(0, 3), 10, ids2)).toHaveLength(3);
+  });
+
+  it("spreads the gauntlet list too — that is the one every shipped video comes from", () => {
+    // Not a stand-in: the real list, built by the real nested loops. It is
+    // ordered challenger-major, so `.slice(0, 7)` is seven videos about
+    // whoever is first in the roster.
+    const all = gauntletMatchups(loadFighters());
+    const idsOf = (m: (typeof all)[number]): string[] => [
+      m.challenger.id,
+      ...m.members.map((x) => x.id),
+    ];
+    expect(new Set(all.slice(0, 7).map((m) => m.challenger.id)).size).toBe(1);
+
+    const picked = spreadAcrossFighters(all, 7, idsOf);
+    const counts = new Map<string, number>();
+    for (const m of picked) for (const id of idsOf(m)) counts.set(id, (counts.get(id) ?? 0) + 1);
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(1);
+  });
 });

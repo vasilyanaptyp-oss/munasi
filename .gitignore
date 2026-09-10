@@ -11,6 +11,10 @@ out/*
 # ...and the ability demo, which is how the ten new ones get reviewed at all:
 # seven of them are movement, and movement does not survive a screenshot.
 !out/demo/
+# ...but never the frame scratch. A render writes one PNG per frame beside the
+# mp4 and removes them when the encode succeeds; interrupt it and 200MB of
+# stills stay behind, inside the one directory the rules above re-include.
+out/samples/.frames/
 *.log
 .DS_Store
 .vitest/

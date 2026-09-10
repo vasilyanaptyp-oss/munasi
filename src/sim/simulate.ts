@@ -146,7 +146,19 @@ const SLIPSTREAM_SPEED = 2.0;
  */
 const COUNTDOWN_SECONDS = 2.5;
 /** `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths. */
-const ORBIT_RADIUS_SHARE = 0.95;
+/**
+ * `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths.
+ *
+ * **Just clear of contact, not inside it.** At 0.95 he circled *through* the
+ * other man, and an ability that holds two fighters in permanent contact pays
+ * whoever has the bigger `meleeShare` on the contact window's own cadence —
+ * against a light opponent the rapper took 98% and 90% of those pairs, against
+ * a heavy one he was fed into their damage. Manufactured contact is the same
+ * defect Boxer Guy's homing charge had, and it is fixed the same way: stop
+ * manufacturing it. His damage arrives on his pulses, and the circling is the
+ * read.
+ */
+const ORBIT_RADIUS_SHARE = 1.18;
 /**
  * `SPIN CYCLE`: radians per tick.
  *
@@ -577,6 +589,52 @@ export function simulate(
     return count;
   };
 
+  /**
+   * `RIPOSTE` — a blow landed on him is answered with one of his own.
+   *
+   * **It answers any damage, not only a collision, and that is the third
+   * attempt at this ability.** A true mirror scales with the attacker's
+   * `meleeShare`; capping the mirror still scaled with it. Both made the fencer
+   * a hard counter to one style and dead weight against the other — 99% of the
+   * pairs against Rapper Guy and Fisherman Guy, 10% against Vacuum Guy.
+   *
+   * Answering with his own strike removed the *size* dependency but not the
+   * *trigger* one: while it only fired on contact, its worth tracked how much
+   * of the opponent's game was contact, which is precisely what differs between
+   * a boxer and a man who throws his spectacles. Firing on every blow makes it
+   * proportional to how often he is hurt, full stop — and the calibrator
+   * already balances that.
+   *
+   * `fieldScale` is one number per fighter and can never reach a single pair,
+   * so a pairwise skew has to be fixed in the mechanic. Same lesson as Boxer
+   * Guy's charge, written down three more times.
+   */
+  const answerRiposte = (
+    parried: FighterState,
+    attacker: FighterState,
+    dealt: number,
+    atX: number,
+    atY: number,
+  ): void => {
+    if (tick >= parried.riposteUntilTick || dealt <= 0 || attacker.hp <= 0) return;
+    const own = effectiveAttack(parried) * (parried.base.meleeShare ?? 1);
+    const returned = damageFighter(attacker, rollDamage(parried.rng, own));
+    events.push({
+      // `frame`, not `tick / TICKS_PER_FRAME`. Two ticks run inside each frame
+      // of the loop, so the derived number trails the loop's own by one — the
+      // answer landed a frame before the blow that caused it, and the gate
+      // caught it as "nothing caused the riposte at frame 145".
+      frame,
+      type: "hit",
+      actorId: parried.base.id,
+      targetId: attacker.base.id,
+      value: returned,
+      atX,
+      atY,
+      ability: "riposte",
+    });
+  };
+
   const castAbility = (state: FighterState, ability: Ability): void => {
     const enemy = opponentOf(state);
     switch (ability.type) {
@@ -928,6 +986,19 @@ export function simulate(
       case "riposte": {
         state.riposteUntilTick =
           tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
+        // **He lunges as well as parries, and that is the third correction to
+        // this ability.**
+        //
+        // Purely reactive, its worth depends entirely on how hard and how often
+        // the *other* man hits — which is exactly what differs between a boxer
+        // and a man who throws his spectacles. Sized the return, then decoupled
+        // it from the attacker, then made it answer every blow rather than only
+        // a collision; each round the fencer stayed a counter-character, taking
+        // 98% of his pairs against melee and 7% against throwers.
+        //
+        // A scheduled strike gives him a floor that owes nothing to the
+        // opponent's style. The parry stays as the flourish on top.
+        scheduleSignature(state, ability);
         events.push({
           frame: Math.floor(tick / TICKS_PER_FRAME),
           type: "signature",
@@ -1197,19 +1268,23 @@ export function simulate(
         // It does not chain — the returned points are dealt directly rather
         // than through this loop — because two fighters both holding a riposte
         // would otherwise volley until one of them died on a single contact.
-        if (tick < enemy.riposteUntilTick && done > 0 && side.hp > 0) {
-          const returned = damageFighter(side, done);
-          events.push({
-            frame,
-            type: "hit",
-            actorId: enemy.base.id,
-            targetId: side.base.id,
-            value: returned,
-            atX: contact.x,
-            atY: contact.y,
-            ability: "riposte",
-          });
-        }
+        //
+        // **It answers with his own strike, not with a copy of yours.**
+        //
+        // A true mirror scales with the *attacker's* `meleeShare`, and that
+        // makes the ability a hard counter to one style and dead weight against
+        // another. Measured twice on the fourteen-fighter field, and capping the
+        // mirror did not fix it — the fencer still took 99% off Rapper Guy and
+        // Fisherman Guy while losing 90% to Vacuum Guy and 88% to Glasses Guy,
+        // because `min(theirs, mine)` still rises with theirs.
+        //
+        // Answering with a fixed amount — what he would have hit for himself —
+        // leaves the ability's worth depending only on how often he is hit,
+        // which is contact frequency, which is roughly the same in every pair.
+        // The read is unchanged: the blow comes straight back, same frame, same
+        // place. `fieldScale` is one number per fighter and can never reach a
+        // single pair, so this had to be fixed in the mechanic.
+        answerRiposte(enemy, side, done, contact.x, contact.y);
         // **One blow per meeting, and every meeting gets one.**
         //
         // This used to refill from `attackSpeed`, and once Boxer Guy's speed
@@ -1296,6 +1371,7 @@ export function simulate(
         // puncher off his own punch separates the pair on the frame it lands.
         setHeading(from, away + Math.PI);
       }
+      answerRiposte(victim, caster, dealt, at.x, at.y);
       events.push({
         frame,
         type: isCrit ? "crit" : "hit",
