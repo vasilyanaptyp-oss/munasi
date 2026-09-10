@@ -1,0 +1,1616 @@
+import {
+  dash,
+  initialMovement,
+  keepInside,
+  resolveCollision,
+  setHeading,
+  steerHeading,
+  stepMovement,
+  type MovementState,
+} from "./movement.js";
+import { mulberry32, type Rng } from "./rng.js";
+import type {
+  Ability,
+  AbilityType,
+  Fighter,
+  MatchConfig,
+  MatchRules,
+  MatchEvent,
+  MatchResult,
+  Minion,
+  MinionSnapshot,
+  MinionSpec,
+  PickupSnapshot,
+  PickupType,
+  Side,
+  Snapshot,
+  Winner,
+} from "./types.js";
+import { MAX_FRAMES, TICKS_PER_FRAME, TICKS_PER_SECOND } from "./types.js";
+
+/**
+ * Damage rolls land within this fraction of the fighter's attack stat.
+ * Deliberately wide: with ~25 swings per match, per-hit spread is what keeps
+ * the outcome genuinely uncertain. Tighten it and a 3% stat edge becomes a
+ * 100% winrate, which makes both balance and drama impossible.
+ */
+export const DAMAGE_VARIANCE = 0.35;
+
+/**
+ * Seconds between a signature being cast and its damage landing.
+ *
+ * Exported because the renderer has to fly the effect across in exactly this
+ * time: the thing a viewer sees arrive and the tick the health drops have to be
+ * the same moment, or the ability reads as decoration again.
+ *
+ * Up from 0.35s. A pair of spectacles crossing the whole square in a third of a
+ * second is a streak, not a throw — there is no frame in which a viewer can see
+ * what the object *is*, which for the one character whose whole identity is the
+ * object he throws is the difference between an ability and a flicker.
+ */
+export const SIGNATURE_LEAD_SECONDS = 0.55;
+
+/**
+ * Seconds between one pulse of a cast and the next.
+ *
+ * Exported for the same reason as the lead: a four-glass volley has to arrive on
+ * the frames its four numbers appear on, so the renderer spaces the objects it
+ * throws by exactly this.
+ */
+export const SIGNATURE_PULSE_SECONDS = 0.22;
+
+/**
+ * Damage one signature pulse deals, as a share of the caster's attack.
+ *
+ * Exported because the calibrator has to solve `attack` from the total damage a
+ * fighter puts out, and for these four fighters most of that total arrives
+ * through here. See `analyticAttack`.
+ */
+export const SIGNATURE_PULSE_SHARE = 1.33;
+
+/**
+ * How much faster Boxer Guy travels while closing for `HAYMAKER`.
+ *
+ * Enough to cross most of a typical gap inside the lead time — about half the
+ * square — so the punch lands from somewhere near the other man rather than
+ * across it.
+ *
+ * Down from 4.5, and the reason is balance rather than looks. A charge that
+ * always arrives *manufactures* a collision, collisions damage both fighters,
+ * and Glasses Guy cannot use one: the pairings with a charge in them ran at 0.70
+ * contacts a second against 0.33 in the pairings without. Between this and the
+ * recoil on the punch itself they now run at 0.36, which is the same fight
+ * everybody else is having.
+ */
+const HAYMAKER_DASH = 2.4;
+/**
+ * The anti-chatter latch on contact damage. **Not** a rate limit.
+ *
+ * `Contact.closing` already marks the one tick a meeting begins on, so a pair
+ * sliding through each other is one blow. This exists for the corner case it
+ * does not cover: a fighter pinned against a wall by the other is shoved back
+ * inside by `keepInside`, ends up overlapping again on the next tick, and reads
+ * as closing every other tick for as long as the press lasts.
+ *
+ * Four tenths of a second — far shorter than any real second meeting, so
+ * **every meeting that a viewer can see as a separate meeting lands a blow.**
+ *
+ * It used to be two seconds, and that was the bug the owner kept reporting.
+ * Sized as a rate limit it swallowed genuine collisions: measured on shipped
+ * video, half of them produced no number at all. Two photographs met on screen
+ * and nothing happened, which from the outside is indistinguishable from the
+ * fight being broken. How *big* a blow is belongs to `meleeShare` and to how
+ * often the bouncing brings them together; it must not be bought by dropping
+ * hits on the floor.
+ */
+export const CONTACT_RECOVERY_TICKS = Math.round(0.4 * TICKS_PER_SECOND);
+/**
+ * How much faster the man Bodyguard Guy has thrown travels, and for how long.
+ *
+ * Long enough to cross the square and reach a wall, so the throw ends where a
+ * throw should end: against something.
+ *
+ * Down from 4.2. At the reference's own pace a fighter covers 0.010 of the
+ * arena per frame and his fastest tenth reaches 0.023; four times base put the
+ * thrown man at 0.040, twice anything the reference ever does, and a burst that
+ * fast reads as a glitch rather than as a throw.
+ */
+const THROW_SPEED = 2.6;
+
+/**
+ * Speeds and windows for the ten abilities added as a batch.
+ *
+ * All of them are multipliers on a fighter's own pace, and all are kept near
+ * the measured band rather than above it. The reference's fighters travel
+ * 0.0095-0.0103 of the arena per frame with a p90 of 0.0187, and the one
+ * complaint the owner has ever made about movement was that ours were too
+ * fast — a four-times dash measured 0.040, twice anything the reference does,
+ * and read as a glitch. Nothing here goes past 2.6.
+ */
+/** `REEL IN`: enough above his own pace that the curve inward is visible. */
+const MAGNET_PULL_SPEED = 1.5;
+/** `OVERCLOCK`: he covers ground, he does not teleport. */
+const OVERCLOCK_SPEED = 2.2;
+/** `WALL SLAM`: the caster closes, the victim is launched off the wall. */
+const WALL_SLAM_DASH = 2.2;
+const WALL_SLAM_THROW = 2.6;
+/** `SLIPSTREAM`: fast enough to pass clean through rather than linger inside. */
+const SLIPSTREAM_SPEED = 2.0;
+/**
+ * `COUNTDOWN`: how long the fuse burns.
+ *
+ * Long enough that the victim is somewhere else by the time it lands — which
+ * is the whole point, it is the one blow that does not need the pair to be
+ * together — and short enough to sit inside the gate's 5.0s ceiling on quiet
+ * stretches rather than being the thing that breaks it.
+ */
+const COUNTDOWN_SECONDS = 2.5;
+/**
+ * Blows one cast of `riposte` answers. See `FighterState.riposteLeft`.
+ *
+ * Swept against the fencer's own pairs, which is where the ability's whole
+ * problem lived. Two is level but far too weak — every pair 68-97% against
+ * him, which `fieldScale` would then have to lift by thirty points, and that
+ * knob is meant to be worth a couple of percent. Six stops binding on a
+ * fighter who throws a lot: Glasses Guy lands more than six blows inside the
+ * window anyway, and the pair goes back to 3%. Four sits in the middle at
+ * 38-66% with no outlier, against 15-89% before any of this.
+ */
+const RIPOSTE_PARRIES = 4;
+/** `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths. */
+/**
+ * `SPIN CYCLE`: how far out he orbits, as a share of the pair's half-widths.
+ *
+ * **Just clear of contact, not inside it.** At 0.95 he circled *through* the
+ * other man, and an ability that holds two fighters in permanent contact pays
+ * whoever has the bigger `meleeShare` on the contact window's own cadence —
+ * against a light opponent the rapper took 98% and 90% of those pairs, against
+ * a heavy one he was fed into their damage. Manufactured contact is the same
+ * defect Boxer Guy's homing charge had, and it is fixed the same way: stop
+ * manufacturing it. His damage arrives on his pulses, and the circling is the
+ * read.
+ */
+const ORBIT_RADIUS_SHARE = 1.35;
+/**
+ * `SPIN CYCLE`: radians per tick.
+ *
+ * One full turn takes about 1.6 seconds at 60 ticks, so a 1.2-second cast is
+ * roughly three quarters of a lap — long enough to read as circling, short
+ * enough that it never looks like he is stuck in a loop.
+ */
+const ORBIT_RADIANS_PER_TICK = (Math.PI * 2) / (1.6 * TICKS_PER_SECOND);
+const THROW_SECONDS = 0.75;
+/** Derived minion stats, used when an ability has no explicit `minion` block. */
+const DERIVED_MINION_ATTACK_RATIO = 0.28;
+const DERIVED_MINION_ATTACK_SPEED = 0.9;
+const DERIVED_MINION_LIFETIME = 8;
+/** Default `buff_attack` duration in seconds. */
+const DEFAULT_BUFF_DURATION = 5;
+
+/** Stats of a comeback-wave minion, as fractions of its owner's numbers. */
+const WAVE_MINION_HP_SHARE = 0.12;
+const WAVE_MINION_ATTACK_SHARE = 0.45;
+const WAVE_MINION_SPEED = 0.9;
+const WAVE_MINION_LIFETIME = 6;
+const DEFAULT_WAVE_SIZE = 2;
+
+/** Arena pickup defaults. */
+const PICKUP_DEFAULTS = {
+  firstFrame: 90,
+  intervalFrames: 150,
+  reachFrames: 45,
+  healPower: 120,
+  damageBuff: 0.35,
+  speedBuff: 0.35,
+  buffDuration: 6,
+} as const;
+const PICKUP_TYPES: PickupType[] = ["heal", "damage_buff", "attack_speed"];
+
+interface ActiveBuff {
+  power: number;
+  /** Tick at which the buff stops applying. */
+  expiresAtTick: number;
+}
+
+interface FighterState {
+  side: Side;
+  base: Fighter;
+  /**
+   * Each side rolls from its own stream. Sharing one stream interleaves the
+   * two fighters' draws, and the serial correlation that introduces is worth a
+   * measurable winrate edge to whichever side draws first.
+   */
+  rng: Rng;
+  hp: number;
+  /** Ticks until the next basic attack. */
+  attackCooldown: number;
+  /** Ticks until each ability (by index) is castable again. */
+  abilityCooldowns: number[];
+  buffs: ActiveBuff[];
+  /** Attack-speed multipliers from pickups. */
+  speedBuffs: ActiveBuff[];
+  minions: MinionState[];
+  minionsSpawned: number;
+  /** Comeback-wave thresholds already triggered. */
+  wavesTriggered: number[];
+  /** Tick until which every blow he lands on contact is a crit — `OVERCLOCK`. */
+  critWindowUntilTick: number;
+  /** Tick until which a blow landed on him is dealt back — `RIPOSTE`. */
+  riposteUntilTick: number;
+  /**
+   * Blows left to parry in this cast.
+   *
+   * **The cap is what makes the ability level.** Without it a parry returns one
+   * strike per blow taken, so what it is worth is the *count* of blows the
+   * other man lands — and that is a property of the opponent, not of the
+   * fencer. Measured: against a man throwing a stream of small pulses off two
+   * abilities he took 100% of the pair, against one dropping a single heavy
+   * lump every six seconds, 17%. Two per cast, whoever he is fighting.
+   */
+  riposteLeft: number;
+}
+
+interface MinionState extends Minion {
+  /** Ticks until the next attack. */
+  attackCooldown: number;
+  /** Ticks until the minion expires. */
+  ticksLeft: number;
+}
+
+function cloneFighter(f: Fighter): Fighter {
+  return {
+    ...f,
+    hp: f.maxHp,
+    abilities: f.abilities.map((a) => ({ ...a })),
+  };
+}
+
+function ticksPerAttack(attacksPerSecond: number): number {
+  if (attacksPerSecond <= 0) return Number.POSITIVE_INFINITY;
+  return TICKS_PER_SECOND / attacksPerSecond;
+}
+
+function attackMultiplier(state: FighterState): number {
+  let mult = 1;
+  for (const buff of state.buffs) mult += buff.power;
+  return mult;
+}
+
+function effectiveAttack(state: FighterState): number {
+  return state.base.attack * attackMultiplier(state);
+}
+
+function effectiveAttackSpeed(state: FighterState): number {
+  let mult = 1;
+  for (const buff of state.speedBuffs) mult += buff.power;
+  return state.base.attackSpeed * mult;
+}
+
+/**
+ * Rubber-band bonus: the further a fighter is from full HP, the harder it
+ * hits. Returns exactly 1 when the rule is off, so the default path is
+ * arithmetically untouched.
+ */
+function comebackMultiplier(state: FighterState, rubberBand: number): number {
+  if (rubberBand <= 0) return 1;
+  const share = Math.max(0, Math.min(1, state.hp / state.base.maxHp));
+  return 1 + rubberBand * (1 - share);
+}
+
+function minionSpec(ability: Ability): MinionSpec {
+  if (ability.minion) return { ...ability.minion };
+  return {
+    hp: ability.power,
+    attack: ability.power * DERIVED_MINION_ATTACK_RATIO,
+    attackSpeed: DERIVED_MINION_ATTACK_SPEED,
+    lifetime: DERIVED_MINION_LIFETIME,
+  };
+}
+
+/**
+ * Runs a full match. Pure: the only entropy is `seed`, and neither argument is
+ * mutated. Identical `(config, seed)` always yields a byte-identical result.
+ */
+export function simulate(
+  config: MatchConfig,
+  seed: number,
+  rules: MatchRules = {},
+): MatchResult {
+  // More hits for less each, at identical damage per second. Applied to the
+  // fighters up front so every downstream read — stat lines, minions derived
+  // from ability power, the snapshot's `attack` — sees one consistent roster.
+  const attackRate = rules.attackRate ?? 1;
+  const paced = (f: Fighter): Fighter =>
+    attackRate === 1
+      ? f
+      : { ...f, attack: f.attack / attackRate, attackSpeed: f.attackSpeed * attackRate };
+  const fighters = { a: cloneFighter(paced(config.a)), b: cloneFighter(paced(config.b)) };
+
+  // Two independent streams derived from the one seed, so the match stays
+  // reproducible while neither side's rolls disturb the other's.
+  const deriveSeed = (salt: number): number => {
+    let h = (seed ^ 0x9e3779b9) | 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ salt, 0xc2b2ae35);
+    return (h ^ (h >>> 13)) | 0;
+  };
+
+  const makeState = (side: Side, base: Fighter, rng: Rng): FighterState => ({
+    side,
+    base,
+    rng,
+    // The gauntlet carries the challenger's HP in from the previous round.
+    hp: side === "a" ? (rules.startHpA ?? base.maxHp) : base.maxHp,
+    // Multiplied, never rounded: at the default 1 this has to be bit-identical
+    // to the old expression or every 1v1 replay changes.
+    attackCooldown: ticksPerAttack(base.attackSpeed) * (rules.openingCooldown ?? 1),
+    /**
+     * **Abilities open short too.**
+     *
+     * They used to start on a full cooldown, so the first signature landed five
+     * or six seconds in — and since a signature is one of only two things that
+     * deal damage, a fight whose pair had not happened to run into each other
+     * yet opened on five seconds of two people flying around with nothing
+     * happening. Measured on the gate's own matchup: first event at 5.00s, first
+     * damage at 5.37s, which is past the 5.0s the reference never exceeds *in
+     * the middle of a fight*, let alone at the front of one.
+     *
+     * The reference's ability is running from its first frame — the note track
+     * is already streaming and already taking health off. Same opening share as
+     * the attack schedule, so the two stay in step.
+     */
+    abilityCooldowns: base.abilities.map(
+      (ab) => ab.cooldown * TICKS_PER_SECOND * (rules.openingCooldown ?? 1),
+    ),
+    buffs: [],
+    speedBuffs: [],
+    minions: [],
+    minionsSpawned: 0,
+    wavesTriggered: [],
+    critWindowUntilTick: 0,
+    riposteUntilTick: 0,
+    riposteLeft: 0,
+  });
+
+  const sides: Record<Side, FighterState> = {
+    a: makeState("a", fighters.a, mulberry32(deriveSeed(1))),
+    b: makeState("b", fighters.b, mulberry32(deriveSeed(2))),
+  };
+  const opponentOf = (s: FighterState): FighterState =>
+    s.side === "a" ? sides.b : sides.a;
+
+  // Streams 4 and 5: added after the fact, so they cannot disturb the draws
+  // that decide the fight (1 and 2) or the pickups (3).
+  const movementRng: Record<Side, Rng> = {
+    a: mulberry32(deriveSeed(4)),
+    b: mulberry32(deriveSeed(5)),
+  };
+  const movement: Record<Side, MovementState> = {
+    a: initialMovement("a", fighters.a.aspect, movementRng.a, fighters.a.silhouette),
+    b: initialMovement("b", fighters.b.aspect, movementRng.b, fighters.b.silhouette),
+  };
+
+  const events: MatchEvent[] = [];
+  const snapshots: Snapshot[] = [];
+
+  let tick = 0;
+  let frame = 0;
+  let winner: Winner | null = null;
+
+  const variance = rules.damageVariance ?? DAMAGE_VARIANCE;
+  const rollDamage = (rng: Rng, attack: number): number =>
+    Math.max(1, Math.round(attack * rng.range(1 - variance, 1 + variance)));
+
+  /**
+   * Damage is queued during a tick and applied once every actor has swung.
+   * Resolving it immediately would hand the fighter checked first a free win on
+   * any tick where both would have landed a killing blow — a systematic ~3
+   * percentage point edge for side A.
+   */
+  const pendingFighterDamage: { target: FighterState; amount: number }[] = [];
+  const pendingMinionDamage: { target: MinionState; amount: number }[] = [];
+
+  const damageFighter = (target: FighterState, amount: number): number => {
+    pendingFighterDamage.push({ target, amount });
+    return amount;
+  };
+
+  const applyPendingDamage = (): void => {
+    for (const { target, amount } of pendingFighterDamage) target.hp -= amount;
+    for (const { target, amount } of pendingMinionDamage) target.hp -= amount;
+    pendingFighterDamage.length = 0;
+    pendingMinionDamage.length = 0;
+  };
+
+  /**
+   * Pickups. No positions are simulated: the item appears, sits for
+   * `reachFrames`, and is then claimed by whoever wins a roll weighted by
+   * attack speed. Speed is the stat a viewer can already see in the stat line,
+   * so the outcome reads as earned rather than arbitrary.
+   */
+  const pickupRules = rules.pickups;
+  const pickupCfg = { ...PICKUP_DEFAULTS, ...(pickupRules ?? {}) };
+  const pickupRng = mulberry32(deriveSeed(3));
+  let pickup: PickupSnapshot | null = null;
+  let pickupsSpawned = 0;
+  let nextPickupFrame = pickupCfg.firstFrame;
+
+  const claimPickup = (item: PickupSnapshot): void => {
+    const speedA = effectiveAttackSpeed(sides.a);
+    const speedB = effectiveAttackSpeed(sides.b);
+    const chanceA = speedA / (speedA + speedB);
+    const winner = pickupRng.next() < chanceA ? sides.a : sides.b;
+    const duration = pickupCfg.buffDuration;
+
+    switch (item.type) {
+      case "heal": {
+        const healed = Math.min(
+          Math.round(pickupCfg.healPower),
+          winner.base.maxHp - winner.hp,
+        );
+        if (healed > 0) winner.hp += healed;
+        break;
+      }
+      case "damage_buff":
+        winner.buffs.push({
+          power: pickupCfg.damageBuff,
+          expiresAtTick: tick + Math.round(duration * TICKS_PER_SECOND),
+        });
+        break;
+      case "attack_speed":
+        winner.speedBuffs.push({
+          power: pickupCfg.speedBuff,
+          expiresAtTick: tick + Math.round(duration * TICKS_PER_SECOND),
+        });
+        break;
+    }
+    events.push({
+      frame,
+      type: "pickup_claim",
+      actorId: winner.base.id,
+      targetId: item.id,
+      value: item.type === "heal" ? pickupCfg.healPower : Math.round(pickupCfg.damageBuff * 100),
+    });
+  };
+
+  const stepPickups = (): void => {
+    if (!pickupRules) return;
+    if (pickup === null && frame >= nextPickupFrame) {
+      pickupsSpawned += 1;
+      const type = PICKUP_TYPES[pickupRng.int(PICKUP_TYPES.length)]!;
+      pickup = {
+        id: `pickup${pickupsSpawned}`,
+        type,
+        spawnFrame: frame,
+        resolveFrame: frame + pickupCfg.reachFrames,
+      };
+      events.push({
+        frame,
+        type: "pickup_spawn",
+        actorId: pickup.id,
+        targetId: pickup.id,
+        value: 0,
+      });
+    } else if (pickup !== null && frame >= pickup.resolveFrame) {
+      claimPickup(pickup);
+      pickup = null;
+      nextPickupFrame = frame + pickupCfg.intervalFrames;
+    }
+  };
+
+  const rubberBand = rules.rubberBand ?? 0;
+  const waveThresholds = rules.comebackWaves ?? [];
+  const waveSize = rules.comebackWaveSize ?? DEFAULT_WAVE_SIZE;
+
+  const spawnMinion = (state: FighterState, spec: MinionSpec): MinionState => {
+    const hp = Math.max(1, Math.round(spec.hp));
+    state.minionsSpawned += 1;
+    const minion: MinionState = {
+      id: `${state.base.id}#m${state.minionsSpawned}`,
+      ownerId: state.base.id,
+      hp,
+      maxHp: hp,
+      attack: spec.attack,
+      attackSpeed: spec.attackSpeed,
+      lifetime: spec.lifetime,
+      attackCooldown: ticksPerAttack(spec.attackSpeed),
+      ticksLeft: Math.round(spec.lifetime * TICKS_PER_SECOND),
+    };
+    state.minions.push(minion);
+    return minion;
+  };
+
+  /** Defensive wave when a fighter drops through a threshold, once each. */
+  const checkComebackWaves = (state: FighterState): void => {
+    if (waveThresholds.length === 0) return;
+    const share = state.hp / state.base.maxHp;
+    for (const threshold of waveThresholds) {
+      if (share > threshold || state.wavesTriggered.includes(threshold)) continue;
+      state.wavesTriggered.push(threshold);
+      if (state.hp <= 0) continue;
+      for (let i = 0; i < waveSize; i += 1) {
+        const minion = spawnMinion(state, {
+          hp: state.base.maxHp * WAVE_MINION_HP_SHARE,
+          attack: state.base.attack * WAVE_MINION_ATTACK_SHARE,
+          attackSpeed: WAVE_MINION_SPEED,
+          lifetime: WAVE_MINION_LIFETIME,
+        });
+        events.push({
+          frame,
+          type: "spawn",
+          actorId: state.base.id,
+          targetId: minion.id,
+          value: minion.hp,
+        });
+      }
+    }
+  };
+
+  /**
+   * Damage a signature is still owed, tick by tick.
+   *
+   * **A signature has to land damage, and land it visibly.** Ours took over the
+   * screen for 1.4 seconds and did nothing to anyone's health: every point of
+   * damage in the video came from somewhere else, so the biggest thing on screen
+   * was decoration and the fight was decided off-camera. The reference does the
+   * opposite — its one signature is a note highway that deals essentially all of
+   * the damage a viewer can see arriving, note by note, each with its own flash
+   * and its own number.
+   *
+   * So a cast schedules a short burst rather than one lump: several pulses over
+   * the animation, each rolled and reported separately, each carrying the
+   * victim's position so the renderer can mark it on them. Contact hits alone
+   * cannot carry the fight either way — measured, two fighters meet every 2.3s
+   * at best, against the reference's 1.20s between blows, and its own worst gap
+   * of 4.87s. The pulses fill exactly the stretches where nobody is touching.
+   */
+
+  const SIGNATURE_FIRST_TICK = Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
+  /**
+   * Ticks between pulses of one cast.
+   *
+   * Tight enough that a four-glass volley is over inside the effect's own 1.4s
+   * animation: the last of four lands at 1.01s. At the old half-second spacing
+   * the fourth arrived after the glasses had stopped being drawn, so a number
+   * appeared with nothing attached to it.
+   */
+  const SIGNATURE_PULSE_GAP = Math.round(SIGNATURE_PULSE_SECONDS * TICKS_PER_SECOND);
+  const pulses: {
+    atTick: number;
+    side: Side;
+    knockback: boolean;
+    share: number;
+    ability: AbilityType;
+    /** `SIPHON`: the caster is healed by whatever this pulse takes off. */
+    siphon?: boolean;
+  }[] = [];
+
+  /**
+   * Schedules one cast's worth of hits and returns how many there are, so the
+   * caller can put the count in the event and the renderer can draw exactly
+   * that many objects in flight.
+   */
+  const scheduleSignature = (
+    state: FighterState,
+    ability: Ability,
+    knockback = false,
+    options: { delayTicks?: number; siphon?: boolean } = {},
+  ): number => {
+    const range = ability.pulses;
+    const count = range
+      ? Math.round(state.rng.range(range[0], range[1] + 0.999 - 1e-9))
+      : 1;
+    for (let i = 0; i < count; i += 1) {
+      pulses.push({
+        atTick: tick + SIGNATURE_FIRST_TICK + (options.delayTicks ?? 0) + i * SIGNATURE_PULSE_GAP,
+        side: state.side,
+        knockback,
+        share: ability.hitShare ?? 1,
+        ability: ability.type,
+        ...(options.siphon === true ? { siphon: true } : {}),
+      });
+    }
+    return count;
+  };
+
+  /**
+   * `RIPOSTE` — a blow landed on him is answered with one of his own.
+   *
+   * **It answers any damage, not only a collision, and that is the third
+   * attempt at this ability.** A true mirror scales with the attacker's
+   * `meleeShare`; capping the mirror still scaled with it. Both made the fencer
+   * a hard counter to one style and dead weight against the other — 99% of the
+   * pairs against Rapper Guy and Fisherman Guy, 10% against Vacuum Guy.
+   *
+   * Answering with his own strike removed the *size* dependency but not the
+   * *trigger* one: while it only fired on contact, its worth tracked how much
+   * of the opponent's game was contact, which is precisely what differs between
+   * a boxer and a man who throws his spectacles. Firing on every blow makes it
+   * proportional to how often he is hurt, full stop — and the calibrator
+   * already balances that.
+   *
+   * `fieldScale` is one number per fighter and can never reach a single pair,
+   * so a pairwise skew has to be fixed in the mechanic. Same lesson as Boxer
+   * Guy's charge, written down three more times.
+   */
+  const answerRiposte = (
+    parried: FighterState,
+    attacker: FighterState,
+    dealt: number,
+    atX: number,
+    atY: number,
+  ): void => {
+    if (tick >= parried.riposteUntilTick || dealt <= 0 || attacker.hp <= 0) return;
+    if (parried.riposteLeft <= 0) return;
+    parried.riposteLeft -= 1;
+    /**
+     * **A strike of his own, sized by the calibrator — and it has to stay that
+     * way.**
+     *
+     * Returning a *share of the incoming blow* is the obvious fix for an
+     * ability whose worth depends on how the other man fights, and it was
+     * tried: it does even out the style half of the problem, since a slow heavy
+     * attacker and a fast light one then pay the same for the same damage. It
+     * is unusable anyway, because a proportional term does not scale with
+     * `attack`, and `attack` is the only grip the calibrator has. Measured at
+     * 0.5, 1.0 and 1.4 of the blow: at 0.5 the fencer lost 98% of the pair
+     * against a fighter who heals — his return is capped by his own health,
+     * since he can only be hit for about a thousand — and at 1.0 and above he
+     * won **every** pair in the roster outright, because a blow coming back
+     * whole means the attacker kills himself. There is nothing in between.
+     *
+     * What survived that pass is the window, which is gapless now: see the
+     * roster. That fixed the other half — whether the other man's blows happen
+     * to fall inside it.
+     */
+    const own = effectiveAttack(parried) * (parried.base.meleeShare ?? 1);
+    const returned = damageFighter(attacker, rollDamage(parried.rng, own));
+    events.push({
+      // `frame`, not `tick / TICKS_PER_FRAME`. Two ticks run inside each frame
+      // of the loop, so the derived number trails the loop's own by one — the
+      // answer landed a frame before the blow that caused it, and the gate
+      // caught it as "nothing caused the riposte at frame 145".
+      frame,
+      type: "hit",
+      actorId: parried.base.id,
+      targetId: attacker.base.id,
+      value: returned,
+      atX,
+      atY,
+      ability: "riposte",
+    });
+  };
+
+  const castAbility = (state: FighterState, ability: Ability): void => {
+    const enemy = opponentOf(state);
+    switch (ability.type) {
+      // MAGNETIC NORTH. The needle picks a direction and everyone else is
+      // pointed at it, whether they liked where they were going or not.
+      case "magnetic_north": {
+        const heading = movementRng[state.side].range(0, Math.PI * 2);
+        setHeading(movement[enemy.side], heading);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: heading,
+        });
+        break;
+      }
+      /**
+       * HAYMAKER — Boxer Guy crosses the arena himself and hits you.
+       *
+       * Not a thrown glove: that was a different character, and the boxer's
+       * whole point is that he fights at range zero. He charges, he arrives,
+       * and the punch is the single biggest number in the video. Whatever it
+       * lands on is sent flying the way the punch was going.
+       */
+      case "haymaker": {
+        const heading = Math.atan2(
+          movement[enemy.side].y - movement[state.side].y,
+          movement[enemy.side].x - movement[state.side].x,
+        );
+        // **He closes the distance himself.** A boxer does not throw his gloves
+        // across the arena; he gets in range and hits you. So the dash moves the
+        // caster, at a speed that covers most of the gap inside the lead time,
+        // and the punch lands when he arrives.
+        dash(
+          movement[state.side],
+          heading,
+          HAYMAKER_DASH,
+          tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND),
+          true,
+        );
+        scheduleSignature(state, ability, true);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: heading,
+        });
+        break;
+      }
+      /**
+       * FOUR EYES — Glasses Guy flings a volley of spectacles.
+       *
+       * They land as a spread rather than a single hit, so the effect reads as a
+       * scatter; the freeze-frame of a pair of glasses spinning across the
+       * arena is the whole gag.
+       */
+      /**
+       * GLASSES THROW — his ordinary attack, and the only one he has.
+       *
+       * He does not punch: `meleeShare` is zero, so running into him costs
+       * nothing. One pair of spectacles, thrown hard, four or so times a fight.
+       */
+      case "glasses_throw": {
+        const thrownOne = scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: thrownOne,
+        });
+        break;
+      }
+      case "four_eyes": {
+        // The count is rolled here and carried in the event, so the renderer
+        // throws exactly as many pairs as land. Deriving it separately in the
+        // render layer would let the picture and the health bar disagree.
+        const thrown = scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: thrown,
+        });
+        break;
+      }
+      /**
+       * THROWN OUT — Bodyguard Guy.
+       *
+       * **He is a bouncer, so he throws you out.** He grabs whoever is in front
+       * of him and hurls them the length of the arena; they cross it at four
+       * times their own speed and hit the far wall.
+       *
+       * The ability he had was hazard tape and a freeze, and both were wrong.
+       * The tape is a *detective's* prop — it was copied off the reference's
+       * Detective Guy and put on the wrong man — and a bodyguard who stops the
+       * arena dead is doing a policeman's job. What a bodyguard does is move
+       * people, which is also the one verb this format is built out of: the
+       * whole picture is two figures crossing a square.
+       */
+      case "thrown_out": {
+        const away = Math.atan2(
+          movement[enemy.side].y - movement[state.side].y,
+          movement[enemy.side].x - movement[state.side].x,
+        );
+        dash(
+          movement[enemy.side],
+          away,
+          THROW_SPEED,
+          tick + Math.round(THROW_SECONDS * TICKS_PER_SECOND),
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: away,
+        });
+        break;
+      }
+      /**
+       * SWITCHEROO — the two change ends of the arena in a single frame.
+       *
+       * The most visible thing this format can do without drawing anything:
+       * both photographs are somewhere else on the next frame, and the plus
+       * over each head goes with it. Velocities travel with the bodies, so
+       * neither one arrives moving in a direction he was not already going.
+       */
+      case "switcheroo": {
+        const mine = movement[state.side];
+        const theirs = movement[enemy.side];
+        const x = mine.x;
+        const y = mine.y;
+        mine.x = theirs.x;
+        mine.y = theirs.y;
+        theirs.x = x;
+        theirs.y = y;
+        // Each was standing somewhere legal for his own box, and the two boxes
+        // differ, so the swap can leave a wider man in a narrower man's corner.
+        keepInside(mine);
+        keepInside(theirs);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: 0,
+        });
+        break;
+      }
+      /**
+       * REEL IN — the other man's flight curves inward for a beat.
+       *
+       * `MAGNETIC NORTH` rewrites a heading once and lets go. This holds on:
+       * the homing flag re-aims the victim at whoever he is fighting on every
+       * tick, and since that is the caster, he arrives. Slightly faster than
+       * his own pace, so the curve is visible rather than inferred.
+       */
+      case "magnet_pull": {
+        const pull = movement[enemy.side];
+        dash(
+          pull,
+          Math.atan2(movement[state.side].y - pull.y, movement[state.side].x - pull.x),
+          MAGNET_PULL_SPEED,
+          tick + Math.round((ability.duration ?? 1.4) * TICKS_PER_SECOND),
+          true,
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.4,
+        });
+        break;
+      }
+      /**
+       * SPIN CYCLE — one photograph circles the other.
+       *
+       * The only movement mode `stepMovement` does not own, because it is the
+       * one that depends on where the *other* man is; the tick loop places him.
+       * He orbits at contact range, so the pair meet on the contact window's
+       * own cadence and he taps away for as long as it runs.
+       */
+      case "spin_cycle": {
+        const me = movement[state.side];
+        const them = movement[enemy.side];
+        me.orbitUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
+        me.orbitAngle = Math.atan2(me.y - them.y, me.x - them.x);
+        me.orbitDir = movementRng[state.side].chance(0.5) ? 1 : -1;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.2,
+        });
+        break;
+      }
+      /**
+       * OVERCLOCK — he visibly accelerates, and everything he touches crits.
+       *
+       * A dash with no steering is a plain speed multiplier: he keeps his
+       * heading and covers ground faster, wall bounces and all. The crit window
+       * is what makes the speed worth something rather than just decorative.
+       */
+      case "overclock": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
+        dash(me, Math.atan2(me.vy, me.vx), OVERCLOCK_SPEED, until, false);
+        state.critWindowUntilTick = until;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 2,
+        });
+        break;
+      }
+      /**
+       * DEAD WEIGHT — he plants himself, and the other man pinballs off him.
+       *
+       * Frozen so he stops, immovable so he keeps none of the collision. What
+       * the viewer sees is a figure that has stopped dead in the middle of the
+       * square and another one bouncing off him harder than he arrived.
+       */
+      case "dead_weight": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 1.6) * TICKS_PER_SECOND);
+        me.frozenUntilTick = until;
+        me.immovableUntilTick = until;
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.6,
+        });
+        break;
+      }
+      /**
+       * WALL SLAM — he rockets into the nearest wall and it throws the other
+       * man off it.
+       *
+       * Two bodies moving in one cast, in opposite senses: the caster drives
+       * *into* a wall while the victim is flung *away* from that same wall. The
+       * wall he picks is the one nearest the victim, so the launch is across
+       * the square rather than into the corner they are already in.
+       */
+      case "wall_slam": {
+        const me = movement[state.side];
+        const them = movement[enemy.side];
+        // Which wall the victim is nearest, and therefore which way he leaves.
+        const toLeft = them.x;
+        const toRight = 1 - them.x;
+        const toTop = them.y;
+        const toBottom = 1 - them.y;
+        const nearest = Math.min(toLeft, toRight, toTop, toBottom);
+        const away =
+          nearest === toLeft ? 0
+          : nearest === toRight ? Math.PI
+          : nearest === toTop ? Math.PI / 2
+          : -Math.PI / 2;
+        const lead = tick + Math.round(SIGNATURE_LEAD_SECONDS * TICKS_PER_SECOND);
+        dash(me, Math.atan2(them.y - me.y, them.x - me.x), WALL_SLAM_DASH, lead, true);
+        dash(them, steerHeading(away), WALL_SLAM_THROW, lead, false);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: away,
+        });
+        break;
+      }
+      /**
+       * SIPHON — the points come off one man and arrive on the other.
+       *
+       * The only ability here that puts two numbers of different colours on one
+       * frame: yellow-green leaving the victim, green arriving on the caster.
+       * Both happen when the pulse lands, not when it is cast, so the two
+       * numbers are the same event seen from both ends.
+       */
+      case "siphon": {
+        scheduleSignature(state, ability, false, { siphon: true });
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: 0,
+        });
+        break;
+      }
+      /**
+       * COUNTDOWN — nothing, and then a heavy blow two and a half seconds later.
+       *
+       * The one ability whose read is *timing*. It lands wherever the victim
+       * has got to, which after that long is usually the far side of the
+       * square, and it is the only thing in the format that damages a man who
+       * is nowhere near his opponent — which makes it the strongest answer to
+       * a fight that has drifted into a quiet stretch.
+       */
+      case "countdown": {
+        scheduleSignature(state, ability, false, {
+          delayTicks: Math.round(COUNTDOWN_SECONDS * TICKS_PER_SECOND),
+        });
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: COUNTDOWN_SECONDS,
+        });
+        break;
+      }
+      /**
+       * RIPOSTE — for a couple of seconds, every blow he takes lands twice.
+       *
+       * Purely reactive: it schedules nothing and moves nobody. What it does is
+       * put a second number on the screen every time the pair meet, on the man
+       * who started it. See the contact block for where that happens.
+       */
+      case "riposte": {
+        state.riposteLeft = RIPOSTE_PARRIES;
+        state.riposteUntilTick =
+          tick + Math.round((ability.duration ?? 2) * TICKS_PER_SECOND);
+        // **He lunges as well as parries, and that is the third correction to
+        // this ability.**
+        //
+        // Purely reactive, its worth depends entirely on how hard and how often
+        // the *other* man hits — which is exactly what differs between a boxer
+        // and a man who throws his spectacles. Sized the return, then decoupled
+        // it from the attacker, then made it answer every blow rather than only
+        // a collision; each round the fencer stayed a counter-character, taking
+        // 98% of his pairs against melee and 7% against throwers.
+        //
+        // A scheduled strike gives him a floor that owes nothing to the
+        // opponent's style. The parry stays as the flourish on top.
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 2,
+        });
+        break;
+      }
+      /**
+       * SLIPSTREAM — he goes translucent and passes straight through.
+       *
+       * No collision either way while it runs, so it is a dodge as much as an
+       * attack: he cannot be hit by running into him, and he cannot hit that
+       * way either. His damage arrives on the pulse instead, on the way past.
+       */
+      case "slipstream": {
+        const me = movement[state.side];
+        const until = tick + Math.round((ability.duration ?? 1.5) * TICKS_PER_SECOND);
+        me.phasingUntilTick = until;
+        dash(
+          me,
+          Math.atan2(movement[enemy.side].y - me.y, movement[enemy.side].x - me.x),
+          SLIPSTREAM_SPEED,
+          until,
+          true,
+        );
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.5,
+        });
+        break;
+      }
+      // NOBODY MOVES. He lowers the sunglasses and the arena stops.
+      case "nobody_moves": {
+        movement[enemy.side].frozenUntilTick = tick + Math.round((ability.duration ?? 1.2) * TICKS_PER_SECOND);
+        scheduleSignature(state, ability);
+        events.push({
+          frame: Math.floor(tick / TICKS_PER_FRAME),
+          type: "signature",
+          ability: ability.type,
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: ability.duration ?? 1.2,
+        });
+        break;
+      }
+      case "spawn_minion": {
+        const minion = spawnMinion(state, minionSpec(ability));
+        events.push({
+          frame,
+          type: "spawn",
+          actorId: state.base.id,
+          targetId: minion.id,
+          value: minion.hp,
+        });
+        break;
+      }
+      case "heal": {
+        const healed = Math.min(
+          Math.round(ability.power),
+          state.base.maxHp - state.hp,
+        );
+        if (healed <= 0) break;
+        state.hp += healed;
+        events.push({
+          frame,
+          type: "heal",
+          actorId: state.base.id,
+          targetId: state.base.id,
+          value: healed,
+        });
+        break;
+      }
+      case "buff_attack": {
+        const duration = ability.duration ?? DEFAULT_BUFF_DURATION;
+        state.buffs.push({
+          power: ability.power,
+          expiresAtTick: tick + Math.round(duration * TICKS_PER_SECOND),
+        });
+        events.push({
+          frame,
+          type: "buff",
+          actorId: state.base.id,
+          targetId: state.base.id,
+          value: ability.power,
+        });
+        break;
+      }
+      case "aoe": {
+        const damage = Math.max(1, Math.round(ability.power));
+        const dealt = damageFighter(enemy, damage);
+        events.push({
+          frame,
+          type: "aoe",
+          actorId: state.base.id,
+          targetId: enemy.base.id,
+          value: dealt,
+        });
+        for (const minion of enemy.minions) {
+          pendingMinionDamage.push({ target: minion, amount: damage });
+        }
+        break;
+      }
+    }
+  };
+
+  const step = (): void => {
+    tick += 1;
+
+    // Buffs expire before anything reads the attack stat this tick.
+    for (const side of [sides.a, sides.b]) {
+      if (side.buffs.length > 0) {
+        side.buffs = side.buffs.filter((b) => b.expiresAtTick > tick);
+      }
+      if (side.speedBuffs.length > 0) {
+        side.speedBuffs = side.speedBuffs.filter((b) => b.expiresAtTick > tick);
+      }
+    }
+
+    // Abilities, in fighter order then ability order — fixed, so the RNG stream
+    // is consumed identically on every run.
+    for (const side of [sides.a, sides.b]) {
+      for (let i = 0; i < side.abilityCooldowns.length; i += 1) {
+        side.abilityCooldowns[i] = side.abilityCooldowns[i]! - 1;
+        if (side.abilityCooldowns[i]! > 0) continue;
+        const ability = side.base.abilities[i]!;
+        castAbility(side, ability);
+        side.abilityCooldowns[i] = ability.cooldown * TICKS_PER_SECOND;
+      }
+    }
+
+    // **A charge homes on the man it was aimed at.**
+    //
+    // `HAYMAKER` used to set the heading once, at the moment of the cast, and
+    // then run for the lead time — during which the other man keeps bouncing and
+    // the boxer's own wall reflections re-steer him. So he arrived at where the
+    // target had been a third of a second ago, and the punch landed on empty
+    // arena while the number appeared on somebody standing elsewhere. Re-aiming
+    // every tick is what makes a charge a charge: he lands *on* him.
+    for (const side of [sides.a, sides.b]) {
+      const me = movement[side.side];
+      // Only a *charge* homes. A man who has been thrown flies where he was
+      // thrown — steering him back at the thrower would be a boomerang.
+      if (tick >= me.dashUntilTick || !me.dashHoming) continue;
+      const them = movement[opponentOf(side).side];
+      setHeading(me, Math.atan2(them.y - me.y, them.x - me.x));
+    }
+
+    // **SPIN CYCLE places its man instead of integrating him.**
+    //
+    // Everything else in this simulation moves by velocity, and it has to: the
+    // bounce is what the format looks like. An orbit is the one exception,
+    // because where he goes depends on where the *other* man is, which is
+    // knowledge `stepMovement` deliberately does not have. So he is written
+    // straight to the circle here and skipped below.
+    const orbiting = new Set<Side>();
+    for (const side of [sides.a, sides.b]) {
+      const me = movement[side.side];
+      if (tick >= me.orbitUntilTick) continue;
+      const them = movement[opponentOf(side).side];
+      orbiting.add(side.side);
+      me.orbitAngle += me.orbitDir * ORBIT_RADIANS_PER_TICK;
+      // **An ellipse, not a circle, because a fighter is not round.** The
+      // radius was built from the two half-*widths* alone, so at the top and
+      // bottom of the orbit — where the clearance that matters is vertical, and
+      // a figure is two and a half times taller than he is wide — the two
+      // photographs sat inside each other and collided on the contact window's
+      // own cadence. Measured across all 91 pairs: the orbiter ran at 0.845
+      // contacts a second against a roster median of 0.55, the highest of
+      // anybody, and a collision damages **both**, so his own ability was
+      // paying whoever had the larger `meleeShare`.
+      me.x = them.x + Math.cos(me.orbitAngle) * (me.halfW + them.halfW) * ORBIT_RADIUS_SHARE;
+      me.y = them.y + Math.sin(me.orbitAngle) * (me.halfH + them.halfH) * ORBIT_RADIUS_SHARE;
+      keepInside(me);
+      // He leaves the orbit going the way he was travelling round it, so the
+      // ability ends in movement rather than in a dead stop.
+      setHeading(me, me.orbitAngle + me.orbitDir * (Math.PI / 2));
+    }
+
+    // The bounce...
+    for (const side of [sides.a, sides.b]) {
+      if (orbiting.has(side.side)) continue;
+      stepMovement(movement[side.side], { tick, rng: movementRng[side.side] });
+    }
+    // ...and then off each other. After both have travelled, so the pair is
+    // resolved from the positions they actually reached rather than from one
+    // fighter's stale position, which would make the outcome depend on which of
+    // them stepped first.
+    const contact = resolveCollision(movement.a, movement.b, tick);
+
+    // **The reel lets go on arrival.** A homing dash that survives the contact
+    // re-aims the victim after every bounce and grinds out collisions for as
+    // long as it runs — 0.836 a second against a roster median of 0.55, second
+    // only to the orbit — and a collision pays both men, so the caster was
+    // buying his opponent damage every time he cast. It has done its job when
+    // the man is here.
+    if (contact) {
+      for (const side of [sides.a, sides.b]) {
+        const m = movement[side.side];
+        if (m.dashHoming) {
+          m.dashHoming = false;
+          m.dashUntilTick = tick;
+          m.dashMul = 1;
+        }
+      }
+    }
+
+    /**
+     * **Damage lands on contact.** This is the fight.
+     *
+     * It used to come off a clock, at whatever distance the pair happened to
+     * be, and the owner's verdict on that was that they were hitting air: a
+     * number appeared over someone standing alone in an empty half of the
+     * arena, and nothing on screen said why. Traced through the reference frame
+     * by frame, that is not what it does. When the two run into each other:
+     *
+     *   - **both take damage in the same frame**, each dealing their own — one
+     *     video shows "-75" over one man and "-120" over the other, together;
+     *   - both flash white, and an impact mark is drawn where they met.
+     *
+     * So the swing happens where a viewer is already looking, and the cause is
+     * on screen. The cooldown survives as a readiness gate rather than a
+     * metronome: a fighter who has just swung cannot swing again until it
+     * refills, so lying against each other for a few ticks is one blow, not
+     * twenty.
+     */
+    // **Any overlap is a blow, not just a head-on one.**
+    //
+    // This used to read `contact.closing`, which is the tick the pair exchange
+    // velocities on. That flag is decided along whichever axis they are least
+    // deep into each other, and it is false whenever they are separating along
+    // *that* axis while still driving into each other along the other — a
+    // corner clip. On screen a corner clip is two photographs plainly running
+    // into each other. Measured: thirteen percent of all overlaps produced no
+    // number, and that is exactly what the owner kept reporting as the boxer
+    // not hitting.
+    //
+    // `closing` still governs the physics, where it is right: two figures
+    // already flying apart must not be thrown back together.
+    if (contact !== null) {
+      const landed: { side: FighterState; dealt: number; crit: boolean }[] = [];
+      for (const side of [sides.a, sides.b]) {
+        if (side.attackCooldown > 0) continue;
+        // A fighter with no melee at all lands nothing by bumping into someone,
+        // and must not push a "-0" onto the screen for it. Glasses Guy touches
+        // nobody: every point he takes off the other man is thrown.
+        if ((side.base.meleeShare ?? 1) <= 0) continue;
+        // `OVERCLOCK` makes every blow inside its window a crit; otherwise the
+        // fighter's own chance decides. Rolled either way so the two paths
+        // consume the same number of draws and a seed stays a seed.
+        const rolled = side.rng.chance(side.base.critChance);
+        const isCrit = rolled || tick < side.critWindowUntilTick;
+        const raw =
+          effectiveAttack(side) *
+          // What this fighter is worth in a collision — see `meleeShare`. The
+          // boxer's is the heaviest number on screen; the man who throws his
+          // glasses barely registers when you bump into him.
+          (side.base.meleeShare ?? 1) *
+          (isCrit ? side.base.critMult : 1) *
+          comebackMultiplier(side, rubberBand);
+        landed.push({ side, dealt: rollDamage(side.rng, raw), crit: isCrit });
+      }
+      // Rolled for both before either is applied, so a fighter who dies to this
+      // exchange still lands the blow they were throwing. A mutual knockout is
+      // a real outcome of running into each other and reads as one.
+      for (const { side, dealt, crit } of landed) {
+        const enemy = opponentOf(side);
+        const done = damageFighter(enemy, dealt);
+        events.push({
+          frame,
+          type: crit ? "crit" : "hit",
+          actorId: side.base.id,
+          targetId: enemy.base.id,
+          value: done,
+          atX: contact.x,
+          atY: contact.y,
+        });
+        // **RIPOSTE returns what it was just given.**
+        //
+        // Reactive, so it lives here rather than in the cast: the man who
+        // parried takes the blow and the same points come off whoever threw it,
+        // in the same frame, at the same place. Two numbers on one meeting is
+        // the read.
+        //
+        // It does not chain — the returned points are dealt directly rather
+        // than through this loop — because two fighters both holding a riposte
+        // would otherwise volley until one of them died on a single contact.
+        //
+        // **It answers with his own strike, not with a copy of yours.**
+        //
+        // A true mirror scales with the *attacker's* `meleeShare`, and that
+        // makes the ability a hard counter to one style and dead weight against
+        // another. Measured twice on the fourteen-fighter field, and capping the
+        // mirror did not fix it — the fencer still took 99% off Rapper Guy and
+        // Fisherman Guy while losing 90% to Vacuum Guy and 88% to Glasses Guy,
+        // because `min(theirs, mine)` still rises with theirs.
+        //
+        // Answering with a fixed amount — what he would have hit for himself —
+        // leaves the ability's worth depending only on how often he is hit,
+        // which is contact frequency, which is roughly the same in every pair.
+        // The read is unchanged: the blow comes straight back, same frame, same
+        // place. `fieldScale` is one number per fighter and can never reach a
+        // single pair, so this had to be fixed in the mechanic.
+        answerRiposte(enemy, side, done, contact.x, contact.y);
+        // **One blow per meeting, and every meeting gets one.**
+        //
+        // This used to refill from `attackSpeed`, and once Boxer Guy's speed
+        // dropped to 0.5 to buy him a heavy punch, his cooldown became one swing
+        // per 5.7 seconds — so he ran into the other man and *nothing happened*.
+        // Measured on a shipped video: 4 collisions in 27 seconds, 2 of which
+        // produced a number, and the fewer he landed the harder each was made,
+        // which made the hole worse every pass.
+        //
+        // A collision is a physical event and the reference damages both
+        // fighters every time they meet. So the gate is a short fixed window,
+        // the same for everyone, doing the one job it is actually for: stopping
+        // a single overlap from counting several times while the two are still
+        // sliding through each other. How hard a fighter hits is `meleeShare`'s
+        // business; how often is the bouncing's.
+        side.attackCooldown = CONTACT_RECOVERY_TICKS;
+      }
+    }
+    for (const side of [sides.a, sides.b]) {
+      if (side.attackCooldown > 0) side.attackCooldown -= 1;
+    }
+
+    // Signature pulses that come due this tick. Reported at the victim's own
+    // position rather than the caster's: the effect fills the arena, so what a
+    // viewer needs marked is where it bit.
+    for (let i = pulses.length - 1; i >= 0; i -= 1) {
+      const pulse = pulses[i]!;
+      if (pulse.atTick !== tick) continue;
+      pulses.splice(i, 1);
+      const caster = sides[pulse.side];
+      const victim = opponentOf(caster);
+      // **A thrown thing does not stop in mid-air because the thrower died.**
+      // This used to skip the pulse when either side was down, and the renderer
+      // knew nothing about that: it went on flying the spectacles across the
+      // arena and landing them on the other man's face with no number and no
+      // flash. Caught on a frame the owner sent — glasses drawn over the boxer,
+      // his health untouched, the caster on 0. From outside it is exactly the
+      // "it does not register" defect, and it is the same defect: something
+      // visibly arrives and nothing happens.
+      //
+      // Only the victim already being dead stops it now, because there is
+      // nothing left to take it.
+      if (victim.hp <= 0) continue;
+      const isCrit = caster.rng.chance(caster.base.critChance);
+      const raw =
+        effectiveAttack(caster) *
+        SIGNATURE_PULSE_SHARE *
+        pulse.share *
+        (isCrit ? caster.base.critMult : 1) *
+        comebackMultiplier(caster, rubberBand);
+      const dealt = damageFighter(victim, rollDamage(caster.rng, raw));
+      const at = movement[victim.side];
+      // `SIPHON`: the same points arrive on the caster, capped by the room he
+      // has for them. Pushed as its own `heal` event so the renderer draws it
+      // in the buff colour — one frame, two numbers, two directions.
+      if (pulse.siphon === true) {
+        const healed = Math.min(dealt, caster.base.maxHp - caster.hp);
+        if (healed > 0) {
+          caster.hp += healed;
+          events.push({
+            frame,
+            type: "heal",
+            actorId: caster.base.id,
+            targetId: caster.base.id,
+            value: healed,
+          });
+        }
+      }
+      // The knock happens when the punch lands, not when it was thrown. Sending
+      // the victim flying before the blow arrives is exactly the incoherence
+      // this whole pass is about.
+      if (pulse.knockback) {
+        const from = movement[caster.side];
+        const away = Math.atan2(at.y - from.y, at.x - from.x);
+        setHeading(at, away);
+        // **And the man who threw it goes the other way.**
+        //
+        // Equal and opposite, and it is the fix for a balance leak rather than
+        // a flourish: a charge that homes leaves the two standing on top of each
+        // other, and they keep colliding for as long as it takes them to drift
+        // apart. Those extra collisions pay both fighters, so owning a dash was
+        // quietly worth a run of free contact damage — against Glasses Guy, who
+        // cannot use a collision, it was worth it to one side only. Bouncing the
+        // puncher off his own punch separates the pair on the frame it lands.
+        setHeading(from, away + Math.PI);
+      }
+      answerRiposte(victim, caster, dealt, at.x, at.y);
+      events.push({
+        frame,
+        type: isCrit ? "crit" : "hit",
+        actorId: caster.base.id,
+        targetId: victim.base.id,
+        value: dealt,
+        atX: at.x,
+        atY: at.y,
+        // Which ability took these points off. A pulse and a collision both
+        // carry a position, so without this there is nothing to tell a thrown
+        // pair of glasses from two men running into each other — and the split
+        // between the two is the whole of a fighter's style.
+        ability: pulse.ability,
+      });
+    }
+
+    // Minions attack the enemy fighter and age.
+    for (const side of [sides.a, sides.b]) {
+      const enemy = opponentOf(side);
+      for (const minion of side.minions) {
+        if (minion.hp <= 0) continue;
+        minion.attackCooldown -= 1;
+        if (minion.attackCooldown <= 0) {
+          const dealt = damageFighter(enemy, rollDamage(side.rng, minion.attack));
+          events.push({
+            frame,
+            type: "minion_hit",
+            actorId: minion.id,
+            targetId: enemy.base.id,
+            value: dealt,
+          });
+          minion.attackCooldown += ticksPerAttack(minion.attackSpeed);
+        }
+        minion.ticksLeft -= 1;
+      }
+    }
+
+    applyPendingDamage();
+
+    if (waveThresholds.length > 0) {
+      checkComebackWaves(sides.a);
+      checkComebackWaves(sides.b);
+    }
+
+    // Minions that ran out of HP or lifetime leave the field.
+    for (const side of [sides.a, sides.b]) {
+      const survivors: MinionState[] = [];
+      for (const minion of side.minions) {
+        if (minion.hp > 0 && minion.ticksLeft > 0) {
+          survivors.push(minion);
+          continue;
+        }
+        events.push({
+          frame,
+          type: "minion_death",
+          actorId: minion.id,
+          targetId: minion.id,
+          value: 0,
+        });
+      }
+      side.minions = survivors;
+    }
+
+    // Deaths. Simultaneous KO counts as a draw.
+    const aDead = sides.a.hp <= 0;
+    const bDead = sides.b.hp <= 0;
+    if (aDead || bDead) {
+      winner = aDead && bDead ? "draw" : aDead ? "b" : "a";
+      if (aDead) {
+        events.push({
+          frame,
+          type: "death",
+          actorId: sides.a.base.id,
+          targetId: sides.a.base.id,
+          value: 0,
+        });
+      }
+      if (bDead) {
+        events.push({
+          frame,
+          type: "death",
+          actorId: sides.b.base.id,
+          targetId: sides.b.base.id,
+          value: 0,
+        });
+      }
+    }
+  };
+
+  const snapshotMinions = (): MinionSnapshot[] => {
+    const out: MinionSnapshot[] = [];
+    for (const side of [sides.a, sides.b]) {
+      for (const m of side.minions) {
+        out.push({ id: m.id, ownerId: m.ownerId, hp: m.hp, maxHp: m.maxHp });
+      }
+    }
+    return out;
+  };
+
+  const takeSnapshot = (): void => {
+    snapshots.push({
+      frame,
+      a: {
+        id: sides.a.base.id,
+        x: movement.a.x,
+        y: movement.a.y,
+        hp: Math.max(0, sides.a.hp),
+        maxHp: sides.a.base.maxHp,
+        attack: effectiveAttack(sides.a),
+        alive: sides.a.hp > 0,
+        buffed: sides.a.buffs.length > 0,
+      },
+      b: {
+        id: sides.b.base.id,
+        x: movement.b.x,
+        y: movement.b.y,
+        hp: Math.max(0, sides.b.hp),
+        maxHp: sides.b.base.maxHp,
+        attack: effectiveAttack(sides.b),
+        alive: sides.b.hp > 0,
+        buffed: sides.b.buffs.length > 0,
+      },
+      minions: snapshotMinions(),
+      ...(pickup === null ? {} : { pickup: { ...pickup } }),
+    });
+  };
+
+  takeSnapshot();
+
+  const frameCap = Math.min(MAX_FRAMES, rules.maxFrames ?? MAX_FRAMES);
+  for (frame = 1; frame < frameCap; frame += 1) {
+    stepPickups();
+    for (let i = 0; i < TICKS_PER_FRAME && winner === null; i += 1) step();
+    takeSnapshot();
+    if (winner !== null) break;
+  }
+
+  const timedOut = winner === null;
+  const decideOnTimeout = (): Winner => {
+    // Timeout: whoever kept the larger share of their health bar takes it.
+    const aShare = sides.a.hp / sides.a.base.maxHp;
+    const bShare = sides.b.hp / sides.b.base.maxHp;
+    return aShare === bShare ? "draw" : aShare > bShare ? "a" : "b";
+  };
+  const finalWinner: Winner = winner ?? decideOnTimeout();
+
+  const lastFrame = snapshots[snapshots.length - 1]!.frame;
+  const winnerId =
+    finalWinner === "draw" ? null : finalWinner === "a" ? fighters.a.id : fighters.b.id;
+  if (winnerId !== null) {
+    events.push({
+      frame: lastFrame,
+      type: "victory",
+      actorId: winnerId,
+      targetId: winnerId,
+      value: 0,
+    });
+  }
+
+  return {
+    seed,
+    fighters,
+    snapshots,
+    events,
+    winner: finalWinner,
+    winnerId,
+    durationFrames: snapshots.length,
+    timedOut,
+  };
+}
