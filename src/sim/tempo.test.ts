@@ -28,6 +28,19 @@ import { FPS } from "./types.js";
 
 const roster = loadFighters();
 
+/**
+ * The pair a test fights when it needs *a* real matchup rather than a
+ * particular one: the head of the shipped matchup list, first fighter on each
+ * side. While the owner's private cast is in the roster that is Compass Guy
+ * against Bodyguard Guy, exactly as before; in the sellable bundle, where the
+ * private cast is an empty list, it is whoever leads each side there. These
+ * tests used to name the two outright, and in the bundle twenty of them failed
+ * to find a fighter.
+ */
+const LEAD = gauntletMatchups(roster)[0]!;
+const A = LEAD.challenger.id;
+const B = LEAD.members[0]!.id;
+
 function run(challenger: string, team: string[]) {
   const config = buildGauntlet(
     getFighter(challenger, roster),
@@ -38,7 +51,7 @@ function run(challenger: string, team: string[]) {
 
 describe("tempo", () => {
   it("never goes longer without a hit than the reference does", () => {
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const report = tempoReport(result);
     expect(
       report.longestGap,
@@ -49,7 +62,7 @@ describe("tempo", () => {
   it("keeps every round change under the limit too", () => {
     // This is where the dead air lived: the death animation's hold plus the
     // newcomer's first cooldown used to add up to 2.00s.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const report = tempoReport(result);
     expect(report.junctions).toHaveLength(result.rounds.length - 1);
     for (const junction of report.junctions) {
@@ -94,7 +107,7 @@ describe("tempo", () => {
   }, 180_000);
 
   it("counts the opening, so a slow start cannot hide in it", () => {
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const firstBeat = result.events.find((e) => e.type === "hit" || e.type === "crit");
     expect(firstBeat).toBeDefined();
     expect(firstBeat!.frame).toBeLessThanOrEqual(MAX_QUIET_FRAMES);
@@ -102,7 +115,7 @@ describe("tempo", () => {
 
   it("reports something for every worker", () => {
     for (const worker of byFaction("left", roster)) {
-      const result = run(worker.id, ["bodyguard"]);
+      const result = run(worker.id, [B]);
       const report = tempoReport(result);
       expect(report.durationFrames).toBeGreaterThan(0);
       expect(report.quietShare).toBeGreaterThanOrEqual(0);
@@ -133,7 +146,7 @@ describe("movement", () => {
     // The whole reason positions exist. A still fighter is invisible to every
     // other gate: the layout is correct, the events keep landing, the picture
     // just does not move.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     // The hold after a death repeats one snapshot on purpose, so the collapse
     // has frames to play in. Nobody is standing there: they are falling over.
     // Frames where stillness is the intent, not a bug: NOBODY MOVES stops the
@@ -186,14 +199,14 @@ describe("movement", () => {
   it("keeps every fighter's box inside the arena", () => {
     // The simulation bounces a box of exactly the size the renderer draws, so
     // staying inside here is what keeps a figure off the wall on screen.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const roster = loadFighters();
     const half = (id: string): { w: number; h: number } => {
       const f = getFighter(id, roster);
       return { w: FIGHTER_HALF_HEIGHT * f.aspect, h: FIGHTER_HALF_HEIGHT };
     };
-    const a = half("compass");
-    const b = half("bodyguard");
+    const a = half(A);
+    const b = half(B);
     for (const snap of result.snapshots) {
       expect(snap.challenger.x).toBeGreaterThanOrEqual(a.w - 1e-9);
       expect(snap.challenger.x).toBeLessThanOrEqual(1 - a.w + 1e-9);
@@ -210,7 +223,7 @@ describe("movement", () => {
     // the arena, because damage came off a clock and had nothing to do with
     // where anyone was. Every hit now carries the point it landed on, and the
     // renderer marks it there.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const blows = result.events.filter((e) => e.type === "hit" || e.type === "crit");
     expect(blows.length, "nobody hit anybody").toBeGreaterThan(8);
     const placeless = blows.filter((e) => e.atX === undefined || e.atY === undefined);
@@ -231,7 +244,7 @@ describe("movement", () => {
     // A signature took over the whole frame for 1.4s and moved nobody's health.
     // The reference's one signature deals essentially all of the damage a viewer
     // watches arrive, so ours has to land something.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const casts = result.events.filter((e) => e.type === "signature");
     expect(casts.length, "nobody cast anything").toBeGreaterThan(0);
     for (const cast of casts) {
@@ -259,14 +272,14 @@ describe("movement", () => {
     // *outlines* overlapping. A stray arm crossing the other man's jacket is
     // not that — it is what the reference does — and an outline says so, where a
     // box could only be told by shrinking it and hoping.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const roster = loadFighters();
     const state = (id: string) => {
       const f = getFighter(id, roster);
       return initialMovement("a", f.aspect, mulberry32(1), f.silhouette);
     };
-    const a = state("compass");
-    const b = state("bodyguard");
+    const a = state(A);
+    const b = state(B);
 
     const worst: string[] = [];
     for (const snap of result.snapshots) {
@@ -296,7 +309,7 @@ describe("movement", () => {
   it("actually collides — the pair meet often enough for it to matter", () => {
     // A collision rule that never fires is not a fixed bug, it is a dead branch.
     // Two fighters crossing a shared arena for thirty seconds have to meet.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     let near = 0;
     for (const snap of result.snapshots) {
       const dx = Math.abs(snap.challenger.x - snap.opponent.x);
@@ -310,7 +323,7 @@ describe("movement", () => {
     // The thing the previous model got wrong. A fighter that drifts near one
     // spot passes a "does it move" check and is still not what the reference
     // does: there, a fighter crosses the whole arena and comes back.
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const xs = result.snapshots.map((s) => s.challenger.x);
     expect(Math.max(...xs) - Math.min(...xs), "never crosses the arena").toBeGreaterThan(0.45);
 
@@ -367,8 +380,8 @@ describe("movement", () => {
   });
 
   it("replays identically — movement is on the same seeded streams", () => {
-    const a = run("compass", ["bodyguard"]);
-    const b = run("compass", ["bodyguard"]);
+    const a = run(A, [B]);
+    const b = run(A, [B]);
     expect(a.snapshots.map((s) => [s.challenger.x, s.opponent.y])).toEqual(
       b.snapshots.map((s) => [s.challenger.x, s.opponent.y]),
     );

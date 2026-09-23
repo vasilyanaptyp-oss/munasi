@@ -1,39 +1,41 @@
-# Исходные фотографии
+# Source photographs
 
-Сюда кладутся фото на белом фоне, дальше `pnpm cutout`.
+Photographs on a white background go here; `pnpm cutout` turns each one into a
+cut-out in `assets/fighters/` and reads its outline.
 
-## Порог белого на файл: `<имя>.cut.json`
+## Per-file white threshold: `<name>.cut.json`
 
-Глобально правильного порога **не существует**, и это замер, а не осторожность.
+There is no single threshold that suits every photograph. The background is
+removed by flooding in from the edge of the picture over anything whiter than
+the threshold (236 by default), and light clothing at the edge of a figure can
+be whiter than the backdrop's shadows:
 
-- У баристы белая футболка образует **внешний контур** фигуры. При стандартном
-  пороге 236 заливка от края кадра вошла прямо через ткань и выгрызла плечо;
-  снимок фона даёт 253.9 при sd 0.5, футболка 231-235 с бликами выше 236.
-  Нужен `{"white": 253}`.
-- У мага белая рубашка **ярче**: на 248 он теряет 2.3% себя. Тот же порог,
-  который спасает баристу, испортил бы его — рубашка там заперта внутри фрака,
-  и её спасает не порог, а проверка «бумага против ткани» по текстуре.
-- Поднять порог глобально нельзя ещё и потому, что это сдвигает рамки всех
-  четырёх отгружаемых бойцов на 1-7px: это перекалибровка и перегенерация
-  всей партии.
+- **Barista Guy**'s white t-shirt forms the outside of his figure. At 236 the
+  fill ran straight through it and took his shoulder, so his file says
+  `{"white": 253}`.
+- **Fencer Guy**'s white jacket needed the same treatment: `{"white": 248}`.
 
-Формат: `{"white": 253}`, при желании `feather` (по умолчанию `white - 28`) и
-`maxWidth`.
+Raising the threshold for everyone would not work either: Magician Guy's shirt is
+brighter still, and at 248 he loses 2.3% of himself. Set it per file, only where
+it is needed.
 
-## Что печатает `pnpm cutout`
+Format: `{"white": 253}`, optionally `"feather"` (default `white - 28`) and
+`"maxWidth"`.
 
-Одна строка на файл: доля силуэта от исходника, доля дыр, ширина к росту.
+## What `pnpm cutout` prints
 
-- **силуэт** — у отгружаемых 36-61%. Выше 85% фон не снялся, ниже 12% съело
-  фигуру; на этих двух `cutout` ругается.
-- **дыры** — прозрачное, замкнутое фигурой. Это **данные, а не вердикт**: у
-  компаса честные 2.3% — треугольник между поднятой рукой и головой. Судить
-  человеку.
-- **ширина/рост** — у референса 0.57-0.61, у нас 0.53-0.84.
+One line per file: how much of the picture the figure takes up, how much of it
+is enclosed holes, and its width against height.
+
+- **figure share** — above 85% the background did not come off, below 12% the
+  fill ate the figure; `cutout` warns on both.
+- **holes** — transparent areas enclosed by the figure. Data, not a verdict: the
+  gap between a raised arm and the head is a real hole.
+- **width/height** — around 0.57-0.75 reads best on screen.
 
 ## `pnpm cutout --probe`
 
-Печатает, сколько ещё выживает при пороге 253. Помогает поймать съеденную
-светлую ткань (у баристы +7.3%), но **у числа две причины**: так же растёт, если
-подложка сама темнее 253 и перестаёт сниматься — у очкарика «возвращается» 33%,
-и всё это фон шахматкой. Смотреть глазами, не верить числу.
+Prints how much more of each figure would survive at a threshold of 253. Useful
+for spotting light clothing that was eaten — but the number also rises when the
+backdrop itself is darker than 253, so look at the result rather than trusting
+the number.

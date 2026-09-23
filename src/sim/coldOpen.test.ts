@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getFighter, loadFighters } from "../content/index.js";
-import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
+import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { coldOpenPlan } from "../render/framePlan.js";
 import { findBestGauntlet } from "./gauntlet.js";
 import {
@@ -121,8 +121,11 @@ describe("findGauntletColdOpen", () => {
     return findBestGauntlet(config, { count: 120, rules: GAUNTLET_RULES }).result;
   }
 
-  const cases: [string, string[]][] = [
-    ["compass", ["bodyguard"]],  ];
+  // The head of the matchup list — see `tempo.test.ts` for why not a named pair.
+  const lead = gauntletMatchups(roster)[0]!;
+  const A = lead.challenger.id;
+  const B = lead.members[0]!.id;
+  const cases: [string, string[]][] = [[A, [B]]];
 
   it("takes its window from the last round, where the run is decided", () => {
     for (const [challenger, team] of cases) {
@@ -162,7 +165,7 @@ describe("findGauntletColdOpen", () => {
   }, 60_000);
 
   it("is exactly 30 frames, and the plan puts them first", () => {
-    const result = run("compass", ["bodyguard"]);
+    const result = run(A, [B]);
     const window = findGauntletColdOpen(result)!;
     expect(window.endFrame - window.startFrame).toBe(COLD_OPEN_FRAMES);
     const plan = coldOpenPlan(result, window, 0);

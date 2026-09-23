@@ -1,36 +1,84 @@
-MIT License
+munasi — Commercial Software Licence
 
-Copyright (c) 2026 vasilyanaptyp
+Copyright (c) 2026 vasilyanaptyp. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This is a licence, not a sale. By installing, copying or using the software
+("the Software") you agree to these terms. If you do not agree, do not use it.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Grant
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   On purchase you receive a non-exclusive, non-transferable, perpetual licence
+   for ONE person or ONE business to install and use the Software, on any number
+   of devices that person or business controls, to make videos.
 
----
+   You may modify the Software for your own use.
 
-## This licence covers the code. It does not cover the pictures.
+2. The videos are yours
 
-`assets/fighters/` and `assets/props/` hold photographs licensed to this
-project's owner, and photographs of people are not the author's to sublicense.
-They are excluded from the published package (see `files` in `package.json`)
-and you must supply your own — see `docs/ADDING-A-FIGHTER.md`.
+   Videos you make with the Software belong to you. You may publish, monetise,
+   sell and license them, with no attribution and no further payment.
 
-The bundled typeface in `assets/fonts/` is DejaVu Sans, under the Bitstream
-Vera and Arev fonts licences, which permit redistribution. It ships with the
-package on purpose: text metrics are part of the rendered bytes, so the font
-travelling with the code is what makes the same seed produce the same video on
-a different machine.
+3. What you may not do
+
+   You may not, in whole or in substantial part, and whether modified or not:
+
+   a. give, sell, sublicense, rent or otherwise distribute the Software, or its
+      source code, to anyone else;
+   b. publish the source code, including in a public code repository;
+   c. offer the Software, or a service built on it, for others to run or to
+      generate videos with (for example as a website, bot or API);
+   d. remove or alter this licence or any copyright notice.
+
+4. Included artwork
+
+   The Software comes with ten character images and two prop images. They are
+   licensed to you only for use inside videos made with the Software. You may
+   not extract them and distribute them as images, character packs or any other
+   stand-alone asset.
+
+   The ten characters were generated with an AI image model and depict no real
+   person; any resemblance to a real person is coincidental.
+
+   Nothing else the author uses is licensed to you. In particular, any
+   photograph of a real person that is not delivered to you with the Software is
+   not part of it.
+
+5. Your own material
+
+   Photographs and other material you add are your responsibility. A licence
+   that lets you use a photograph does not always let you show the person in it
+   losing a fight: stock licences commonly forbid unflattering use of a model,
+   and a person's right to their own image is separate from copyright. Obtain
+   the permissions you need.
+
+6. Third-party components
+
+   The bundled DejaVu Sans typeface is distributed under its own licence, in
+   assets/fonts/LICENSE-DejaVu.txt. Packages installed by `pnpm install` are
+   distributed under their own licences. This licence does not change theirs.
+
+7. No guarantee of platform results
+
+   The Software makes video files. Whether a platform accepts, recommends or
+   monetises them is decided by that platform under its own rules, and the
+   author makes no promise about reach, views or revenue.
+
+8. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+9. Limitation of liability
+
+   TO THE EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+   ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS
+   USE. WHERE LIABILITY CANNOT BE EXCLUDED, IT IS LIMITED TO THE PRICE YOU PAID
+   FOR THE LICENCE.
+
+10. Termination
+
+   This licence ends automatically if you breach it. On termination you must
+   stop using the Software and delete your copies. Videos you made before
+   termination remain yours.

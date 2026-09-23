@@ -1,0 +1,191 @@
+import type { FighterSpec } from "./roster.js";
+
+/**
+ * **The owner's private cast: four stock photographs of real people.**
+ *
+ * They are licensed to this project's owner, not to anyone who buys the
+ * generator, so they live in a file of their own and the sellable bundle
+ * (`pnpm bundle`) replaces it with an empty list. Everything that has to work
+ * in the bundle — the simulation, the balance gates, the tests — therefore has
+ * to work without them, and nothing outside this file may name them.
+ *
+ * They go first in `ROSTER`, which keeps the order the one it has always been:
+ * `fighters.json`, the matchup list and every seed already recorded in a
+ * manifest depend on it.
+ */
+export const PRIVATE_ROSTER: FighterSpec[] = [
+  {
+    // Holding a compass and still lost. He is the one who never travels in a
+    // straight line for long — see `signature` in the render layer — and his
+    // ability points everyone else somewhere they did not want to go.
+    id: "compass",
+    faction: "left",
+    name: "Compass Guy",
+    spriteId: "compass-guy",
+    maxHp: 1000,
+    attackSpeed: 1.15,
+    critChance: 0.20,
+    critMult: 1.45,
+    abilities: [{ type: "magnetic_north", cooldown: 5, power: 0 }],
+    // Solved, not guessed. The calibrator evens each fighter against a reference
+    // dummy, which does not make a *pair* even: without this Compass Guy took
+    // 66% of the fights. Bisected through the real calibration — change the
+    // scale, re-run the whole calibrator, play 300 gauntlets, read the winrate —
+    // until the pair sits on 50. Lands at 50.0% over 400 gauntlets.
+    //
+    // Re-bisected on every change to how damage happens or how often it can,
+    // because every one of them moved the pair: `attackRate` 3 -> 0.35 (26/74),
+    // pickups off (43/57), damage landing on contact instead of on a clock
+    // (39/61), and the tempo pass — slower fighters, one pulse per cast, shorter
+    // cooldowns, less HP — which moved it again.
+    //
+    // **The calibrator plays matches, so it moves too.** Anything touching
+    // movement or combat shifts the calibration *and* the pair, and the bracket
+    // has to be re-found from scratch rather than nudged: twice now the search
+    // has converged onto its own lower bound because the answer had walked out
+    // from under it.
+    //
+    // **And bisection stops working past two fighters.** With four, each one's
+    // record depends on the other three and moving any scale moves all of them,
+    // so there is no single number to bisect. All four are solved together as a
+    // fixed point instead — calibrate the roster, play every ordered pairing,
+    // nudge each scale toward an even record, repeat. Three rounds from the old
+    // pair values brought the spread from 10.1pp to 1.4pp.
+    fieldScale: 1.0416,
+  },
+  {
+    // Arms crossed, sunglasses on, does not move. Everything else bounces off
+    // him; his ability stops the arena dead for a beat.
+    id: "bodyguard",
+    faction: "right",
+    name: "Bodyguard Guy",
+    spriteId: "bodyguard-guy",
+    maxHp: 1000,
+    attackSpeed: 0.85,
+    critChance: 0.16,
+    critMult: 1.55,
+    // A bouncer throws you out. See `thrown_out` in `simulate.ts` for why the
+    // freeze-and-tape he had before was a policeman's job, not his.
+    abilities: [{ type: "thrown_out", cooldown: 5, power: 0, hitShare: 1.5 }],
+    fieldScale: 0.9871,
+  },
+
+  /*
+   * **Only one of these throws anything.** A boxer fights at range zero: he
+   * closes the distance and hits you. `haymaker` dashes him at the other man
+   * and lands the punch when he arrives — it used to send a glove flying across
+   * the arena, which is a different character. The thrown weapon belongs to
+   * Glasses Guy, and it is his actual spectacles: the image is in
+   * `assets/props/glasses.png` and the effect draws that, not a sketch of one.
+   */
+  {
+    // Gloves up, scowling. The one who actually throws a punch.
+    id: "boxer",
+    faction: "left",
+    name: "Boxer Guy",
+    spriteId: "boxer-guy",
+    maxHp: 1000,
+    // **Few, heavy punches.** He swung as often as everyone else and so his
+    // numbers came out the same size as everyone else's — 36-45 against a man
+    // who does not fight back with his hands at all. A boxer's blow has to be
+    // the biggest number in the video, and the only way to buy that is to land
+    // fewer of them: the total a fighter puts out over a match is fixed by the
+    // other one's health.
+    //
+    // Note that `attackSpeed` no longer gates contact — a collision is a
+    // physical event and every one of them lands. It survives because the
+    // calibrator reads it and because it still paces minions and buffs.
+    attackSpeed: 0.5,
+    critChance: 0.22,
+    critMult: 1.50,
+    /**
+     * **He is the one with the heavy hands.** Running into Boxer Guy costs more
+     * than running into anyone else — that is what a boxer is, and it was not
+     * true here: every fighter dealt the same contact damage and the boxer was
+     * distinguishable only by an effect nobody could read.
+     *
+     * It was 3.0 and had to come down. At that weight nine tenths of everything
+     * he did arrived as contact, and contact is the one thing Glasses Guy is
+     * immune to — so the boxer took 92% of that pairing and 20-39% of the two
+     * where the other man could hit back with his hands. Style has to survive
+     * meeting a man with a different style.
+     */
+    meleeShare: 4.0,
+    /**
+     * **The charge is his signature and the charge is where the big number is.**
+     *
+     * He crosses the arena and arrives, and the punch that lands there is the
+     * single largest number in the video — around 120, against an ordinary
+     * contact of 50-60. `hitShare` used to be 0.55 on the theory that his weight
+     * belonged in contact instead, which put the biggest swing in the fight at
+     * 24: smaller than a bump into a man walking past.
+     *
+     * The charge does not also collect a contact number on arrival — see the
+     * note on `charging` in `simulate.ts`. Homing at the other man manufactures
+     * a collision every cast, and collisions pay both fighters, so a dash that
+     * paid twice was quietly rewriting the whole roster's pacing around whoever
+     * owned one.
+     */
+    abilities: [{ type: "haymaker", cooldown: 6, power: 0, hitShare: 3.2 }],
+    fieldScale: 0.9518,
+  },
+  {
+    // Reads the room, then throws his glasses at it.
+    id: "glasses",
+    faction: "right",
+    name: "Glasses Guy",
+    spriteId: "glasses-guy",
+    maxHp: 1000,
+    attackSpeed: 0.95,
+    critChance: 0.18,
+    critMult: 1.50,
+    /**
+     * **A bump, not a punch.** He does not fight with his hands: nearly
+     * everything he takes off the other man is thrown, and this is a fifth of
+     * what an ordinary fighter's contact is worth — around 20 on screen against
+     * the boxer's 85.
+     *
+     * It was a flat zero, and zero turned out to be unplayable. A collision is
+     * a *shared* event: it damages both. A fighter who converts his half to
+     * nothing is handing his opponent free damage on every meeting, and the
+     * more of an opponent's output arrives as contact the bigger the gift — so
+     * Boxer Guy, who is all contact, took 65-69% of this pairing however the
+     * knobs were turned, while losing the two he could not do that to. That is
+     * not "stronger", it is rock-paper-scissors, and `fieldScale` is one number
+     * per fighter so it cannot reach a single pair.
+     *
+     * Measured: at 0.55 the same six pairings sat inside 38-62%, spread 1.4pp,
+     * and no pair was outside the band for the first time since the outline
+     * collision went in.
+     *
+     * **Then the white keyline went, and 0.55 stopped being enough.** The
+     * keyline was drawn pixels, so the bounce box carried a margin for it, and
+     * taking the margin away shrank every fighter's box by 0.012 in each
+     * direction — around a sixth of the area a pair sweeps past each other.
+     * Contacts got rarer, and rarer contacts are worth *more* to the fighter
+     * whose damage is mostly contact: boxer vs glasses went to 69/31. Swept it
+     * with the calibrator in the loop, at 500 matches a pair: 0.55 -> 69%,
+     * 0.85 -> 66%, 1.15 -> 66%, **1.5 -> 62%**, 1.9 -> 56% but Bodyguard Guy
+     * drops to 38% against him. 1.5 is the one that puts all six pairs inside
+     * the band at once — 42-62%.
+     *
+     * He is still the man who does not punch: 1.5 against Boxer Guy's 4.0.
+     */
+    meleeShare: 1.5,
+    /**
+     * Two abilities, which is the whole character:
+     *
+     * - `glasses_throw` is his ordinary attack — **one pair, thrown hard**, four
+     *   times a fight, which is what the five-second cooldown buys and what the
+     *   owner asked for. `hitShare 2.2` is what makes it the heavy single number
+     *   rather than a tap: it lands for 95-120, the reference's own band;
+     * - `four_eyes` is the ult — **three or four pairs at once**, rolled per
+     *   cast and carried on the event so exactly as many fly as land.
+     */
+    abilities: [
+      { type: "glasses_throw", cooldown: 5, power: 0, hitShare: 2.2 },
+      { type: "four_eyes", cooldown: 11, power: 0, pulses: [3, 4], hitShare: 1.0 },
+    ],
+    fieldScale: 1.0615,
+  },
+];

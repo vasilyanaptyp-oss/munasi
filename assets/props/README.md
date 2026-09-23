@@ -1,42 +1,25 @@
-# Пропы
+# Props
 
-Фотографии, которые кладут на экран способности. Не рисунки: правило формата —
-только фотографии, см. CLAUDE.md, «Способности не рисуются».
+Photographs an ability puts on screen — an object flying across the arena, or
+held at its owner's side. Photographs only: this format does not draw.
 
-Как добавить: положить фото на белом фоне в `source/` под именем из
-`ABILITY_PROPS` (`src/render/signatures.ts`), выполнить `pnpm cutout`. Проп
-режется тем же кодом, что и бойцы, но на более свободном пороге белого (200
-против 236) — под предметом на товарном снимке лежит мягкая серая тень, и на
-чёрном квадрате арены она видна. Ширина обрезается до 512px: проп рисуется
-примерно на 250px, остальное — байты, которые никто не сэмплирует.
+To add one, put a photograph on white in `source/` under the name the ability
+expects (`ABILITY_PROPS` in `src/render/signatures.ts`) and run `pnpm cutout`.
+Props are cut at a looser white threshold than fighters (200 against 236),
+because a product shot usually has a soft grey shadow under the object and it
+would show on the arena. They are trimmed to 512 px wide; a prop is drawn at
+about 250.
 
-## Происхождение и лицензия
+## Where each one comes from
 
-Каждый файл здесь — с указанием источника и лицензии. Берём только то, что явно
-разрешено к коммерческому использованию.
+Every file here has a recorded source and licence, and only material licensed
+for commercial use is used.
 
-| файл | источник | лицензия |
+| file | source | licence |
 | --- | --- | --- |
-| `glasses.png` | фотография владельца проекта | — |
 | `compass.png` | [Wikimedia Commons, `File:Plastic-compass.jpg`](https://commons.wikimedia.org/wiki/File:Plastic-compass.jpg) | Public domain |
-| `glove.png` | обрезка 186x196 из `assets/fighters/source/boxer-guy.png` | та же, что у персонажа |
+| `glasses.png` | photograph by the author | licensed with the software — see `LICENSE`, section 4 |
 
-## Перчатка: почему из своей же фотографии
-
-Искал в сети. Всё бесплатное, что нашлось по боксёрской перчатке, — либо
-рекламный баннер с логотипом бренда (набор STING на Flickr, помечен CC0, но
-логотип на каждом кадре), либо векторная иллюстрация (rawpixel, Noun Project).
-Годные фото на Wikimedia — `Red boxing glove`, `Lace Up Boxing Gloves`,
-`Boxing gloves Bail 10-OZ` — все CC BY-SA: коммерческое использование
-разрешено, но share-alike на встроенном в ролик кадре юридически мутный, и
-вешать это на монетизацию не стоит.
-
-При этом перчатка уже лежала в проекте: она на фотографии самого боксёра.
-Лицензия та же, что у персонажа, скачивать нечего, и предмет совпадает с его
-собственным, потому что это он и есть.
-
-## Чего ещё нет
-
-`grab.png` (бросок телохранителя) — и он больше не нужен. Способность читается
-тем, что делает с фотографией: брошенный кувыркается через арену, бросающий
-наклоняется вслед, удар отмечается белой вспышкой и жёлто-зелёным числом.
+The included cast uses neither: `compass` belongs to `magnetic_north` and
+`glasses` to `glasses_throw` and `four_eyes`. They are here for fighters you add
+with those abilities.

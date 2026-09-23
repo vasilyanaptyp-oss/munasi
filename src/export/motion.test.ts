@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getFighter, loadFighters } from "../content/index.js";
-import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
+import { loadFighters } from "../content/index.js";
+import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { findBestGauntlet } from "../sim/gauntlet.js";
 import { defaultPlan, VICTORY_CARD_FRAMES } from "../render/framePlan.js";
 import { renderFrames } from "../render/index.js";
@@ -52,10 +52,9 @@ function hasFfmpeg(): boolean {
 describe.runIf(hasFfmpeg())("motion", () => {
   beforeAll(async () => {
     workdir = mkdtempSync(join(tmpdir(), "munasi-motion-"));
-    const config = buildGauntlet(
-      getFighter("compass", roster),
-      [getFighter("bodyguard", roster)],
-    );
+    // The head of the matchup list — see `tempo.test.ts` for why not a named pair.
+    const lead = gauntletMatchups(roster)[0]!;
+    const config = buildGauntlet(lead.challenger, lead.members);
     const { result } = findBestGauntlet(config, { count: 24, rules: GAUNTLET_RULES });
     const plan = defaultPlan(result, VICTORY_CARD_FRAMES);
     const frames = join(workdir, "frames");

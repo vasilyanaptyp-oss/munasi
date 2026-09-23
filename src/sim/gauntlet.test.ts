@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getFighter, loadFighters } from "../content/index.js";
+import { loadFighters } from "../content/index.js";
 import { GAUNTLET_TUNING, buildGauntlet, combinations, gauntletMatchups, GAUNTLET_RULES, byFaction } from "../content/teams.js";
 import { findColdOpen } from "./coldOpen.js";
 import {
@@ -11,10 +11,9 @@ import {
 import { FPS } from "./types.js";
 
 const roster = loadFighters();
-const config: GauntletConfig = buildGauntlet(
-  getFighter("compass", roster),
-  [getFighter("bodyguard", roster)],
-);
+/** The head of the matchup list — see `tempo.test.ts` for why not a named pair. */
+const LEAD = gauntletMatchups(roster)[0]!;
+const config: GauntletConfig = buildGauntlet(LEAD.challenger, LEAD.members);
 
 describe("simulateGauntlet", () => {
   it("is deterministic", () => {
@@ -166,15 +165,15 @@ describe("teams from factions", () => {
   });
 
   it("scales damage but never HP", () => {
-    const plain = getFighter("compass", roster);
-    const built = buildGauntlet(plain, [getFighter("bodyguard", roster)]);
+    const plain = LEAD.challenger;
+    const built = buildGauntlet(plain, LEAD.members);
     expect(built.challenger.maxHp).toBe(plain.maxHp);
     // Scaled, not passed through. Which *way* it scales is `tempo`'s business
     // and it moves with fight length — this used to assert "greater", which was
     // only ever true because tempo happened to sit above 1.
     expect(built.challenger.attack).not.toBe(plain.attack);
     expect(built.challenger.attack).toBeCloseTo(plain.attack * GAUNTLET_TUNING.tempo, 6);
-    expect(built.team.members[0]!.maxHp).toBe(getFighter("bodyguard", roster).maxHp);
+    expect(built.team.members[0]!.maxHp).toBe(LEAD.members[0]!.maxHp);
   });
 });
 

@@ -6,7 +6,7 @@ import { renderFrames } from "../render/index.js";
 import { renderFramesParallel } from "../render/parallel.js";
 import { simulate } from "../sim/simulate.js";
 import { loadFighters } from "../content/index.js";
-import { gauntletMatchups } from "../content/teams.js";
+import { byFaction, gauntletMatchups } from "../content/teams.js";
 import type { Matchup } from "../content/generateMatchups.js";
 import { abilityMatch, makeFighter } from "../sim/testFixtures.js";
 import type { MatchResult } from "../sim/types.js";
@@ -159,20 +159,14 @@ describe("renderFramesParallel", () => {
 
 describe("gauntlet rendering", () => {
   it("renders identically in parallel and in one process", async () => {
-    const { loadFighters, getFighter } = await import("../content/index.js");
-    const { buildGauntlet, GAUNTLET_RULES } = await import("../content/teams.js");
+    const { loadFighters } = await import("../content/index.js");
+    const { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } = await import("../content/teams.js");
     const { simulateGauntlet } = await import("../sim/gauntlet.js");
     const { defaultPlan } = await import("../render/framePlan.js");
 
-    const roster = loadFighters();
-    const full = simulateGauntlet(
-      buildGauntlet(
-        getFighter("compass", roster),
-        [getFighter("bodyguard", roster)],
-      ),
-      7,
-      GAUNTLET_RULES,
-    );
+    // The head of the matchup list — see `tempo.test.ts` for why not a named pair.
+    const lead = gauntletMatchups(loadFighters())[0]!;
+    const full = simulateGauntlet(buildGauntlet(lead.challenger, lead.members), 7, GAUNTLET_RULES);
     // A slice from the middle of round one keeps the test quick.
     const plan = defaultPlan(full, 0).slice(40, 48);
 
@@ -191,17 +185,16 @@ describe("gauntlet rendering", () => {
   }, 180_000);
 
   it("renders the same frame the same way twice", async () => {
-    const { loadFighters, getFighter } = await import("../content/index.js");
-    const { buildGauntlet, GAUNTLET_RULES } = await import("../content/teams.js");
+    const { loadFighters } = await import("../content/index.js");
+    const { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } = await import("../content/teams.js");
     const { simulateGauntlet } = await import("../sim/gauntlet.js");
     const { renderGauntletFrame } = await import("../render/gauntletFrame.js");
 
-    const roster = loadFighters();
+    // The head of the matchup list, sides swapped so this is a different fight
+    // from the parallel test above.
+    const lead = gauntletMatchups(loadFighters())[0]!;
     const result = simulateGauntlet(
-      buildGauntlet(
-        getFighter("bodyguard", roster),
-        [getFighter("compass", roster)],
-      ),
+      buildGauntlet(lead.members[0]!, [lead.challenger]),
       3,
       GAUNTLET_RULES,
     );
@@ -425,16 +418,20 @@ describe("batch composition", () => {
 
   it("spreads the gauntlet list too — that is the one every shipped video comes from", () => {
     // Not a stand-in: the real list, built by the real nested loops. It is
-    // ordered challenger-major, so `.slice(0, 7)` is seven videos about
-    // whoever is first in the roster.
-    const all = gauntletMatchups(loadFighters());
+    // ordered challenger-major, so a slice as long as one side is that many
+    // videos about whoever is first in the roster. Sized off the roster rather
+    // than written as 7: that was the fourteen-fighter count, and the sellable
+    // bundle has five a side.
+    const roster = loadFighters();
+    const all = gauntletMatchups(roster);
+    const side = byFaction("right", roster).length;
     const idsOf = (m: (typeof all)[number]): string[] => [
       m.challenger.id,
       ...m.members.map((x) => x.id),
     ];
-    expect(new Set(all.slice(0, 7).map((m) => m.challenger.id)).size).toBe(1);
+    expect(new Set(all.slice(0, side).map((m) => m.challenger.id)).size).toBe(1);
 
-    const picked = spreadAcrossFighters(all, 7, idsOf);
+    const picked = spreadAcrossFighters(all, side, idsOf);
     const counts = new Map<string, number>();
     for (const m of picked) for (const id of idsOf(m)) counts.set(id, (counts.get(id) ?? 0) + 1);
     expect(Math.max(...counts.values())).toBeLessThanOrEqual(1);

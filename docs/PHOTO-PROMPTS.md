@@ -1,43 +1,35 @@
-# Десять промптов для генерации персонажей
+# Prompts for generating characters
 
-Каждый промпт — под конкретную способность из уже реализованных десяти, чтобы
-вид и механика совпадали. Копировать по одному.
+The ten included characters were generated from these prompts, one per ability.
+Use them as they are to see how the format wants a photograph to look, or change
+the profession and the prop to make your own — the parts about the background,
+the crop and the arms are what make a picture cut out cleanly.
 
-## Как пользоваться
+## How to use
 
-1. Скопировать промпт целиком в ChatGPT (или другой генератор изображений).
-2. Сохранить результат в `assets/fighters/source/` под именем из заголовка.
-3. Когда все десять на месте — `munasi cutout`.
-4. Инструмент скажет, если вырезка вышла мусором: **выше 85%** — фон остался,
-   генератор подсунул серый или градиент; **ниже 12%** — съело фигуру.
-   Отгружаемая четвёрка идёт 36-61%.
+1. Paste one prompt into an AI image generator.
+2. Save the result in `assets/fighters/source/` under the name in the heading.
+3. `pnpm cutout`. It warns if the result is unusable: **above 85%** means the
+   background stayed (the generator slipped in a grey or a gradient), **below
+   12%** means the figure was eaten.
 
-## Почему промпты написаны именно так
+## Why the prompts say what they say
 
-Три требования не про вкус, а про то, что делает код.
-
-- **Чисто белый фон без тени.** Фон снимается заливкой от края кадра по порогу
-  236 из 255. Тень на полу, виньетка и серый градиент этот порог не проходят и
-  остаются на арене прямоугольником.
-- **По пояс, руки близко к телу.** Замерено: у референса ширина к росту
-  0.57-0.61, у нас 0.63-0.84. Расставленные руки дают слишком широкий силуэт,
-  полный рост — слишком узкий.
-- **Никакого текста и логотипов.** На поиске пропов половина «свободных»
-  снимков оказалась рекламой с брендом на каждом кадре; в кадр это тащить
-  нельзя.
-- **Костюм не бирюзовый и не голубой.** Поле арены — `#18a2d3`, и персонаж в
-  близком цвете в нём растворяется. Замерено: у лучадора в бирюзовом трико 9.3%
-  фигуры попадает в 60 единиц RGB от цвета поля, у всех остальных девяти —
-  0.0%. `pnpm cutout` теперь на это ругается.
-
-Плюс два, которые про формат: **фотография, а не иллюстрация** (весь формат —
-коллаж из фотографий, вектор в нём видно сразу) и **узнаваемая профессия с
-предметом в руках** — персонаж здесь это гэг, и силуэт должен читаться на
-превью.
+- **Pure white background, no shadow.** The background is removed by a flood
+  fill from the edge of the picture over near-white. A floor shadow, a vignette
+  or a grey gradient does not pass it and stays on the arena as a rectangle.
+- **Waist-up, arms close to the body.** Arms spread wide make the figure too
+  wide; full length makes it too thin.
+- **No text or logos.** They end up on screen in every video.
+- **Nothing turquoise or sky blue.** The arena's field is `#18a2d3`; a costume
+  close to it disappears. `pnpm cutout` warns about it.
+- **A photograph, not an illustration**, and **a recognisable profession holding
+  its prop**: a character is a gag, and the silhouette has to read at thumbnail
+  size.
 
 ---
 
-## 1. `magician.jpg` → способность `switcheroo`
+## 1. `magician.png` → `switcheroo`
 
 ```
 A photorealistic studio photograph of a stage magician, waist-up portrait,
@@ -54,7 +46,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 2. `fisherman.jpg` → способность `magnet_pull`
+## 2. `fisherman.png` → `magnet_pull`
 
 ```
 A photorealistic studio photograph of a fisherman, waist-up portrait, facing the
@@ -71,7 +63,9 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 3. `breakdancer.jpg` → способность `spin_cycle`
+## 3. `rapper.png` → `spin_cycle`
+
+> Written as a breakdancer; the result read as a rapper and ships under that name.
 
 ```
 A photorealistic studio photograph of a breakdancer, waist-up portrait, facing
@@ -89,7 +83,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 4. `barista.jpg` → способность `overclock`
+## 4. `barista.png` → `overclock`
 
 ```
 A photorealistic studio photograph of a barista, waist-up portrait, facing the
@@ -106,7 +100,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 5. `sumo.jpg` → способность `dead_weight`
+## 5. `sumo.png` → `dead_weight`
 
 ```
 A photorealistic studio photograph of a sumo wrestler, waist-up portrait, facing
@@ -123,9 +117,9 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 6. `luchador.jpg` → способность `wall_slam`
+## 6. `luchador.png` → `wall_slam`
 
-> Бирюзовый вариант растворяется в поле арены — цвет заменён на малиновый.
+> A turquoise costume vanishes into the arena's field, so the colour is crimson.
 
 ```
 A photorealistic studio photograph of a Mexican lucha libre wrestler, waist-up
@@ -144,7 +138,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 7. `vacuum-salesman.jpg` → способность `siphon`
+## 7. `vacuum-salesman.png` → `siphon`
 
 ```
 A photorealistic studio photograph of a door-to-door vacuum cleaner salesman,
@@ -162,7 +156,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 8. `demolition.jpg` → способность `countdown`
+## 8. `demolition.png` → `countdown`
 
 ```
 A photorealistic studio photograph of a demolition worker, waist-up portrait,
@@ -179,7 +173,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 9. `fencer.jpg` → способность `riposte`
+## 9. `fencer.png` → `riposte`
 
 ```
 A photorealistic studio photograph of a fencer, waist-up portrait, facing the
@@ -196,7 +190,7 @@ No text, no watermark, no logos, no brand names anywhere in the image.
 Photograph, not an illustration, not 3D, not CGI.
 ```
 
-## 10. `mime.jpg` → способность `slipstream`
+## 10. `mime.png` → `slipstream`
 
 ```
 A photorealistic studio photograph of a street mime, waist-up portrait, facing
@@ -216,10 +210,10 @@ Photograph, not an illustration, not 3D, not CGI.
 
 ---
 
-## Если фон вышел не белым
+## If the background did not come out white
 
-Генераторы любят подмешивать лёгкий серый градиент или тень под ногами. Лечится
-дописыванием в конец промпта:
+Generators like to add a light grey gradient or a shadow under the subject. Add
+to the end of the prompt:
 
 ```
 The background must be pure flat white with zero tonal variation, as if the
@@ -228,13 +222,12 @@ contact shadow, no ambient occlusion, no soft grey falloff at the edges of the
 frame.
 ```
 
-Проверять не глазом, а `munasi cutout`: он печатает долю силуэта и ругается,
-когда фон остался на месте.
+Check with `pnpm cutout`, not by eye.
 
-## Если силуэт вышел слишком широким
+## If the figure came out too wide
 
-Ширина к росту должна лечь в 0.57-0.75. Расставленные руки или широкий разворот
-плеч дают 0.85+, и боец читается приземистым. Лечится:
+Width against height should land around 0.57-0.75. Spread arms or wide-set
+shoulders give 0.85 and more, and the fighter reads as squat. Add:
 
 ```
 Arms held close to the torso, shoulders square to the camera, cropped just below

@@ -90,7 +90,10 @@ describe("roster loading", () => {
   });
 
   it("looks fighters up by id", () => {
-    expect(getFighter("compass", roster).name).toBe("Compass Guy");
+    // Whoever is first, not a named fighter: the owner's stock cast is not in the
+    // sellable bundle, and this has to pass there too.
+    const first = roster[0]!;
+    expect(getFighter(first.id, roster).name).toBe(first.name);
     expect(() => getFighter("nobody", roster)).toThrow(/unknown fighter/);
   });
 });

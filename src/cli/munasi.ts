@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { inPackage, inProject, projectRoot } from "../util/paths.js";
+import { runTs } from "../util/tsx.js";
 
 /**
  * The one entry point an installed copy exposes:
@@ -74,14 +74,12 @@ function init(): void {
         "   `assets/fighters/source/`. Cropped waist-up, one person, 700px or",
         "   more on the short side. The background is flood-filled from the edge",
         "   of the frame, so anything that is not near-white will stay.",
-        "2. `munasi cutout` — removes the background and reads each figure's",
+        "2. `pnpm cutout` — removes the background and reads each figure's",
         "   outline out of the alpha channel.",
-        "3. Describe them in `fighters.json` (see `munasi calibrate --help`), then",
-        "   `munasi calibrate` and `munasi solve` to even the roster out.",
-        "4. `munasi generate --count 10`.",
-        "",
-        "Until `fighters.json` exists here, the shipped cast is used so that",
-        "`munasi generate` does something on the first run.",
+        "3. Add each one to `src/content/roster.ts` (or `roster.private.ts` for",
+        "   fighters you may not share), then `pnpm solve` to even the roster out.",
+        "   Step by step: `docs/ADDING-A-FIGHTER.md`.",
+        "4. `pnpm generate --count 10`.",
         "",
         "**Licensing is yours.** Stock photography usually forbids showing a model",
         "in an unflattering light, and this format has them losing fights. Buy the",
@@ -98,7 +96,7 @@ function init(): void {
       ? `nothing to do — ${root} is already set up`
       : `created in ${root}:\n  ${made.join("\n  ")}`,
   );
-  console.log("\nnext: put photographs in assets/fighters/source/, then `munasi cutout`");
+  console.log("\nnext: put photographs in assets/fighters/source/, then `pnpm cutout`");
 }
 
 function main(): void {
@@ -118,15 +116,10 @@ function main(): void {
     init();
     return;
   }
-  // Run through `tsx` from the package's own dependencies: the sources ship as
-  // TypeScript, and a build step is one more thing to keep in step with the
-  // determinism guarantee.
-  const tsx = inPackage("node_modules", ".bin", "tsx");
-  const runner = existsSync(tsx) ? tsx : "tsx";
-  const result = spawnSync(runner, [inPackage(entry.file), ...rest], {
-    stdio: "inherit",
-    cwd: inProject(),
-  });
+  // The sources ship as TypeScript — a build step is one more thing to keep in
+  // step with the determinism guarantee — so each command runs under tsx's
+  // loader. See `runTs` for why that is Node itself and not the `tsx` shim.
+  const result = runTs(inPackage(entry.file), rest, { stdio: "inherit", cwd: inProject() });
   process.exitCode = result.status ?? 1;
 }
 

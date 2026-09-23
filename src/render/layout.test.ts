@@ -1,7 +1,7 @@
 import { createCanvas } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
-import { getFighter, loadFighters } from "../content/index.js";
-import { buildGauntlet, GAUNTLET_RULES } from "../content/teams.js";
+import { loadFighters } from "../content/index.js";
+import { buildGauntlet, GAUNTLET_RULES, gauntletMatchups } from "../content/teams.js";
 import { findBestGauntlet, simulateGauntlet, type GauntletResult } from "../sim/gauntlet.js";
 import { buildRenderIndex } from "./frame.js";
 import { coldOpenPlan, defaultPlan, VICTORY_CARD_FRAMES, type FramePlan } from "./framePlan.js";
@@ -35,9 +35,11 @@ import { FPS } from "../sim/types.js";
  */
 
 const roster = loadFighters();
+/** The head of the matchup list — see `tempo.test.ts` for why not a named pair. */
+const LEAD = gauntletMatchups(roster)[0]!;
 
 function run(seeds = 40): GauntletResult {
-  const config = buildGauntlet(getFighter("compass", roster), [getFighter("bodyguard", roster)]);
+  const config = buildGauntlet(LEAD.challenger, LEAD.members);
   return findBestGauntlet(config, { count: seeds, rules: GAUNTLET_RULES }).result;
 }
 

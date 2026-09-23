@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isMain } from "../util/main.js";
+import { runTs } from "../util/tsx.js";
 import { evaluateRoster } from "./balance.js";
 import { GAUNTLET_RULES } from "./teams.js";
 
@@ -34,7 +34,21 @@ import { GAUNTLET_RULES } from "./teams.js";
 /** Fraction of the measured error fed back into the scale each round. */
 const GAIN = 0.1;
 
-const ROSTER_PATH = join(import.meta.dirname, "roster.ts");
+/**
+ * Where `fieldScale` lives. Two files since the cast was split: the owner's
+ * private stock photographs and the ten that ship. Each fighter's number is
+ * written back into whichever file declares him, and the bundle's private file
+ * is an empty list, so the same solver works there unchanged.
+ */
+export const ROSTER_FILES = [
+  join(import.meta.dirname, "roster.private.ts"),
+  join(import.meta.dirname, "roster.ts"),
+];
+
+/** Every fighter's scale across both files, in `ROSTER` order. */
+export function readAllScales(files = ROSTER_FILES): Map<string, number> {
+  return new Map(files.flatMap((path) => [...readScales(readFileSync(path, "utf8"))]));
+}
 
 /** Reads the `fieldScale` of every fighter, in file order. */
 export function readScales(source: string): Map<string, number> {
@@ -78,9 +92,15 @@ async function main(): Promise<void> {
   const rounds = Number(process.argv[2] ?? 3);
   const sample = Number(process.argv[3] ?? 400);
   const cwd = join(import.meta.dirname, "..", "..");
+  // Through Node itself rather than `pnpm calibrate`: `pnpm` is a `.cmd` shim
+  // on Windows and cannot be started without a shell. See `runTs`.
+  const calibrate = (): void => {
+    const run = runTs(join(import.meta.dirname, "calibrate.ts"), [], { cwd, stdio: "ignore" });
+    if (run.status !== 0) throw new Error(`calibrate exited with ${String(run.status)}`);
+  };
 
   for (let round = 1; round <= rounds; round += 1) {
-    execFileSync("pnpm", ["calibrate"], { cwd, stdio: "ignore" });
+    calibrate();
     // Imported fresh each round: `pnpm calibrate` has just rewritten
     // `fighters.json` and a cached module would still hold the old numbers.
     const { loadFighters } = await import(`./index.js?round=${round}`);
@@ -103,8 +123,8 @@ async function main(): Promise<void> {
     const spread = Math.max(...means.values()) - Math.min(...means.values());
     console.log(`\n— круг ${round}: разброс ${(spread * 100).toFixed(1)} п.п. —`);
 
-    const source = readFileSync(ROSTER_PATH, "utf8");
-    const scales = readScales(source);
+    const sources = ROSTER_FILES.map((path) => ({ path, source: readFileSync(path, "utf8") }));
+    const scales = new Map(sources.flatMap(({ source }) => [...readScales(source)]));
     const next = nextScales(scales, means);
     for (const [id, mean] of means) {
       console.log(
@@ -118,10 +138,13 @@ async function main(): Promise<void> {
         ? "все пары внутри 35-65%"
         : `вне полосы: ${outside.map((p) => `${p.aId}/${p.bId} ${(p.winRateA * 100).toFixed(0)}%`).join(", ")}`,
     );
-    writeFileSync(ROSTER_PATH, writeScales(source, next));
+    for (const { path, source } of sources) {
+      const own = readScales(source);
+      writeFileSync(path, writeScales(source, new Map([...next].filter(([id]) => own.has(id)))));
+    }
   }
 
-  execFileSync("pnpm", ["calibrate"], { cwd, stdio: "ignore" });
+  calibrate();
   console.log("\nfighters.json пересобран из roster.ts");
 }
 
