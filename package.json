@@ -1,0 +1,62 @@
+{
+  "name": "munasi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic battle-sim short video generator (1080x1920, 30fps)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate": "tsx src/cli/generate.ts",
+    "balance": "tsx src/content/validateBalance.ts",
+    "solve": "tsx src/content/solveField.ts",
+    "frame": "tsx src/cli/frame.ts",
+    "calibrate": "tsx src/content/calibrate.ts",
+    "cutout": "tsx src/content/cutout.ts",
+    "matchups": "tsx src/content/generateMatchups.ts",
+    "diagnose": "tsx src/cli/diagnose.ts",
+    "calibrate:gauntlet": "tsx src/content/calibrateGauntlet.ts",
+    "motion": "tsx src/cli/motion.ts",
+    "smoke": "tsx src/cli/smoke.ts",
+    "compare": "tsx src/cli/compare.ts",
+    "sheet": "tsx src/cli/sheet.ts",
+    "munasi": "tsx src/cli/munasi.ts",
+    "inspect": "tsx src/cli/audit.ts",
+    "bundle": "tsx src/cli/bundle.ts"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.80"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@napi-rs/canvas"
+    ],
+    "overrides": {
+      "nanoid@<3.3.18": "^3.3.18"
+    }
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "vasilyanaptyp",
+  "keywords": [
+    "video",
+    "generator",
+    "tiktok",
+    "shorts",
+    "ffmpeg",
+    "deterministic",
+    "simulation"
+  ]
+}

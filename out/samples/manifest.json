@@ -1,0 +1,1329 @@
+{
+  "entries": [
+    {
+      "file": "compass-vs-bodyguard-286.mp4",
+      "fighters": [
+        "compass",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 286,
+      "dramaScore": 65.1,
+      "durationSeconds": 23.33,
+      "frames": 700,
+      "winnerId": "compass",
+      "sizeBytes": 6452564,
+      "generatedAt": "2026-09-10T18:42:07.686Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          31
+        ]
+      }
+    },
+    {
+      "file": "boxer-vs-glasses-202.mp4",
+      "fighters": [
+        "boxer",
+        "glasses"
+      ],
+      "fighterNames": [
+        "Boxer Guy",
+        "OPPONENT"
+      ],
+      "seed": 202,
+      "dramaScore": 62.3,
+      "durationSeconds": 21.5,
+      "frames": 645,
+      "winnerId": "boxer",
+      "sizeBytes": 5969152,
+      "generatedAt": "2026-09-10T18:42:45.070Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          27
+        ]
+      }
+    },
+    {
+      "file": "magician-vs-fisherman-186.mp4",
+      "fighters": [
+        "magician",
+        "fisherman"
+      ],
+      "fighterNames": [
+        "Magician Guy",
+        "OPPONENT"
+      ],
+      "seed": 186,
+      "dramaScore": 65.6,
+      "durationSeconds": 23.67,
+      "frames": 710,
+      "winnerId": "fisherman",
+      "sizeBytes": 7225811,
+      "generatedAt": "2026-09-10T18:43:24.140Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "magician",
+        "teamIds": [
+          "fisherman"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "rapper-vs-barista-408.mp4",
+      "fighters": [
+        "rapper",
+        "barista"
+      ],
+      "fighterNames": [
+        "Rapper Guy",
+        "OPPONENT"
+      ],
+      "seed": 408,
+      "dramaScore": 62.9,
+      "durationSeconds": 21.93,
+      "frames": 658,
+      "winnerId": "rapper",
+      "sizeBytes": 6786563,
+      "generatedAt": "2026-09-10T18:44:01.778Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "rapper",
+        "teamIds": [
+          "barista"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          30
+        ]
+      }
+    },
+    {
+      "file": "sumo-vs-luchador-31.mp4",
+      "fighters": [
+        "sumo",
+        "luchador"
+      ],
+      "fighterNames": [
+        "Sumo Guy",
+        "OPPONENT"
+      ],
+      "seed": 31,
+      "dramaScore": 56.8,
+      "durationSeconds": 18.67,
+      "frames": 560,
+      "winnerId": "sumo",
+      "sizeBytes": 5346916,
+      "generatedAt": "2026-09-10T18:44:34.230Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "sumo",
+        "teamIds": [
+          "luchador"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          87
+        ]
+      }
+    },
+    {
+      "file": "vacuum-vs-demolition-286.mp4",
+      "fighters": [
+        "vacuum",
+        "demolition"
+      ],
+      "fighterNames": [
+        "Vacuum Guy",
+        "OPPONENT"
+      ],
+      "seed": 286,
+      "dramaScore": 69.6,
+      "durationSeconds": 27.8,
+      "frames": 834,
+      "winnerId": "demolition",
+      "sizeBytes": 8724513,
+      "generatedAt": "2026-09-10T18:45:22.103Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "vacuum",
+        "teamIds": [
+          "demolition"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "fencer-vs-mime-151.mp4",
+      "fighters": [
+        "fencer",
+        "mime"
+      ],
+      "fighterNames": [
+        "Fencer Guy",
+        "OPPONENT"
+      ],
+      "seed": 151,
+      "dramaScore": 65.5,
+      "durationSeconds": 23.7,
+      "frames": 711,
+      "winnerId": "fencer",
+      "sizeBytes": 8241956,
+      "generatedAt": "2026-09-10T18:46:02.787Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "fencer",
+        "teamIds": [
+          "mime"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          36
+        ]
+      }
+    },
+    {
+      "file": "compass-vs-glasses-198.mp4",
+      "fighters": [
+        "compass",
+        "glasses"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 198,
+      "dramaScore": 64.3,
+      "durationSeconds": 23.1,
+      "frames": 693,
+      "winnerId": "compass",
+      "sizeBytes": 6516747,
+      "generatedAt": "2026-09-10T18:46:43.077Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          54
+        ]
+      }
+    },
+    {
+      "file": "boxer-vs-bodyguard-169.mp4",
+      "fighters": [
+        "boxer",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "Boxer Guy",
+        "OPPONENT"
+      ],
+      "seed": 169,
+      "dramaScore": 65.9,
+      "durationSeconds": 23.7,
+      "frames": 711,
+      "winnerId": "bodyguard",
+      "sizeBytes": 6306816,
+      "generatedAt": "2026-09-10T18:47:23.481Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "magician-vs-barista-462.mp4",
+      "fighters": [
+        "magician",
+        "barista"
+      ],
+      "fighterNames": [
+        "Magician Guy",
+        "OPPONENT"
+      ],
+      "seed": 462,
+      "dramaScore": 68.5,
+      "durationSeconds": 28.7,
+      "frames": 861,
+      "winnerId": "magician",
+      "sizeBytes": 7855158,
+      "generatedAt": "2026-09-10T18:48:11.083Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "magician",
+        "teamIds": [
+          "barista"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          74
+        ]
+      }
+    },
+    {
+      "file": "rapper-vs-fisherman-43.mp4",
+      "fighters": [
+        "rapper",
+        "fisherman"
+      ],
+      "fighterNames": [
+        "Rapper Guy",
+        "OPPONENT"
+      ],
+      "seed": 43,
+      "dramaScore": 57.7,
+      "durationSeconds": 18.43,
+      "frames": 553,
+      "winnerId": "rapper",
+      "sizeBytes": 5872493,
+      "generatedAt": "2026-09-10T18:48:41.109Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "rapper",
+        "teamIds": [
+          "fisherman"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          24
+        ]
+      }
+    },
+    {
+      "file": "sumo-vs-demolition-22.mp4",
+      "fighters": [
+        "sumo",
+        "demolition"
+      ],
+      "fighterNames": [
+        "Sumo Guy",
+        "OPPONENT"
+      ],
+      "seed": 22,
+      "dramaScore": 66.7,
+      "durationSeconds": 24.43,
+      "frames": 733,
+      "winnerId": "demolition",
+      "sizeBytes": 6829760,
+      "generatedAt": "2026-09-10T18:49:22.856Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "sumo",
+        "teamIds": [
+          "demolition"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "vacuum-vs-luchador-25.mp4",
+      "fighters": [
+        "vacuum",
+        "luchador"
+      ],
+      "fighterNames": [
+        "Vacuum Guy",
+        "OPPONENT"
+      ],
+      "seed": 25,
+      "dramaScore": 69.3,
+      "durationSeconds": 25.93,
+      "frames": 778,
+      "winnerId": "vacuum",
+      "sizeBytes": 9208520,
+      "generatedAt": "2026-09-10T18:50:06.598Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "vacuum",
+        "teamIds": [
+          "luchador"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          20
+        ]
+      }
+    },
+    {
+      "file": "compass-vs-mime-286.mp4",
+      "fighters": [
+        "compass",
+        "mime"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 286,
+      "dramaScore": 64.9,
+      "durationSeconds": 23.1,
+      "frames": 693,
+      "winnerId": "compass",
+      "sizeBytes": 7334539,
+      "generatedAt": "2026-09-10T18:50:45.705Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "mime"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          21
+        ]
+      }
+    },
+    {
+      "file": "fencer-vs-bodyguard-268.mp4",
+      "fighters": [
+        "fencer",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "Fencer Guy",
+        "OPPONENT"
+      ],
+      "seed": 268,
+      "dramaScore": 64.4,
+      "durationSeconds": 23.7,
+      "frames": 711,
+      "winnerId": "bodyguard",
+      "sizeBytes": 6902132,
+      "generatedAt": "2026-09-10T18:51:25.671Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "fencer",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "boxer-vs-fisherman-22.mp4",
+      "fighters": [
+        "boxer",
+        "fisherman"
+      ],
+      "fighterNames": [
+        "Boxer Guy",
+        "OPPONENT"
+      ],
+      "seed": 22,
+      "dramaScore": 65.2,
+      "durationSeconds": 23.63,
+      "frames": 709,
+      "winnerId": "boxer",
+      "sizeBytes": 7006069,
+      "generatedAt": "2026-09-10T18:52:05.249Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "fisherman"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          48
+        ]
+      }
+    },
+    {
+      "file": "magician-vs-glasses-468.mp4",
+      "fighters": [
+        "magician",
+        "glasses"
+      ],
+      "fighterNames": [
+        "Magician Guy",
+        "OPPONENT"
+      ],
+      "seed": 468,
+      "dramaScore": 64,
+      "durationSeconds": 22.7,
+      "frames": 681,
+      "winnerId": "magician",
+      "sizeBytes": 5708646,
+      "generatedAt": "2026-09-10T18:52:45.032Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "magician",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          38
+        ]
+      }
+    },
+    {
+      "file": "rapper-vs-luchador-232.mp4",
+      "fighters": [
+        "rapper",
+        "luchador"
+      ],
+      "fighterNames": [
+        "Rapper Guy",
+        "OPPONENT"
+      ],
+      "seed": 232,
+      "dramaScore": 61.9,
+      "durationSeconds": 21.93,
+      "frames": 658,
+      "winnerId": "luchador",
+      "sizeBytes": 6916957,
+      "generatedAt": "2026-09-10T18:53:21.289Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "rapper",
+        "teamIds": [
+          "luchador"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "sumo-vs-barista-237.mp4",
+      "fighters": [
+        "sumo",
+        "barista"
+      ],
+      "fighterNames": [
+        "Sumo Guy",
+        "OPPONENT"
+      ],
+      "seed": 237,
+      "dramaScore": 65.8,
+      "durationSeconds": 23.77,
+      "frames": 713,
+      "winnerId": "sumo",
+      "sizeBytes": 6590282,
+      "generatedAt": "2026-09-10T18:54:00.640Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "sumo",
+        "teamIds": [
+          "barista"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          29
+        ]
+      }
+    },
+    {
+      "file": "vacuum-vs-mime-304.mp4",
+      "fighters": [
+        "vacuum",
+        "mime"
+      ],
+      "fighterNames": [
+        "Vacuum Guy",
+        "OPPONENT"
+      ],
+      "seed": 304,
+      "dramaScore": 69.6,
+      "durationSeconds": 28.7,
+      "frames": 861,
+      "winnerId": "vacuum",
+      "sizeBytes": 10418100,
+      "generatedAt": "2026-09-10T18:54:49.079Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "vacuum",
+        "teamIds": [
+          "mime"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          20
+        ]
+      }
+    },
+    {
+      "file": "fencer-vs-demolition-185.mp4",
+      "fighters": [
+        "fencer",
+        "demolition"
+      ],
+      "fighterNames": [
+        "Fencer Guy",
+        "OPPONENT"
+      ],
+      "seed": 185,
+      "dramaScore": 66.7,
+      "durationSeconds": 24.43,
+      "frames": 733,
+      "winnerId": "demolition",
+      "sizeBytes": 7519375,
+      "generatedAt": "2026-09-10T18:55:30.289Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "fencer",
+        "teamIds": [
+          "demolition"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "compass-vs-fisherman-286.mp4",
+      "fighters": [
+        "compass",
+        "fisherman"
+      ],
+      "fighterNames": [
+        "Compass Guy",
+        "OPPONENT"
+      ],
+      "seed": 286,
+      "dramaScore": 65,
+      "durationSeconds": 23.33,
+      "frames": 700,
+      "winnerId": "compass",
+      "sizeBytes": 7114418,
+      "generatedAt": "2026-09-10T18:56:08.243Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "compass",
+        "teamIds": [
+          "fisherman"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          36
+        ]
+      }
+    },
+    {
+      "file": "boxer-vs-barista-210.mp4",
+      "fighters": [
+        "boxer",
+        "barista"
+      ],
+      "fighterNames": [
+        "Boxer Guy",
+        "OPPONENT"
+      ],
+      "seed": 210,
+      "dramaScore": 62.9,
+      "durationSeconds": 21.93,
+      "frames": 658,
+      "winnerId": "boxer",
+      "sizeBytes": 6197107,
+      "generatedAt": "2026-09-10T18:56:44.820Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "boxer",
+        "teamIds": [
+          "barista"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          32
+        ]
+      }
+    },
+    {
+      "file": "magician-vs-bodyguard-439.mp4",
+      "fighters": [
+        "magician",
+        "bodyguard"
+      ],
+      "fighterNames": [
+        "Magician Guy",
+        "OPPONENT"
+      ],
+      "seed": 439,
+      "dramaScore": 64.4,
+      "durationSeconds": 23.7,
+      "frames": 711,
+      "winnerId": "bodyguard",
+      "sizeBytes": 6033102,
+      "generatedAt": "2026-09-10T18:57:25.453Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "stopped",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "magician",
+        "teamIds": [
+          "bodyguard"
+        ],
+        "cleared": false,
+        "decidedInRound": 1,
+        "hpByRound": [
+          0
+        ]
+      }
+    },
+    {
+      "file": "rapper-vs-glasses-297.mp4",
+      "fighters": [
+        "rapper",
+        "glasses"
+      ],
+      "fighterNames": [
+        "Rapper Guy",
+        "OPPONENT"
+      ],
+      "seed": 297,
+      "dramaScore": 57.6,
+      "durationSeconds": 18.47,
+      "frames": 554,
+      "winnerId": "rapper",
+      "sizeBytes": 5738448,
+      "generatedAt": "2026-09-10T18:57:57.432Z",
+      "provenance": {
+        "commit": "01f3c3591016c8a7579cd7bb2763247a4041ef51",
+        "dirty": true,
+        "rosterHash": "45d00291dc81dab8",
+        "seedsSearched": 500,
+        "wantedOutcome": "cleared",
+        "constants": {
+          "tuning": {
+            "tempo": 0.76,
+            "challengerPower": 1
+          },
+          "rules": {
+            "damageVariance": 0.15,
+            "openingCooldown": 0.22,
+            "attackRate": 0.35,
+            "pickups": null
+          },
+          "duelDamageVariance": 0.35,
+          "roundHoldFrames": 26,
+          "roundFrameCap": 1350,
+          "victoryCardFrames": 34,
+          "victoryFreezeFrames": 60
+        }
+      },
+      "gauntlet": {
+        "challengerId": "rapper",
+        "teamIds": [
+          "glasses"
+        ],
+        "cleared": true,
+        "decidedInRound": 1,
+        "hpByRound": [
+          30
+        ]
+      }
+    }
+  ]
+}

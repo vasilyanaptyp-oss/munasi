@@ -1,0 +1,63 @@
+name: CI
+
+# Pull requests, plus pushes to main. Both on every push ran each commit twice
+# on a branch with an open pull request — and on a private repository the
+# minutes are counted.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes the running check pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is here because most people who make short videos are on it,
+        # and until this job existed nothing in the project had ever run there.
+        # macOS because the README says it is supported. On a private repository
+        # its minutes count ten times over; drop it from here if that bites.
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      # Line endings exactly as committed. The Windows runner's git would turn
+      # them into CRLF, and the balance solver edits `roster.ts` by pattern.
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: ffmpeg
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            choco install ffmpeg -y --no-progress
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          fi
+          ffmpeg -version | head -1
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # The product exactly as a buyer gets it: the ten shipped fighters in a
+      # directory of their own, a clean install from the lockfile, the whole
+      # suite, one real video. `--quick` skips re-solving the balance, which is
+      # a release step and takes a quarter of an hour.
+      - run: pnpm bundle --quick
