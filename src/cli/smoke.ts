@@ -125,7 +125,10 @@ async function main(): Promise<void> {
     check("it is a gauntlet row, decided in a round of the run",
       entry.gauntlet !== undefined && entry.gauntlet.decidedInRound >= 1,
       entry.gauntlet ? `round ${entry.gauntlet.decidedInRound}, cleared=${entry.gauntlet.cleared}` : "no gauntlet block");
-    check("the cold open is on by default and recorded", entry.coldOpen !== undefined,
+    // Asked for explicitly above, so this path is exercised too. It is **off**
+    // by default — `--cold-open` turns it on — and this label said the
+    // opposite for as long as nobody but the author ever read it.
+    check("the cold open is recorded when asked for", entry.coldOpen !== undefined,
       entry.coldOpen ? entry.coldOpen.why : "missing");
 
     // Provenance: the point of it is that a row is still usable in a month.
