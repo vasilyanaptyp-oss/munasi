@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ffmpegBin, ffprobeBin } from "./tools.js";
 
@@ -24,8 +25,11 @@ describe("ffmpeg lookup", () => {
   it("finds ffprobe next to an overridden ffmpeg", () => {
     process.env["FFMPEG_PATH"] = "/opt/ff/bin/ffmpeg";
     delete process.env["FFPROBE_PATH"];
+    // Built with `join`, like the code it checks: on Windows the directory comes
+    // back with backslashes, which the literal this used to compare against did
+    // not have.
     expect(ffprobeBin()).toBe(
-      process.platform === "win32" ? "/opt/ff/bin/ffprobe.exe" : "/opt/ff/bin/ffprobe",
+      join("/opt/ff/bin", process.platform === "win32" ? "ffprobe.exe" : "ffprobe"),
     );
   });
 

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   assetDir,
@@ -50,7 +50,10 @@ describe("paths", () => {
   });
 
   it("passes an absolute path straight through", () => {
-    expect(inProject("/somewhere/else")).toBe("/somewhere/else");
+    // Compared in the platform's own spelling: Windows writes the same path
+    // with backslashes, and a literal "/somewhere/else" failed the first CI run
+    // there while the behaviour was right.
+    expect(inProject("/somewhere/else")).toBe(normalize("/somewhere/else"));
   });
 
   it("prefers the project's own roster and falls back to the shipped one", () => {

@@ -1,7 +1,11 @@
 name: CI
 
+# Pull requests, plus pushes to main. Both on every push ran each commit twice
+# on a branch with an open pull request — and on a private repository the
+# minutes are counted.
 on:
   push:
+    branches: [main]
   pull_request:
 
 # A newer push to the same branch makes the running check pointless.
